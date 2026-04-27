@@ -1,0 +1,41 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\STEM\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{D4E5F6A7-B8C9-40B1-2A3B-4C5D6E7F8A9B}|src\\STEM.Api\\STEM.Api.csproj|c:\\stem\\src\\stem.api\\stem.api.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{D4E5F6A7-B8C9-40B1-2A3B-4C5D6E7F8A9B}|src\\STEM.Api\\STEM.Api.csproj|solutionrelative:src\\stem.api\\stem.api.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 1,
+          "Children": [
+            {
+              "$type": "Bookmark",
+              "Name": "ST:128:0:{1fc202d4-d401-403c-9834-5b218574bb67}"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "STEM.Api.csproj",
+              "DocumentMoniker": "C:\\STEM\\src\\STEM.Api\\STEM.Api.csproj",
+              "RelativeDocumentMoniker": "src\\STEM.Api\\STEM.Api.csproj",
+              "ToolTip": "C:\\STEM\\src\\STEM.Api\\STEM.Api.csproj",
+              "RelativeToolTip": "src\\STEM.Api\\STEM.Api.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2026-04-27T12:40:42.641Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
