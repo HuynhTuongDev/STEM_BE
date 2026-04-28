@@ -4,7 +4,7 @@ Clean Architecture ASP.NET Core 9.0 Monolithic Application
 
 ## Cấu trúc Dự án
 
-### Building Blocks (Shared Libraries)
+### Shared Libraries
 - **Stem.Shared**: Common types, utilities, Result<T> pattern
 - **Stem.Observability**: Logging, Monitoring, Tracing (Serilog, Jaeger, OpenTelemetry)
 - **Stem.Messaging**: Message Queue, Events (MassTransit + RabbitMQ)
@@ -31,7 +31,7 @@ Clean Architecture ASP.NET Core 9.0 Monolithic Application
 ```bash
 dotnet restore
 dotnet build
-dotnet run --project src/STEM.Api
+dotnet run --project STEM.Api
 ```
 
 ## Giấy Phép

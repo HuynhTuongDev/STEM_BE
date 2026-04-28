@@ -34,7 +34,9 @@ STEM_BE là một ứng dụng ASP.NET Core 9.0 tuân theo nguyên lý **Clean A
 └─────────────────────────────────────────┘
 ```
 
-## Các Building Blocks (Shared Libraries)
+## Shared Libraries
+
+Shared libraries được đặt trong thư mục `Shared/` để cung cấp các tính năng dùng chung:
 
 ### Stem.Shared
 - Common Result<T> pattern

@@ -3,29 +3,27 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.0.31919.166
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{E2A3E8B0-5B1D-4A3E-8F6C-2E8A5F1B3D8C}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "building-blocks", "building-blocks", "{F1B4C7A9-2E5D-4C9E-8A7B-1E2F3A8B5C6D}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Shared", "Shared", "{F1B4C7A9-2E5D-4C9E-8A7B-1E2F3A8B5C6D}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{C5E7D9D3-0B4D-6C1C-9F3B-7D0C5C4D6E8C}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "deploy", "deploy", "{D6F8E0E4-1C5E-7D2D-0C4C-8E1C6D5D7E8C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stem.Shared", "src\building-blocks\Stem.Shared\Stem.Shared.csproj", "{FB1C4D8E-3F5A-4B9C-8A1D-2E7F9A4B5C6D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stem.Shared", "Shared\Stem.Shared\Stem.Shared.csproj", "{FB1C4D8E-3F5A-4B9C-8A1D-2E7F9A4B5C6D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stem.Observability", "src\building-blocks\Stem.Observability\Stem.Observability.csproj", "{FC2D5E9F-4B6C-5C0D-9B2E-3F8C0B5C6D7E}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stem.Observability", "Shared\Stem.Observability\Stem.Observability.csproj", "{FC2D5E9F-4B6C-5C0D-9B2E-3F8C0B5C6D7E}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stem.Messaging", "src\building-blocks\Stem.Messaging\Stem.Messaging.csproj", "{FD3E6F0A-5C7D-6D1E-0C3F-4C9A1C6D7E8F}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stem.Messaging", "Shared\Stem.Messaging\Stem.Messaging.csproj", "{FD3E6F0A-5C7D-6D1E-0C3F-4C9A1C6D7E8F}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stem.ServiceDefaults", "src\building-blocks\Stem.ServiceDefaults\Stem.ServiceDefaults.csproj", "{FE4F7C1B-6D8E-7E2F-1D4C-5C0B2D7E8F9C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Stem.ServiceDefaults", "Shared\Stem.ServiceDefaults\Stem.ServiceDefaults.csproj", "{FE4F7C1B-6D8E-7E2F-1D4C-5C0B2D7E8F9C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "STEM.Core", "src\STEM.Core\STEM.Core.csproj", "{A1B2C3D4-E5F6-47B8-9A0B-1C2D3E4F5A6B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "STEM.Core", "STEM.Core\STEM.Core.csproj", "{A1B2C3D4-E5F6-47B8-9A0B-1C2D3E4F5A6B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "STEM.Application", "src\STEM.Application\STEM.Application.csproj", "{B2C3D4E5-F6A7-48B9-0A1B-2C3D4E5F6A7B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "STEM.Application", "STEM.Application\STEM.Application.csproj", "{B2C3D4E5-F6A7-48B9-0A1B-2C3D4E5F6A7B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "STEM.Infrastructure", "src\STEM.Infrastructure\STEM.Infrastructure.csproj", "{C3D4E5F6-A7B8-49B0-1A2B-3C4D5E6F7A8B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "STEM.Infrastructure", "STEM.Infrastructure\STEM.Infrastructure.csproj", "{C3D4E5F6-A7B8-49B0-1A2B-3C4D5E6F7A8B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "STEM.Api", "src\STEM.Api\STEM.Api.csproj", "{D4E5F6A7-B8C9-40B1-2A3B-4C5D6E7F8A9B}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "STEM.Api", "STEM.Api\STEM.Api.csproj", "{D4E5F6A7-B8C9-40B1-2A3B-4C5D6E7F8A9B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -71,9 +69,5 @@ Global
 		{FC2D5E9F-4B6C-5C0D-9B2E-3F8C0B5C6D7E} = {F1B4C7A9-2E5D-4C9E-8A7B-1E2F3A8B5C6D}
 		{FD3E6F0A-5C7D-6D1E-0C3F-4C9A1C6D7E8F} = {F1B4C7A9-2E5D-4C9E-8A7B-1E2F3A8B5C6D}
 		{FE4F7C1B-6D8E-7E2F-1D4C-5C0B2D7E8F9C} = {F1B4C7A9-2E5D-4C9E-8A7B-1E2F3A8B5C6D}
-		{A1B2C3D4-E5F6-47B8-9A0B-1C2D3E4F5A6B} = {E2A3E8B0-5B1D-4A3E-8F6C-2E8A5F1B3D8C}
-		{B2C3D4E5-F6A7-48B9-0A1B-2C3D4E5F6A7B} = {E2A3E8B0-5B1D-4A3E-8F6C-2E8A5F1B3D8C}
-		{C3D4E5F6-A7B8-49B0-1A2B-3C4D5E6F7A8B} = {E2A3E8B0-5B1D-4A3E-8F6C-2E8A5F1B3D8C}
-		{D4E5F6A7-B8C9-40B1-2A3B-4C5D6E7F8A9B} = {E2A3E8B0-5B1D-4A3E-8F6C-2E8A5F1B3D8C}
 	EndGlobalSection
 EndGlobal
