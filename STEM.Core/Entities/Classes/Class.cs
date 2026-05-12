@@ -1,0 +1,1 @@
+using STEM.Core.Entities.Courses; using STEM.Core.Entities.Users; namespace STEM.Core.Entities.Classes; public class Class : BaseEntity { public int CourseId { get; set; } public int TeacherId { get; set; } public DateTime StartDate { get; set; } public DateTime EndDate { get; set; } public Course? Course { get; set; } public User? Teacher { get; set; } }

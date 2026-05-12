@@ -1,0 +1,1 @@
+namespace STEM.Core.Entities.Classes; public class Announcement : BaseEntity { public int ClassId { get; set; } public string Title { get; set; } = string.Empty; public string Content { get; set; } = string.Empty; public Class? Class { get; set; } }

@@ -1,0 +1,1 @@
+using STEM.Core.Entities.Users; namespace STEM.Core.Entities.Classes; public class Attendee : BaseEntity { public int ClassId { get; set; } public int StudentId { get; set; } public string Status { get; set; } = string.Empty; public Class? Class { get; set; } public User? Student { get; set; } }

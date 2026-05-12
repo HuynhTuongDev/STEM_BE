@@ -50,6 +50,107 @@ Shared libraries được đặt trong thư mục `Shared/` để cung cấp cá
 - Jaeger integration
 - Health checks
 
+## Cấu Trúc Thư Mục Chi Tiết
+
+### Cây Thư Mục Hoàn Chỉnh
+
+```
+STEM_BE/
+│
+├── STEM.Core/                          (Domain Layer - Miền kinh doanh)
+│   ├── Entities/
+│   │   ├── Orders/                     (Entities liên quan Orders)
+│   │   ├── Payments/                   (Entities liên quan Payments)
+│   │   └── Products/                   (Entities liên quan Products)
+│   ├── Repositories/
+│   │   ├── IOrderRepository.cs
+│   │   ├── IPaymentRepository.cs
+│   │   ├── IProductRepository.cs
+│   │   └── (các interface repository chính)
+│   └── STEM.Core.csproj
+│
+├── STEM.Application/                   (Application Layer - Quy tắc ứng dụng)
+│   ├── UseCases/
+│   │   ├── Orders/
+│   │   │   ├── CreateOrderHandler.cs
+│   │   │   ├── GetOrderHandler.cs
+│   │   │   ├── UpdateOrderHandler.cs
+│   │   │   └── DeleteOrderHandler.cs
+│   │   ├── Payments/
+│   │   │   ├── ProcessPaymentHandler.cs
+│   │   │   └── GetPaymentStatusHandler.cs
+│   │   └── Products/
+│   │       ├── GetProductHandler.cs
+│   │       ├── ListProductsHandler.cs
+│   │       └── CreateProductHandler.cs
+│   ├── Dtos/
+│   │   ├── Orders/
+│   │   │   ├── CreateOrderDto.cs
+│   │   │   ├── OrderResponseDto.cs
+│   │   │   └── UpdateOrderDto.cs
+│   │   ├── Payments/
+│   │   │   ├── PaymentRequestDto.cs
+│   │   │   └── PaymentResponseDto.cs
+│   │   └── Products/
+│   │       ├── ProductDto.cs
+│   │       ├── CreateProductDto.cs
+│   │       └── UpdateProductDto.cs
+│   └── STEM.Application.csproj
+│
+├── STEM.Infrastructure/                (Infrastructure Layer - Triển khai kỹ thuật)
+│   ├── Data/
+│   │   ├── StemDbContext.cs            (Entity Framework DbContext)
+│   │   ├── DbContextFactory.cs
+│   │   └── Migrations/                 (Database migrations)
+│   ├── Repositories/
+│   │   ├── OrderRepository.cs
+│   │   ├── PaymentRepository.cs
+│   │   ├── ProductRepository.cs
+│   │   └── BaseRepository.cs
+│   ├── Extensions/
+│   │   ├── ServiceCollectionExtensions.cs
+│   │   ├── DbContextExtensions.cs
+│   │   └── MappingExtensions.cs
+│   └── STEM.Infrastructure.csproj
+│
+├── STEM.Api/                            (Presentation Layer - API)
+│   ├── Controllers/
+│   │   ├── OrdersController.cs
+│   │   ├── PaymentsController.cs
+│   │   ├── ProductsController.cs
+│   │   └── (các API endpoints)
+│   ├── Properties/
+│   │   └── launchSettings.json
+│   ├── Program.cs                       (Startup configuration, Swagger setup)
+│   ├── STEM.Api.csproj
+│   └── bin/                             (Build output)
+│
+├── Shared/                              (Shared Libraries & Building Blocks)
+│   ├── Stem.Shared/
+│   │   ├── Result<T>/
+│   │   │   └── Result.cs
+│   │   ├── Exceptions/
+│   │   │   ├── ValidationException.cs
+│   │   │   └── NotFoundException.cs
+│   │   ├── Extensions/
+│   │   │   └── StringExtensions.cs
+│   │   └── Stem.Shared.csproj
+│   ├── Stem.Observability/
+│   │   ├── Logging/
+│   │   ├── Tracing/
+│   │   └── Stem.Observability.csproj
+│   ├── Stem.Messaging/
+│   │   ├── Events/
+│   │   ├── Consumers/
+│   │   └── Stem.Messaging.csproj
+│   └── Stem.ServiceDefaults/
+│       └── Stem.ServiceDefaults.csproj
+│
+├── STEM.sln                             (Solution file)
+├── README.md                            (Tài liệu chính)
+├── ARCHITECTURE.md                      (Tài liệu kiến trúc này)
+└── .git/                                (Git repository)
+
 ### Stem.Messaging
 - MassTransit configuration
 - RabbitMQ message bus setup

@@ -1,0 +1,1 @@
+namespace STEM.Core.Entities.Courses; public class Lesson : BaseEntity { public int ModuleId { get; set; } public string Title { get; set; } = string.Empty; public string Content { get; set; } = string.Empty; public Module? Module { get; set; } }
