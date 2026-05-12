@@ -1,0 +1,48 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
+using STEM.Application.Interfaces;
+using STEM.Core.Entities.Users;
+
+namespace STEM.Infrastructure.Authentication;
+
+public class JwtProvider : IJwtProvider
+{
+    private readonly IConfiguration _configuration;
+
+    public JwtProvider(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+
+    public string GenerateToken(User user)
+    {
+        var secretKey = _configuration["JwtSettings:Secret"];
+        if (string.IsNullOrEmpty(secretKey))
+        {
+            throw new InvalidOperationException("JWT Secret is not configured.");
+        }
+
+        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Email, user.Email),
+            new Claim("name", user.FullName),
+            new Claim(ClaimTypes.Role, user.RoleId.ToString()) // Replace with actual role name if available
+        };
+
+        var token = new JwtSecurityToken(
+            issuer: _configuration["JwtSettings:Issuer"],
+            audience: _configuration["JwtSettings:Audience"],
+            claims: claims,
+            expires: DateTime.UtcNow.AddHours(int.Parse(_configuration["JwtSettings:ExpirationInHours"] ?? "1")),
+            signingCredentials: credentials);
+
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+}
