@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Interfaces;
-using STEM.Core.DTOs.Auth;
+using STEM.Application.Dtos.Auth;
 
 namespace STEM.Api.Controllers;
 
@@ -27,9 +27,9 @@ public class AuthController : ControllerBase
         {
             return Unauthorized(new { message = ex.Message });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new { message = "An error occurred during login." });
         }
     }
 
@@ -63,7 +63,7 @@ public class AuthController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(500, new { message = "An error occurred during email verification." });
         }
@@ -77,7 +77,7 @@ public class AuthController : ControllerBase
             await _authService.ForgotPasswordAsync(request);
             return Ok(new { message = "If the email is registered, a password reset link has been sent." });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(500, new { message = "An error occurred while processing the request." });
         }
@@ -95,7 +95,7 @@ public class AuthController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
-        catch (Exception ex)
+        catch (Exception)
         {
             return StatusCode(500, new { message = "An error occurred while resetting the password." });
         }

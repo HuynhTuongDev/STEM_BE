@@ -1,4 +1,4 @@
-using STEM.Core.DTOs.Auth;
+using STEM.Application.Dtos.Auth;
 
 namespace STEM.Application.Interfaces;
 

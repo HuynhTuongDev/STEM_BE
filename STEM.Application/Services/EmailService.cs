@@ -1,8 +1,8 @@
-using MailKit.Net.Smtp;
 using MailKit.Security;
 using Microsoft.Extensions.Configuration;
 using MimeKit;
 using STEM.Application.Interfaces;
+using SmtpClient = MailKit.Net.Smtp.SmtpClient;
 
 namespace STEM.Infrastructure.Services;
 

@@ -1,10 +1,10 @@
 using BCrypt.Net;
+using STEM.Application.Dtos.Auth;
 using STEM.Application.Interfaces;
-using STEM.Core.DTOs.Auth;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
-namespace STEM.Application.Services;
+namespace STEM.Application.Usecases.Auth;
 
 public class AuthService : IAuthService
 {
@@ -44,7 +44,7 @@ public class AuthService : IAuthService
             Token = token,
             Email = user.Email,
             FullName = user.FullName,
-            Role = user.RoleId.ToString() // Replace with Role.Name if available
+            Role = user.RoleId.ToString()
         };
     }
 
@@ -67,14 +67,15 @@ public class AuthService : IAuthService
             IsActive = true,
             IsEmailVerified = false,
             VerificationToken = verificationToken,
-            VerificationTokenExpires = DateTime.UtcNow.AddDays(1),
-            RoleId = 2 // Assuming 2 is a default role like "Student" or "User"
+            VerificationTokenExpires = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(1), DateTimeKind.Utc),
+            RoleId = 2,
+            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc),
+            UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
         };
 
         await _userRepository.AddAsync(user, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
-        // In a real application, construct a proper URL pointing to the frontend
         var verificationLink = $"https://yourfrontend.com/verify-email?email={user.Email}&token={verificationToken}";
         var body = $"Please verify your email by clicking <a href='{verificationLink}'>here</a>.";
 
@@ -102,6 +103,7 @@ public class AuthService : IAuthService
         user.IsEmailVerified = true;
         user.VerificationToken = null;
         user.VerificationTokenExpires = null;
+        user.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync(cancellationToken);
@@ -110,34 +112,26 @@ public class AuthService : IAuthService
     public async Task ForgotPasswordAsync(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
-        if (user == null)
-        {
-            // Do not reveal that the user does not exist
-            return;
-        }
+        if (user == null) return;
 
         var resetToken = Guid.NewGuid().ToString("N");
         user.ResetToken = resetToken;
-        user.ResetTokenExpires = DateTime.UtcNow.AddHours(1);
+        user.ResetTokenExpires = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(1), DateTimeKind.Utc);
+        user.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
         var resetLink = $"https://yourfrontend.com/reset-password?email={user.Email}&token={resetToken}";
-        var body = $"You requested a password reset. Click <a href='{resetLink}'>here</a> to reset your password.";
+        var body = $"Reset your password by clicking <a href='{resetLink}'>here</a>.";
 
-        await _emailService.SendEmailAsync(user.Email, "Password Reset", body, cancellationToken);
+        await _emailService.SendEmailAsync(user.Email, "Reset Password", body, cancellationToken);
     }
 
     public async Task ResetPasswordAsync(ResetPasswordRequest request, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
-        if (user == null)
-        {
-            throw new InvalidOperationException("Invalid email or token.");
-        }
-
-        if (user.ResetToken != request.Token || user.ResetTokenExpires < DateTime.UtcNow)
+        if (user == null || user.ResetToken != request.Token || user.ResetTokenExpires < DateTime.UtcNow)
         {
             throw new InvalidOperationException("Invalid or expired reset token.");
         }
@@ -145,8 +139,34 @@ public class AuthService : IAuthService
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
         user.ResetToken = null;
         user.ResetTokenExpires = null;
+        user.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync(cancellationToken);
+    }
+
+    public Task<Core.DTOs.Auth.LoginResponse> LoginAsync(Core.DTOs.Auth.LoginRequest request, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task RegisterAsync(Core.DTOs.Auth.RegisterRequest request, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task VerifyEmailAsync(Core.DTOs.Auth.VerifyEmailRequest request, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task ForgotPasswordAsync(Core.DTOs.Auth.ForgotPasswordRequest request, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
+    }
+
+    public Task ResetPasswordAsync(Core.DTOs.Auth.ResetPasswordRequest request, CancellationToken cancellationToken = default)
+    {
+        throw new NotImplementedException();
     }
 }

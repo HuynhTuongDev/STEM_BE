@@ -1,6 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using STEM.Application.Interfaces;
-using STEM.Application.Services;
+using STEM.Application.Usecases.Auth;
 
 namespace STEM.Application.Extensions;
 
