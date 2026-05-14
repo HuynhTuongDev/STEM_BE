@@ -1,5 +1,6 @@
 using Microsoft.Extensions.DependencyInjection;
 using STEM.Application.UseCases.Auth;
+using STEM.Application.UseCases.LoginHistory;
 
 namespace STEM.Application.Extensions;
 
@@ -13,7 +14,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<VerifyEmailHandler>();
         services.AddScoped<ResetPasswordHandler>();
 
-        // TODO: Add Order, Payment, and Product handlers when implemented
+        // LoginHistory Handlers
+        services.AddScoped<GetLoginHistoriesHandler>();
 
         return services;
     }

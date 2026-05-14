@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -19,7 +20,11 @@ public static class ServiceCollectionExtensions
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
 
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+        services.AddHttpContextAccessor();
+
+        // Specific Repositories
         services.AddScoped<IUserRepository, UserRepository>();
+        services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
 
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddTransient<IEmailService, EmailService>();
