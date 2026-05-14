@@ -7,7 +7,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace STEM.Infrastructure.Migrations
 {
     /// <inheritdoc />
-    public partial class InitialFullSchema : Migration
+    public partial class InitialCreate : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -165,6 +165,11 @@ namespace STEM.Infrastructure.Migrations
                     Avatar = table.Column<string>(type: "text", nullable: false),
                     IsActive = table.Column<bool>(type: "boolean", nullable: false),
                     RoleId = table.Column<int>(type: "integer", nullable: false),
+                    IsEmailVerified = table.Column<bool>(type: "boolean", nullable: false),
+                    VerificationToken = table.Column<string>(type: "text", nullable: true),
+                    VerificationTokenExpires = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
+                    ResetToken = table.Column<string>(type: "text", nullable: true),
+                    ResetTokenExpires = table.Column<DateTime>(type: "timestamp with time zone", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "timestamp with time zone", nullable: false)
                 },
@@ -447,7 +452,7 @@ namespace STEM.Infrastructure.Migrations
                         column: x => x.StudentId,
                         principalTable: "Users",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -667,7 +672,7 @@ namespace STEM.Infrastructure.Migrations
                         column: x => x.StudentId,
                         principalTable: "Users",
                         principalColumn: "Id",
-                        onDelete: ReferentialAction.Cascade);
+                        onDelete: ReferentialAction.Restrict);
                 });
 
             migrationBuilder.CreateTable(
@@ -1211,31 +1216,12 @@ namespace STEM.Infrastructure.Migrations
             migrationBuilder.CreateIndex(
                 name: "IX_UserProfiles_UserId",
                 table: "UserProfiles",
-                column: "UserId",
-                unique: true);
+                column: "UserId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Users_RoleId",
                 table: "Users",
                 column: "RoleId");
-
-            // Enable RLS for all tables
-            var tables = new[]
-            {
-                "Users", "Roles", "Permissions", "RolePermissions", "UserProfiles", "LoginHistories", "RefreshTokens",
-                "Categories", "Courses", "Modules", "Lessons", "Materials", "Files",
-                "Classes", "Enrollments", "Attendees", "Announcements", "Schedules",
-                "Projects", "ProjectNumbers", "Assignments", "Submissions", "FileEntities", "Metrics", "ProjectMembers",
-                "Quizzes", "QuizQuestions", "QuizAnswers", "Grades", "Feedbacks", "Certificates", "Leaderboards", "Badges", "Rubrics",
-                "Simulations", "SimulationTemplates", "SimulationSessions", "ExperimentLogs", "LiveMonitorings",
-                "AuditLogs", "Messages", "Notifications"
-            };
-
-            foreach (var table in tables)
-            {
-                migrationBuilder.Sql($"ALTER TABLE \"{table}\" ENABLE ROW LEVEL SECURITY;");
-                migrationBuilder.Sql($"ALTER TABLE \"{table}\" FORCE ROW LEVEL SECURITY;");
-            }
         }
 
         /// <inheritdoc />

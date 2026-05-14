@@ -12,6 +12,13 @@ public class User : BaseEntity
     public bool IsActive { get; set; }
     public int RoleId { get; set; }
 
+    public bool IsEmailVerified { get; set; }
+    public string? VerificationToken { get; set; }
+    public DateTime? VerificationTokenExpires { get; set; }
+
+    public string? ResetToken { get; set; }
+    public DateTime? ResetTokenExpires { get; set; }
+
     public Role? Role { get; set; }
 
     // Navigation properties cho Messages

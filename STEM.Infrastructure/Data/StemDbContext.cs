@@ -76,6 +76,13 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     {
         base.OnModelCreating(modelBuilder);
 
+        // Seed Roles
+        modelBuilder.Entity<Role>().HasData(
+            new Role { Id = 1, Name = "Admin", CreatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc), UpdatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc) },
+            new Role { Id = 2, Name = "Student", CreatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc), UpdatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc) },
+            new Role { Id = 3, Name = "Teacher", CreatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc), UpdatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc) }
+        );
+
         // Configure Message relationships
         modelBuilder.Entity<Message>(entity =>
         {
