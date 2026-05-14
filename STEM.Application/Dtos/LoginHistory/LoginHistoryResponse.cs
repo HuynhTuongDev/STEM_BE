@@ -1,11 +1,11 @@
-namespace STEM.Core.Entities.Users;
+namespace STEM.Application.Dtos.LoginHistory;
 
-public class LoginHistory : BaseEntity
+public class LoginHistoryResponse
 {
+    public int Id { get; set; }
     public int UserId { get; set; }
     public DateTime LoginTime { get; set; }
     public string IpAddress { get; set; } = string.Empty;
     public string DeviceName { get; set; } = string.Empty;
-
-    public User? User { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
