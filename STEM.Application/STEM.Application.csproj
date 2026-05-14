@@ -8,12 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="Usecases\**" />
-    <EmbeddedResource Remove="Usecases\**" />
-    <None Remove="Usecases\**" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\STEM.Core\STEM.Core.csproj" />
   </ItemGroup>
 

@@ -6,7 +6,7 @@ using Microsoft.IdentityModel.Tokens;
 using STEM.Application.Interfaces;
 using STEM.Core.Entities.Users;
 
-namespace STEM.Infrastructure.Authentication;
+namespace STEM.Infrastructure.Services.Authentication;
 
 public class JwtProvider : IJwtProvider
 {

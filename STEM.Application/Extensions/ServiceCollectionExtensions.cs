@@ -1,6 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
-using STEM.Application.Interfaces;
-using STEM.Application.Usecases.Auth;
+using STEM.Application.UseCases.Auth;
 
 namespace STEM.Application.Extensions;
 
@@ -8,7 +7,14 @@ public static class ServiceCollectionExtensions
 {
     public static IServiceCollection AddApplication(this IServiceCollection services)
     {
-        services.AddScoped<IAuthService, AuthService>();
+        // Auth Handlers
+        services.AddScoped<LoginHandler>();
+        services.AddScoped<RegisterHandler>();
+        services.AddScoped<VerifyEmailHandler>();
+        services.AddScoped<ResetPasswordHandler>();
+
+        // TODO: Add Order, Payment, and Product handlers when implemented
+
         return services;
     }
 }
