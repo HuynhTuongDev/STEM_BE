@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using STEM.Application.Interfaces;
-using STEM.Application.UseCases.Auth;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 using STEM.Infrastructure.Repositories;
@@ -25,16 +24,11 @@ public static class ServiceCollectionExtensions
         // Specific Repositories
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
+        services.AddScoped<INotificationRepository, NotificationRepository>();
 
+        // Services
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddTransient<IEmailService, EmailService>();
-
-        // Register Auth Handlers
-        services.AddScoped<LoginHandler>();
-        services.AddScoped<RegisterHandler>();
-        services.AddScoped<VerifyEmailHandler>();
-        services.AddScoped<ForgotPasswordHandler>();
-        services.AddScoped<ResetPasswordHandler>();
 
         return services;
     }
