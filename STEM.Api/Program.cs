@@ -4,6 +4,7 @@ using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using STEM.Infrastructure.Extensions;
 using STEM.Application.Extensions;
+using STEM.Core.Entities.Users;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -66,10 +67,35 @@ if (!string.IsNullOrEmpty(secretKey))
             ValidateIssuerSigningKey = true,
             ValidIssuer = jwtSettings["Issuer"],
             ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
+            RoleClaimType = System.Security.Claims.ClaimTypes.Role
         };
     });
 }
+
+// Add RBAC Authorization Policies
+builder.Services.AddAuthorization(options =>
+{
+    // Master Administrator: System/Developer operations only
+    options.AddPolicy("MasterOnly", policy =>
+        policy.RequireRole(RoleNames.MasterAdministrator));
+
+    // School Administrator: Business operations (students, classes, grades, etc.)
+    options.AddPolicy("SchoolAdminOnly", policy =>
+        policy.RequireRole(RoleNames.SchoolAdministrator));
+
+    // Teachers & School Admins: Course/Class management
+    options.AddPolicy("TeacherAndAbove", policy =>
+        policy.RequireRole(RoleNames.SchoolAdministrator, RoleNames.Teacher));
+
+    // All authenticated roles: Students, Teachers, School Admins
+    options.AddPolicy("StudentAndAbove", policy =>
+        policy.RequireRole(RoleNames.SchoolAdministrator, RoleNames.Teacher, RoleNames.Student));
+
+    // Legacy: Both admin types (avoid using, prefer specific policies above)
+    options.AddPolicy("AdminOnly", policy =>
+        policy.RequireRole(RoleNames.MasterAdministrator, RoleNames.SchoolAdministrator));
+});
 
 var app = builder.Build();
 

@@ -14,18 +14,21 @@ public class LoginHandler
 {
     private readonly IUserRepository _userRepository;
     private readonly ILoginHistoryRepository _loginHistoryRepository;
-    private readonly IJwtProvider _jwtProvider;
+    private readonly IRepository<RefreshToken> _refreshTokenRepository;
+    private readonly ITokenService _tokenService;
     private readonly IHttpContextAccessor _httpContextAccessor;
 
     public LoginHandler(
         IUserRepository userRepository,
         ILoginHistoryRepository loginHistoryRepository,
-        IJwtProvider jwtProvider,
+        IRepository<RefreshToken> refreshTokenRepository,
+        ITokenService tokenService,
         IHttpContextAccessor httpContextAccessor)
     {
         _userRepository = userRepository;
         _loginHistoryRepository = loginHistoryRepository;
-        _jwtProvider = jwtProvider;
+        _refreshTokenRepository = refreshTokenRepository;
+        _tokenService = tokenService;
         _httpContextAccessor = httpContextAccessor;
     }
 
@@ -47,7 +50,8 @@ public class LoginHandler
             throw new UnauthorizedAccessException("Account is disabled.");
         }
 
-        var token = _jwtProvider.GenerateToken(user);
+        var token = _tokenService.GenerateAccessToken(user);
+        var refreshToken = await CreateRefreshTokenAsync(user, cancellationToken);
 
         // Record login history
         try
@@ -75,9 +79,70 @@ public class LoginHandler
         return new LoginResponse
         {
             Token = token,
+            RefreshToken = refreshToken,
             Email = user.Email,
             FullName = user.FullName,
-            Role = user.RoleId.ToString()
+            Role = user.Role?.Name ?? user.RoleId.ToString()
         };
+    }
+
+    public string GenerateNewAccessToken(User user)
+    {
+        return _tokenService.GenerateAccessToken(user);
+    }
+
+    public async Task<LoginResponse> RefreshTokenAsync(string refreshTokenStr, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(refreshTokenStr))
+            throw new UnauthorizedAccessException("Refresh token is required.");
+
+        var refreshTokens = await _refreshTokenRepository.FindAsync(rt => rt.Token == refreshTokenStr, cancellationToken);
+        var refreshToken = refreshTokens.FirstOrDefault();
+
+        if (refreshToken == null)
+            throw new UnauthorizedAccessException("Invalid refresh token.");
+
+        var user = await _userRepository.GetByIdAsync(refreshToken.UserId, cancellationToken);
+        if (user == null)
+            throw new UnauthorizedAccessException("User not found.");
+
+        if (!user.IsActive)
+            throw new UnauthorizedAccessException("Account is disabled.");
+
+        // Generate new access token and refresh token
+        // CreateRefreshTokenAsync will delete all old tokens and add new one
+        var newAccessToken = _tokenService.GenerateAccessToken(user);
+        var newRefreshToken = await CreateRefreshTokenAsync(user, cancellationToken);
+
+        return new LoginResponse
+        {
+            Token = newAccessToken,
+            RefreshToken = newRefreshToken,
+            Email = user.Email,
+            FullName = user.FullName,
+            Role = user.Role?.Name ?? user.RoleId.ToString()
+        };
+    }
+
+    private async Task<string> CreateRefreshTokenAsync(User user, CancellationToken cancellationToken)
+    {
+        var existingTokens = await _refreshTokenRepository.FindAsync(rt => rt.UserId == user.Id, cancellationToken);
+        foreach (var existingToken in existingTokens)
+        {
+            _refreshTokenRepository.Delete(existingToken);
+        }
+
+        var refreshToken = new RefreshToken
+        {
+            UserId = user.Id,
+            Token = _tokenService.GenerateRefreshToken(),
+            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc),
+            UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+        };
+
+        await _refreshTokenRepository.AddAsync(refreshToken, cancellationToken);
+        await _refreshTokenRepository.SaveChangesAsync(cancellationToken);
+
+        return refreshToken.Token;
     }
 }

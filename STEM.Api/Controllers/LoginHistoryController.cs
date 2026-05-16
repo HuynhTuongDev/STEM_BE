@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Dtos.LoginHistory;
 using STEM.Application.UseCases.LoginHistory;
@@ -6,6 +7,7 @@ namespace STEM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Policy = "SchoolAdminOnly")]
 public class LoginHistoryController : ControllerBase
 {
     private readonly GetLoginHistoriesHandler _getLoginHistoriesHandler;
