@@ -86,11 +86,6 @@ public class LoginHandler
         };
     }
 
-    public string GenerateNewAccessToken(User user)
-    {
-        return _tokenService.GenerateAccessToken(user);
-    }
-
     public async Task<LoginResponse> RefreshTokenAsync(string refreshTokenStr, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(refreshTokenStr))
