@@ -3,6 +3,7 @@ using STEM.Application.Dtos.Auth;
 using STEM.Application.Interfaces;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
+using FluentValidation;
 
 namespace STEM.Application.UseCases.Auth;
 
@@ -13,15 +14,18 @@ public class RegisterHandler
 {
     private readonly IUserRepository _userRepository;
     private readonly IEmailService _emailService;
+    private readonly IValidator<RegisterRequest> _validator;
 
-    public RegisterHandler(IUserRepository userRepository, IEmailService emailService)
+    public RegisterHandler(IUserRepository userRepository, IEmailService emailService, IValidator<RegisterRequest> validator)
     {
         _userRepository = userRepository;
         _emailService = emailService;
+        _validator = validator;
     }
 
     public async Task Handle(RegisterRequest request, CancellationToken cancellationToken = default)
     {
+        await _validator.ValidateAndThrowAsync(request, cancellationToken);
         var existingUser = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
         if (existingUser != null)
         {

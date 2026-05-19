@@ -7,6 +7,7 @@ using STEM.Infrastructure.Data;
 using STEM.Infrastructure.Repositories;
 using STEM.Infrastructure.Services;
 using STEM.Infrastructure.Services.Authentication;
+using Supabase;
 
 namespace STEM.Infrastructure.Extensions;
 
@@ -27,6 +28,22 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddTransient<IEmailService, EmailService>();
+
+        // Supabase Configuration
+        var supabaseUrl = configuration["Supabase:Url"];
+        var supabaseKey = configuration["Supabase:Key"];
+        
+        if (!string.IsNullOrEmpty(supabaseUrl) && !string.IsNullOrEmpty(supabaseKey))
+        {
+            var options = new SupabaseOptions
+            {
+                AutoRefreshToken = true,
+                AutoConnectRealtime = true
+            };
+            services.AddScoped<Supabase.Client>(_ => new Supabase.Client(supabaseUrl, supabaseKey, options));
+        }
+
+        services.AddScoped<IFileService, SupabaseStorageService>();
 
         return services;
     }

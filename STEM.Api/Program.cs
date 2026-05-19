@@ -12,7 +12,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddApplication();
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<STEM.Api.Filters.ValidationExceptionFilter>();
+});
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure Swagger for JWT Auth

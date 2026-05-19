@@ -4,6 +4,7 @@ using STEM.Application.Dtos.Auth;
 using STEM.Application.Interfaces;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
+using FluentValidation;
 
 namespace STEM.Application.UseCases.Auth;
 
@@ -17,23 +18,28 @@ public class LoginHandler
     private readonly IRepository<RefreshToken> _refreshTokenRepository;
     private readonly ITokenService _tokenService;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IValidator<LoginRequest> _validator;
 
     public LoginHandler(
         IUserRepository userRepository,
         ILoginHistoryRepository loginHistoryRepository,
         IRepository<RefreshToken> refreshTokenRepository,
         ITokenService tokenService,
-        IHttpContextAccessor httpContextAccessor)
+        IHttpContextAccessor httpContextAccessor,
+        IValidator<LoginRequest> validator)
     {
         _userRepository = userRepository;
         _loginHistoryRepository = loginHistoryRepository;
         _refreshTokenRepository = refreshTokenRepository;
         _tokenService = tokenService;
         _httpContextAccessor = httpContextAccessor;
+        _validator = validator;
     }
 
     public async Task<LoginResponse> Handle(LoginRequest request, CancellationToken cancellationToken = default)
     {
+        await _validator.ValidateAndThrowAsync(request, cancellationToken);
+
         var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
         {

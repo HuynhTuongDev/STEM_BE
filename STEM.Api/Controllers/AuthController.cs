@@ -14,19 +14,22 @@ public class AuthController : ControllerBase
     private readonly VerifyEmailHandler _verifyEmailHandler;
     private readonly ForgotPasswordHandler _forgotPasswordHandler;
     private readonly ResetPasswordHandler _resetPasswordHandler;
+    private readonly ChangePasswordHandler _changePasswordHandler;
 
     public AuthController(
         LoginHandler loginHandler,
         RegisterHandler registerHandler,
         VerifyEmailHandler verifyEmailHandler,
         ForgotPasswordHandler forgotPasswordHandler,
-        ResetPasswordHandler resetPasswordHandler)
+        ResetPasswordHandler resetPasswordHandler,
+        ChangePasswordHandler changePasswordHandler)
     {
         _loginHandler = loginHandler;
         _registerHandler = registerHandler;
         _verifyEmailHandler = verifyEmailHandler;
         _forgotPasswordHandler = forgotPasswordHandler;
         _resetPasswordHandler = resetPasswordHandler;
+        _changePasswordHandler = changePasswordHandler;
     }
 
     [HttpPost("login")]
@@ -136,6 +139,31 @@ public class AuthController : ControllerBase
         catch (Exception ex)
         {
             return BadRequest(new { message = ex.Message });
+        }
+    }
+
+    [HttpPut("change-password")]
+    [Authorize]
+    public async Task<IActionResult> ChangePassword([FromBody] ChangePasswordRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out int userId))
+            {
+                return Unauthorized(new { message = "User is not authenticated properly." });
+            }
+
+            await _changePasswordHandler.Handle(userId, request, cancellationToken);
+            return Ok(new { success = true, message = "Password has been changed successfully." });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "An error occurred while changing the password.", error = ex.Message });
         }
     }
 }
