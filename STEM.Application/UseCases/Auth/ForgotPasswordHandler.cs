@@ -24,6 +24,8 @@ public class ForgotPasswordHandler
         var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
         user.UpdatedAt = now;
+        user.ResetToken = resetToken;
+        user.ResetTokenExpires = now.AddHours(1);
 
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync(cancellationToken);

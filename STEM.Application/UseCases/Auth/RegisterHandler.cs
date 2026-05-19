@@ -42,6 +42,8 @@ public class RegisterHandler
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
             IsActive = true,
             IsEmailVerified = false,
+            VerificationToken = verificationToken,
+            VerificationTokenExpires = now.AddHours(1),
             RoleId = 4,
             CreatedAt = now,
             UpdatedAt = now
