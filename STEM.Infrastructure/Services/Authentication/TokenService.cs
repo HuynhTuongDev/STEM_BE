@@ -21,7 +21,8 @@ public class TokenService : ITokenService
     /// </summary>
     public string GenerateAccessToken(User user)
     {
-        return _jwtProvider.GenerateToken(user);
+        var displayName = string.IsNullOrWhiteSpace(user.Profile?.FullName) ? user.Email : user.Profile!.FullName;
+        return _jwtProvider.GenerateToken(user, displayName);
     }
 
     /// <summary>

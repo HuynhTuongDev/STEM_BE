@@ -15,7 +15,7 @@ public class LoginHistoryRepository : Repository<LoginHistory>, ILoginHistoryRep
     {
         return await _dbSet
             .Where(lh => lh.UserId == userId)
-            .OrderByDescending(lh => lh.LoginTime)
+            .OrderByDescending(lh => lh.CreatedAt)
             .ToListAsync(cancellationToken);
     }
 }

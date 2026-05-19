@@ -11,7 +11,10 @@ public class UpdateUserProfileHandler
     private readonly IRepository<UserProfile> _userProfileRepository;
     private readonly IValidator<UpdateProfileRequest> _validator;
 
-    public UpdateUserProfileHandler(IUserRepository userRepository, IRepository<UserProfile> userProfileRepository, IValidator<UpdateProfileRequest> validator)
+    public UpdateUserProfileHandler(
+        IUserRepository userRepository,
+        IRepository<UserProfile> userProfileRepository,
+        IValidator<UpdateProfileRequest> validator)
     {
         _userRepository = userRepository;
         _userProfileRepository = userProfileRepository;
@@ -25,50 +28,51 @@ public class UpdateUserProfileHandler
         if (user == null)
             throw new KeyNotFoundException("User not found.");
 
-        // Update basic user info
-        user.FullName = request.FullName;
-        user.Phone = request.Phone;
-        user.UpdatedAt = DateTime.UtcNow;
-        _userRepository.Update(user);
+        var profile = user.Profile
+            ?? (await _userProfileRepository.FindAsync(p => p.UserId == userId, cancellationToken)).FirstOrDefault();
 
-        // Update or create profile info
-        var profiles = await _userProfileRepository.FindAsync(p => p.UserId == userId, cancellationToken);
-        var profile = profiles.FirstOrDefault();
+        var now = DateTime.UtcNow;
 
         if (profile == null)
         {
             profile = new UserProfile
             {
                 UserId = userId,
+                FullName = request.FullName,
+                Phone = request.Phone,
                 Gender = request.Gender,
-                DateOfBirth = request.DateOfBirth ?? default,
+                DateOfBirth = request.DateOfBirth,
                 Address = request.Address,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = now,
+                UpdatedAt = now
             };
             await _userProfileRepository.AddAsync(profile, cancellationToken);
         }
         else
         {
+            profile.FullName = request.FullName;
+            profile.Phone = request.Phone;
             profile.Gender = request.Gender;
-            profile.DateOfBirth = request.DateOfBirth ?? default;
+            profile.DateOfBirth = request.DateOfBirth;
             profile.Address = request.Address;
-            profile.UpdatedAt = DateTime.UtcNow;
+            profile.UpdatedAt = now;
             _userProfileRepository.Update(profile);
         }
 
-        await _userRepository.SaveChangesAsync(cancellationToken); // Save both user and profile changes
+        user.UpdatedAt = now;
+        _userRepository.Update(user);
+        await _userProfileRepository.SaveChangesAsync(cancellationToken);
 
         return new UserProfileDto
         {
             UserId = user.Id,
             Email = user.Email,
-            FullName = user.FullName,
-            Phone = user.Phone,
-            Avatar = user.Avatar,
-            Gender = profile.Gender,
+            FullName = profile.FullName,
+            Phone = profile.Phone,
+            Avatar = profile.Avatar,
+            Gender = profile.Gender ?? string.Empty,
             DateOfBirth = profile.DateOfBirth,
-            Address = profile.Address
+            Address = profile.Address ?? string.Empty
         };
     }
 }

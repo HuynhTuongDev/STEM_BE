@@ -4,9 +4,6 @@ using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Auth;
 
-/// <summary>
-/// Handler for reset password use case - validates reset token and updates password
-/// </summary>
 public class ResetPasswordHandler
 {
     private readonly IUserRepository _userRepository;
@@ -32,7 +29,6 @@ public class ResetPasswordHandler
         if (user.ResetTokenExpires == null || user.ResetTokenExpires < DateTime.UtcNow)
             throw new InvalidOperationException("Reset token has expired.");
 
-        // Update password
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
         user.ResetToken = null;
         user.ResetTokenExpires = null;
@@ -42,4 +38,3 @@ public class ResetPasswordHandler
         await _userRepository.SaveChangesAsync(cancellationToken);
     }
 }
-

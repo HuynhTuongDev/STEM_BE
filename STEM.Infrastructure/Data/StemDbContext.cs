@@ -85,6 +85,16 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
 
         );
 
+        modelBuilder.Entity<UserProfile>(entity =>
+        {
+            entity.HasOne(p => p.User)
+                .WithOne(u => u.Profile)
+                .HasForeignKey<UserProfile>(p => p.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(p => p.UserId).IsUnique();
+        });
+
         // Configure Message relationships
         modelBuilder.Entity<Message>(entity =>
         {

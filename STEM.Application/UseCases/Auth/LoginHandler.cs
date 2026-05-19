@@ -1,5 +1,6 @@
 using BCrypt.Net;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using STEM.Application.Dtos.Auth;
 using STEM.Application.Interfaces;
 using STEM.Core.Entities.Users;
@@ -8,9 +9,6 @@ using FluentValidation;
 
 namespace STEM.Application.UseCases.Auth;
 
-/// <summary>
-/// Handler for user login use case
-/// </summary>
 public class LoginHandler
 {
     private readonly IUserRepository _userRepository;
@@ -18,6 +16,7 @@ public class LoginHandler
     private readonly IRepository<RefreshToken> _refreshTokenRepository;
     private readonly ITokenService _tokenService;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IConfiguration _configuration;
     private readonly IValidator<LoginRequest> _validator;
 
     public LoginHandler(
@@ -26,6 +25,7 @@ public class LoginHandler
         IRepository<RefreshToken> refreshTokenRepository,
         ITokenService tokenService,
         IHttpContextAccessor httpContextAccessor,
+        IConfiguration configuration,
         IValidator<LoginRequest> validator)
     {
         _userRepository = userRepository;
@@ -33,6 +33,7 @@ public class LoginHandler
         _refreshTokenRepository = refreshTokenRepository;
         _tokenService = tokenService;
         _httpContextAccessor = httpContextAccessor;
+        _configuration = configuration;
         _validator = validator;
     }
 
@@ -42,54 +43,39 @@ public class LoginHandler
 
         var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
         if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-        {
             throw new UnauthorizedAccessException("Invalid email or password.");
-        }
 
         if (!user.IsEmailVerified)
-        {
             throw new UnauthorizedAccessException("Email is not verified.");
-        }
 
         if (!user.IsActive)
-        {
             throw new UnauthorizedAccessException("Account is disabled.");
-        }
 
         var token = _tokenService.GenerateAccessToken(user);
         var refreshToken = await CreateRefreshTokenAsync(user, cancellationToken);
 
-        // Record login history
         try
         {
             var ipAddress = _httpContextAccessor?.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "Unknown";
             var userAgent = _httpContextAccessor?.HttpContext?.Request?.Headers["User-Agent"].ToString() ?? "Unknown";
+            var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
-            var loginHistory = new STEM.Core.Entities.Users.LoginHistory
+            await _loginHistoryRepository.AddAsync(new STEM.Core.Entities.Users.LoginHistory
             {
                 UserId = user.Id,
-                LoginTime = DateTime.UtcNow,
                 IpAddress = ipAddress,
-                DeviceName = userAgent
-            };
-
-            await _loginHistoryRepository.AddAsync(loginHistory, cancellationToken);
+                DeviceName = userAgent,
+                CreatedAt = now,
+                UpdatedAt = now
+            }, cancellationToken);
             await _loginHistoryRepository.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            // Log the exception but don't fail the login process
             Console.WriteLine($"Failed to record login history: {ex.Message}");
         }
 
-        return new LoginResponse
-        {
-            Token = token,
-            RefreshToken = refreshToken,
-            Email = user.Email,
-            FullName = user.FullName,
-            Role = user.Role?.Name ?? user.RoleId.ToString()
-        };
+        return BuildLoginResponse(user, token, refreshToken);
     }
 
     public async Task<LoginResponse> RefreshTokenAsync(string refreshTokenStr, CancellationToken cancellationToken = default)
@@ -97,11 +83,16 @@ public class LoginHandler
         if (string.IsNullOrWhiteSpace(refreshTokenStr))
             throw new UnauthorizedAccessException("Refresh token is required.");
 
-        var refreshTokens = await _refreshTokenRepository.FindAsync(rt => rt.Token == refreshTokenStr, cancellationToken);
+        var refreshTokens = await _refreshTokenRepository.FindAsync(
+            rt => rt.Token == refreshTokenStr,
+            cancellationToken);
         var refreshToken = refreshTokens.FirstOrDefault();
 
         if (refreshToken == null)
             throw new UnauthorizedAccessException("Invalid refresh token.");
+
+        if (refreshToken.ExpiresAt < DateTime.UtcNow)
+            throw new UnauthorizedAccessException("Refresh token has expired.");
 
         var user = await _userRepository.GetByIdAsync(refreshToken.UserId, cancellationToken);
         if (user == null)
@@ -110,35 +101,40 @@ public class LoginHandler
         if (!user.IsActive)
             throw new UnauthorizedAccessException("Account is disabled.");
 
-        // Generate new access token and refresh token
-        // CreateRefreshTokenAsync will delete all old tokens and add new one
         var newAccessToken = _tokenService.GenerateAccessToken(user);
         var newRefreshToken = await CreateRefreshTokenAsync(user, cancellationToken);
 
-        return new LoginResponse
+        return BuildLoginResponse(user, newAccessToken, newRefreshToken);
+    }
+
+    private static LoginResponse BuildLoginResponse(User user, string accessToken, string refreshToken) =>
+        new()
         {
-            Token = newAccessToken,
-            RefreshToken = newRefreshToken,
+            Token = accessToken,
+            RefreshToken = refreshToken,
             Email = user.Email,
-            FullName = user.FullName,
+            FullName = string.IsNullOrWhiteSpace(user.Profile?.FullName) ? user.Email : user.Profile!.FullName,
             Role = user.Role?.Name ?? user.RoleId.ToString()
         };
-    }
 
     private async Task<string> CreateRefreshTokenAsync(User user, CancellationToken cancellationToken)
     {
-        var existingTokens = await _refreshTokenRepository.FindAsync(rt => rt.UserId == user.Id, cancellationToken);
+        var existingTokens = await _refreshTokenRepository.FindAsync(
+            rt => rt.UserId == user.Id,
+            cancellationToken);
         foreach (var existingToken in existingTokens)
-        {
             _refreshTokenRepository.Delete(existingToken);
-        }
+
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
+        var expirationDays = int.Parse(_configuration["JwtSettings:RefreshTokenExpirationInDays"] ?? "7");
 
         var refreshToken = new RefreshToken
         {
             UserId = user.Id,
             Token = _tokenService.GenerateRefreshToken(),
-            CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc),
-            UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
+            ExpiresAt = now.AddDays(expirationDays),
+            CreatedAt = now,
+            UpdatedAt = now
         };
 
         await _refreshTokenRepository.AddAsync(refreshToken, cancellationToken);

@@ -21,16 +21,15 @@ public class GetUserProfileHandler
         if (user == null)
             throw new KeyNotFoundException("User not found.");
 
-        var profiles = await _userProfileRepository.FindAsync(p => p.UserId == userId, cancellationToken);
-        var profile = profiles.FirstOrDefault();
+        var profile = user.Profile ?? (await _userProfileRepository.FindAsync(p => p.UserId == userId, cancellationToken)).FirstOrDefault();
 
         return new UserProfileDto
         {
             UserId = user.Id,
             Email = user.Email,
-            FullName = user.FullName,
-            Phone = user.Phone,
-            Avatar = user.Avatar,
+            FullName = profile?.FullName ?? string.Empty,
+            Phone = profile?.Phone ?? string.Empty,
+            Avatar = profile?.Avatar ?? string.Empty,
             Gender = profile?.Gender ?? string.Empty,
             DateOfBirth = profile?.DateOfBirth,
             Address = profile?.Address ?? string.Empty

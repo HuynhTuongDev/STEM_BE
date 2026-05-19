@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.UseCases.Notifications;
+using System.Security.Claims;
+using STEM.Core.Entities.Users;
 
 namespace STEM.Api.Controllers;
 
@@ -21,6 +23,17 @@ public class NotificationsController : ControllerBase
     {
         try
         {
+            var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
+            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            // Access Control: 
+            // 1. School Admin can access any user's notifications
+            // 2. Other users (e.g. Students) can only access their own notifications
+            if (currentUserRole != RoleNames.SchoolAdministrator && currentUserId != userId.ToString())
+            {
+                return Forbid();
+            }
+
             var notifications = await _notificationHandler.GetNotificationsByUserId(userId, cancellationToken);
             return Ok(new { success = true, data = notifications });
         }
@@ -35,8 +48,15 @@ public class NotificationsController : ControllerBase
     {
         try
         {
-            await _notificationHandler.MarkAsRead(id, cancellationToken);
+            var currentUserRole = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+            var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
+
+            await _notificationHandler.MarkAsRead(id, currentUserId, currentUserRole, cancellationToken);
             return Ok(new { success = true, message = "Notification marked as read" });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -49,8 +69,15 @@ public class NotificationsController : ControllerBase
     {
         try
         {
-            await _notificationHandler.DeleteNotification(id, cancellationToken);
+            var currentUserRole = User.FindFirstValue(ClaimTypes.Role) ?? string.Empty;
+            var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
+
+            await _notificationHandler.DeleteNotification(id, currentUserId, currentUserRole, cancellationToken);
             return Ok(new { success = true, message = "Notification deleted" });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
