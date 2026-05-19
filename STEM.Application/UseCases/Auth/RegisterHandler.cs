@@ -44,7 +44,7 @@ public class RegisterHandler
             IsEmailVerified = false,
             VerificationToken = verificationToken,
             VerificationTokenExpires = DateTime.SpecifyKind(DateTime.UtcNow.AddDays(1), DateTimeKind.Utc),
-            RoleId = 2,
+            RoleId = 4, // Student role
             CreatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc),
             UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc)
         };

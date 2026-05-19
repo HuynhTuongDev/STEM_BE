@@ -38,6 +38,12 @@ public class UploadAvatarHandler
             throw new ArgumentException("File size must not exceed 5MB.");
         }
 
+        // Delete old avatar if exists
+        if (!string.IsNullOrWhiteSpace(user.Avatar))
+        {
+            await _fileService.DeleteFileAsync(user.Avatar, "avatars", cancellationToken);
+        }
+
         // Upload to Supabase Storage
         var publicUrl = await _fileService.UploadFileAsync(file, "avatars", cancellationToken);
 

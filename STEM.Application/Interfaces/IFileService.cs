@@ -12,4 +12,12 @@ public interface IFileService
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The public URL of the uploaded file</returns>
     Task<string> UploadFileAsync(IFormFile file, string folderName, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Deletes a file from the storage service by its URL.
+    /// </summary>
+    /// <param name="fileUrl">The public URL of the file to delete</param>
+    /// <param name="bucketName">The bucket name</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    Task DeleteFileAsync(string fileUrl, string bucketName, CancellationToken cancellationToken = default);
 }
