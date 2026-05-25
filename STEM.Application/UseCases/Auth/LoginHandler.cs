@@ -113,7 +113,7 @@ public class LoginHandler
             Token = accessToken,
             RefreshToken = refreshToken,
             Email = user.Email,
-            FullName = string.IsNullOrWhiteSpace(user.Profile?.FullName) ? user.Email : user.Profile!.FullName,
+            FullName = string.IsNullOrWhiteSpace(user.FullName) ? user.Email : user.FullName,
             Role = user.Role?.Name ?? user.RoleId.ToString()
         };
 

@@ -15,7 +15,7 @@ public class UserRepository : Repository<User>, IUserRepository
     {
         return await _dbSet
             .Include(u => u.Role)
-            .Include(u => u.Profile)
+            .Include(u => u.School)
             .FirstOrDefaultAsync(u => u.Id == id, cancellationToken);
     }
 
@@ -23,16 +23,15 @@ public class UserRepository : Repository<User>, IUserRepository
     {
         return await _dbSet
             .Include(u => u.Role)
-            .Include(u => u.Profile)
+            .Include(u => u.School)
             .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
     }
 
     public async Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
     {
-        // Assuming email is used as username or add actual username property to User
         return await _dbSet
             .Include(u => u.Role)
-            .Include(u => u.Profile)
-            .FirstOrDefaultAsync(u => u.Profile != null && u.Profile.FullName == username, cancellationToken);
+            .Include(u => u.School)
+            .FirstOrDefaultAsync(u => u.FullName == username, cancellationToken);
     }
 }

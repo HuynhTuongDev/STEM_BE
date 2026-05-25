@@ -6,6 +6,8 @@ using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Quizzes;
 using STEM.Core.Entities.Simulations;
 using STEM.Core.Entities.Common;
+using STEM.Core.Entities.Schools;
+using STEM.Core.Entities.Participants;
 using File = STEM.Core.Entities.Courses.File;
 using Class = STEM.Core.Entities.Classes.Class;
 using Message = STEM.Core.Entities.Common.Message;
@@ -17,14 +19,14 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     // Users & Security
     public DbSet<User> Users { get; set; } = null!;
     public DbSet<Role> Roles { get; set; } = null!;
-    public DbSet<Permission> Permissions { get; set; } = null!;
-    public DbSet<RolePermission> RolePermissions { get; set; } = null!;
-    public DbSet<UserProfile> UserProfiles { get; set; } = null!;
     public DbSet<LoginHistory> LoginHistories { get; set; } = null!;
     public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
+    public DbSet<Invitation> Invitations { get; set; } = null!;
+
+    // Schools
+    public DbSet<School> Schools { get; set; } = null!;
 
     // Courses & Learning
-    public DbSet<Category> Categories { get; set; } = null!;
     public DbSet<Course> Courses { get; set; } = null!;
     public DbSet<Module> Modules { get; set; } = null!;
     public DbSet<Lesson> Lessons { get; set; } = null!;
@@ -34,13 +36,11 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     // Classes
     public DbSet<Class> Classes { get; set; } = null!;
     public DbSet<Enrollment> Enrollments { get; set; } = null!;
-    public DbSet<Attendee> Attendees { get; set; } = null!;
     public DbSet<Announcement> Announcements { get; set; } = null!;
     public DbSet<Schedule> Schedules { get; set; } = null!;
 
     // Projects & Assignments
     public DbSet<Project> Projects { get; set; } = null!;
-    public DbSet<ProjectNumber> ProjectNumbers { get; set; } = null!;
     public DbSet<Assignment> Assignments { get; set; } = null!;
     public DbSet<Submission> Submissions { get; set; } = null!;
     public DbSet<FileEntity> FileEntities { get; set; } = null!;
@@ -55,7 +55,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Feedback> Feedbacks { get; set; } = null!;
     public DbSet<Certificate> Certificates { get; set; } = null!;
     public DbSet<Leaderboard> Leaderboards { get; set; } = null!;
-    public DbSet<Badge> Badges { get; set; } = null!;
     public DbSet<Rubric> Rubrics { get; set; } = null!;
 
     // Simulations
@@ -64,9 +63,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<SimulationSession> SimulationSessions { get; set; } = null!;
     public DbSet<ExperimentLog> ExperimentLogs { get; set; } = null!;
     public DbSet<LiveMonitoring> LiveMonitorings { get; set; } = null!;
-
-    // Auditing
-    public DbSet<AuditLog> AuditLogs { get; set; } = null!;
 
     // Common
     public DbSet<Message> Messages { get; set; } = null!;
@@ -78,21 +74,18 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
 
         // Seed Roles
         modelBuilder.Entity<Role>().HasData(
-            new Role { Id = 1, Name = "Master Admin", CreatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc), UpdatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc) },
-            new Role { Id = 2, Name = "School Admin", CreatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc), UpdatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc) },
+            new Role { Id = 1, Name = "Master Administrator", CreatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc), UpdatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc) },
+            new Role { Id = 2, Name = "School Administrator", CreatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc), UpdatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc) },
             new Role { Id = 3, Name = "Teacher", CreatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc), UpdatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc) },
             new Role { Id = 4, Name = "Student", CreatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc), UpdatedAt = DateTime.SpecifyKind(new DateTime(2024, 1, 1), DateTimeKind.Utc) }
-
         );
 
-        modelBuilder.Entity<UserProfile>(entity =>
+        modelBuilder.Entity<User>(entity =>
         {
-            entity.HasOne(p => p.User)
-                .WithOne(u => u.Profile)
-                .HasForeignKey<UserProfile>(p => p.UserId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasIndex(p => p.UserId).IsUnique();
+            entity.HasOne(u => u.School)
+                .WithMany(s => s.Users)
+                .HasForeignKey(u => u.SchoolId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         // Configure Message relationships
@@ -112,18 +105,9 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         // Configure ProjectMember relationships
         modelBuilder.Entity<ProjectMember>(entity =>
         {
-            entity.HasOne(pm => pm.User)
+            entity.HasOne(pm => pm.Student)
                 .WithMany()
-                .HasForeignKey(pm => pm.UserId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
-        // Configure Attendee relationships
-        modelBuilder.Entity<Attendee>(entity =>
-        {
-            entity.HasOne(a => a.Student)
-                .WithMany()
-                .HasForeignKey(a => a.StudentId)
+                .HasForeignKey(pm => pm.StudentId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
 

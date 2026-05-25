@@ -8,16 +8,13 @@ namespace STEM.Application.UseCases.Users;
 public class UploadAvatarHandler
 {
     private readonly IUserRepository _userRepository;
-    private readonly IRepository<UserProfile> _userProfileRepository;
     private readonly IFileService _fileService;
 
     public UploadAvatarHandler(
         IUserRepository userRepository,
-        IRepository<UserProfile> userProfileRepository,
         IFileService fileService)
     {
         _userRepository = userRepository;
-        _userProfileRepository = userProfileRepository;
         _fileService = fileService;
     }
 
@@ -36,29 +33,15 @@ public class UploadAvatarHandler
         if (file.Length > 5 * 1024 * 1024)
             throw new ArgumentException("File size must not exceed 5MB.");
 
-        var profile = user.Profile
-            ?? (await _userProfileRepository.FindAsync(p => p.UserId == userId, cancellationToken)).FirstOrDefault();
-
-        if (profile == null)
-        {
-            profile = new UserProfile
-            {
-                UserId = userId,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
-            };
-            await _userProfileRepository.AddAsync(profile, cancellationToken);
-        }
-
-        if (!string.IsNullOrWhiteSpace(profile.Avatar))
-            await _fileService.DeleteFileAsync(profile.Avatar, "avatars", cancellationToken);
+        if (!string.IsNullOrWhiteSpace(user.Avatar))
+            await _fileService.DeleteFileAsync(user.Avatar, "avatars", cancellationToken);
 
         var publicUrl = await _fileService.UploadFileAsync(file, "avatars", cancellationToken);
 
-        profile.Avatar = publicUrl;
-        profile.UpdatedAt = DateTime.UtcNow;
-        _userProfileRepository.Update(profile);
-        await _userProfileRepository.SaveChangesAsync(cancellationToken);
+        user.Avatar = publicUrl;
+        user.UpdatedAt = DateTime.UtcNow;
+        _userRepository.Update(user);
+        await _userRepository.SaveChangesAsync(cancellationToken);
 
         return publicUrl;
     }
