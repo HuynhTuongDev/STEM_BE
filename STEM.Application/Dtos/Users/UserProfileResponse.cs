@@ -1,6 +1,6 @@
 namespace STEM.Application.Dtos.Users;
 
-public class UserProfileDto
+public class UserProfileResponse
 {
     public int UserId { get; set; }
     public string Email { get; set; } = string.Empty;

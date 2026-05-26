@@ -13,13 +13,13 @@ public class GetUserProfileHandler
         _userRepository = userRepository;
     }
 
-    public async Task<UserProfileDto> Handle(int userId, CancellationToken cancellationToken = default)
+    public async Task<UserProfileResponse> Handle(int userId, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
         if (user == null)
             throw new KeyNotFoundException("User not found.");
 
-        return new UserProfileDto
+        return new UserProfileResponse
         {
             UserId = user.Id,
             Email = user.Email,

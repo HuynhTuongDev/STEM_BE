@@ -18,7 +18,7 @@ public class UpdateUserProfileHandler
         _validator = validator;
     }
 
-    public async Task<UserProfileDto> Handle(int userId, UpdateProfileRequest request, CancellationToken cancellationToken = default)
+    public async Task<UserProfileResponse> Handle(int userId, UpdateProfileRequest request, CancellationToken cancellationToken = default)
     {
         await _validator.ValidateAndThrowAsync(request, cancellationToken);
         var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
@@ -37,7 +37,7 @@ public class UpdateUserProfileHandler
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
-        return new UserProfileDto
+        return new UserProfileResponse
         {
             UserId = user.Id,
             Email = user.Email,
