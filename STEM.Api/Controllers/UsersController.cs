@@ -15,15 +15,17 @@ public class UsersController : ControllerBase
     private readonly GetUserProfileHandler _getUserProfileHandler;
     private readonly UpdateUserProfileHandler _updateUserProfileHandler;
     private readonly UploadAvatarHandler _uploadAvatarHandler;
-
+    private readonly GetUsersListHandler _getUsersListHandler;
     public UsersController(
         GetUserProfileHandler getUserProfileHandler,
         UpdateUserProfileHandler updateUserProfileHandler,
-        UploadAvatarHandler uploadAvatarHandler)
+        UploadAvatarHandler uploadAvatarHandler,
+        GetUsersListHandler getUsersListHandler)
     {
         _getUserProfileHandler = getUserProfileHandler;
         _updateUserProfileHandler = updateUserProfileHandler;
         _uploadAvatarHandler = uploadAvatarHandler;
+        _getUsersListHandler = getUsersListHandler;
     }
 
     [HttpGet("profile")]
@@ -87,6 +89,25 @@ public class UsersController : ControllerBase
         }
     }
 
+    [HttpGet]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> GetUsers([FromQuery] GetUsersRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var result = await _getUsersListHandler.Handle(request, currentUserId, cancellationToken);
+            return Ok(new { success = true, data = result });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "An error occurred while fetching the users list.", error = ex.Message });
+        }
+    }
     private int GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
