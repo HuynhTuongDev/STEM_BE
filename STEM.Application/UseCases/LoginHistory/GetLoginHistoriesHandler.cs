@@ -1,4 +1,5 @@
 using STEM.Application.Dtos.LoginHistory;
+using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.LoginHistory;
@@ -6,10 +7,14 @@ namespace STEM.Application.UseCases.LoginHistory;
 public class GetLoginHistoriesHandler
 {
     private readonly ILoginHistoryRepository _loginHistoryRepository;
+    private readonly IUserRepository _userRepository;
 
-    public GetLoginHistoriesHandler(ILoginHistoryRepository loginHistoryRepository)
+    public GetLoginHistoriesHandler(
+        ILoginHistoryRepository loginHistoryRepository,
+        IUserRepository userRepository)
     {
         _loginHistoryRepository = loginHistoryRepository;
+        _userRepository = userRepository;
     }
 
     public async Task<List<LoginHistoryResponse>> Handle(GetLoginHistoriesRequest request, CancellationToken cancellationToken = default)
@@ -20,7 +25,16 @@ public class GetLoginHistoriesHandler
         var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
         var pageSize = request.PageSize < 1 ? 20 : Math.Min(request.PageSize, 100);
 
-        var histories = await _loginHistoryRepository.GetByUserIdAsync(request.UserId, cancellationToken);
+        // Get target user to check SchoolId
+        var targetUser = await _userRepository.GetByIdAsync(request.UserId, cancellationToken);
+        if (targetUser == null)
+            throw new KeyNotFoundException("User not found.");
+
+        // Get histories filtered by both UserId and SchoolId
+        var histories = await _loginHistoryRepository.GetByUserIdAndSchoolIdAsync(
+            request.UserId,
+            targetUser.SchoolId ?? 0,
+            cancellationToken);
 
         var pagedHistories = histories
             .Skip((pageNumber - 1) * pageSize)

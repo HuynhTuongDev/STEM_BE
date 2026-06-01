@@ -43,7 +43,8 @@ public class RegisterHandler
             IsEmailVerified = false,
             VerificationToken = verificationToken,
             VerificationTokenExpires = now.AddHours(1),
-            RoleId = 4,
+            RoleId = 4, // Student
+            SchoolId = request.SchoolId,
             CreatedAt = now,
             UpdatedAt = now
         };

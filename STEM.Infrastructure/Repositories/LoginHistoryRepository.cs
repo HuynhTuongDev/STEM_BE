@@ -18,4 +18,13 @@ public class LoginHistoryRepository : Repository<LoginHistory>, ILoginHistoryRep
             .OrderByDescending(lh => lh.CreatedAt)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IEnumerable<LoginHistory>> GetByUserIdAndSchoolIdAsync(int userId, int schoolId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(lh => lh.User)
+            .Where(lh => lh.UserId == userId && lh.User != null && lh.User.SchoolId == schoolId)
+            .OrderByDescending(lh => lh.CreatedAt)
+            .ToListAsync(cancellationToken);
+    }
 }

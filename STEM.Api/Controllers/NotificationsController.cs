@@ -54,7 +54,7 @@ public class NotificationsController : ControllerBase
             await _notificationHandler.MarkAsRead(id, currentUserId, currentUserRole, cancellationToken);
             return Ok(new { success = true, message = "Notification marked as read" });
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException)
         {
             return Forbid();
         }
@@ -75,7 +75,7 @@ public class NotificationsController : ControllerBase
             await _notificationHandler.DeleteNotification(id, currentUserId, currentUserRole, cancellationToken);
             return Ok(new { success = true, message = "Notification deleted" });
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException)
         {
             return Forbid();
         }

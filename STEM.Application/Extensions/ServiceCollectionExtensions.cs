@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using STEM.Application.UseCases.Auth;
 using STEM.Application.UseCases.LoginHistory;
 using STEM.Application.UseCases.Notifications;
+using STEM.Application.UseCases.Schools;
 using STEM.Application.UseCases.Users;
 using FluentValidation;
 using STEM.Application.Validators;
@@ -19,6 +20,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ForgotPasswordHandler>();
         services.AddScoped<ResetPasswordHandler>();
         services.AddScoped<ChangePasswordHandler>();
+
+        // School Handlers
+        services.AddScoped<RegisterSchoolHandler>();
 
         // LoginHistory Handlers
         services.AddScoped<GetLoginHistoriesHandler>();

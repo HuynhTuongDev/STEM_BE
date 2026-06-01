@@ -1,18 +1,16 @@
+namespace STEM.Infrastructure.Data;
+
+using STEM.Core.Entities.Participants;
+using STEM.Core.Entities.Projects;
 using Microsoft.EntityFrameworkCore;
 using STEM.Core.Entities.Users;
 using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Classes;
-using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Quizzes;
-using STEM.Core.Entities.Simulations;
 using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Schools;
-using STEM.Core.Entities.Participants;
 using File = STEM.Core.Entities.Courses.File;
-using Class = STEM.Core.Entities.Classes.Class;
-using Message = STEM.Core.Entities.Common.Message;
-
-namespace STEM.Infrastructure.Data;
+using Rubric = STEM.Core.Entities.Assessments.Rubric;
 
 public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(options)
 {
@@ -21,7 +19,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Role> Roles { get; set; } = null!;
     public DbSet<LoginHistory> LoginHistories { get; set; } = null!;
     public DbSet<RefreshToken> RefreshTokens { get; set; } = null!;
-    public DbSet<Invitation> Invitations { get; set; } = null!;
 
     // Schools
     public DbSet<School> Schools { get; set; } = null!;
@@ -43,7 +40,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Project> Projects { get; set; } = null!;
     public DbSet<Assignment> Assignments { get; set; } = null!;
     public DbSet<Submission> Submissions { get; set; } = null!;
-    public DbSet<FileEntity> FileEntities { get; set; } = null!;
     public DbSet<Metric> Metrics { get; set; } = null!;
     public DbSet<ProjectMember> ProjectMembers { get; set; } = null!;
 
@@ -51,22 +47,11 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Quiz> Quizzes { get; set; } = null!;
     public DbSet<QuizQuestion> QuizQuestions { get; set; } = null!;
     public DbSet<QuizAnswer> QuizAnswers { get; set; } = null!;
-    public DbSet<Grade> Grades { get; set; } = null!;
-    public DbSet<Feedback> Feedbacks { get; set; } = null!;
-    public DbSet<Certificate> Certificates { get; set; } = null!;
-    public DbSet<Leaderboard> Leaderboards { get; set; } = null!;
     public DbSet<Rubric> Rubrics { get; set; } = null!;
 
-    // Simulations
-    public DbSet<SimulationEntity> Simulations { get; set; } = null!;
-    public DbSet<SimulationTemplate> SimulationTemplates { get; set; } = null!;
-    public DbSet<SimulationSession> SimulationSessions { get; set; } = null!;
-    public DbSet<ExperimentLog> ExperimentLogs { get; set; } = null!;
-    public DbSet<LiveMonitoring> LiveMonitorings { get; set; } = null!;
-
     // Common
-    public DbSet<Message> Messages { get; set; } = null!;
     public DbSet<Notification> Notifications { get; set; } = null!;
+    public DbSet<FileEntity> FileEntities { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -88,41 +73,12 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
-        // Configure Message relationships
-        modelBuilder.Entity<Message>(entity =>
-        {
-            entity.HasOne(m => m.Sender)
-                .WithMany(u => u.SentMessages)
-                .HasForeignKey(m => m.SenderId)
-                .OnDelete(DeleteBehavior.Restrict);
-
-            entity.HasOne(m => m.Receiver)
-                .WithMany(u => u.ReceivedMessages)
-                .HasForeignKey(m => m.ReceiverId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
         // Configure ProjectMember relationships
         modelBuilder.Entity<ProjectMember>(entity =>
         {
             entity.HasOne(pm => pm.Student)
                 .WithMany()
                 .HasForeignKey(pm => pm.StudentId)
-                .OnDelete(DeleteBehavior.Restrict);
-        });
-
-        // Configure Simulation relationships
-        modelBuilder.Entity<SimulationEntity>(entity =>
-        {
-            entity.ToTable("Simulations");
-        });
-
-        // Configure Certificates
-        modelBuilder.Entity<Certificate>(entity =>
-        {
-            entity.HasOne(c => c.Student)
-                .WithMany()
-                .HasForeignKey(c => c.StudentId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
     }

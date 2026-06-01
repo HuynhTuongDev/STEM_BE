@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using STEM.Infrastructure.Data;
@@ -11,9 +12,11 @@ using STEM.Infrastructure.Data;
 namespace STEM.Infrastructure.Migrations
 {
     [DbContext(typeof(StemDbContext))]
-    partial class StemDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260601230254_RemoveMessageAndInvitation")]
+    partial class RemoveMessageAndInvitation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,37 +24,6 @@ namespace STEM.Infrastructure.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("STEM.Core.Entities.Assessments.Rubric", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AssignmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Criteria")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("MaxScore")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignmentId");
-
-                    b.ToTable("Rubrics");
-                });
 
             modelBuilder.Entity("STEM.Core.Entities.Classes.Announcement", b =>
                 {
@@ -539,7 +511,125 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("AssignmentId");
 
+                    b.HasIndex("FileId");
+
                     b.ToTable("Submissions");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Certificate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("CourseId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CourseId");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("Certificates");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Feedback", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Content")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("Feedbacks");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Grade", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("RubricId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RubricId");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("Grades");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Leaderboard", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Score")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("Leaderboards");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Quizzes.Quiz", b =>
@@ -629,6 +719,37 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("QuizQuestions");
                 });
 
+            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Rubric", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Criteria")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Rubrics");
+                });
+
             modelBuilder.Entity("STEM.Core.Entities.Schools.School", b =>
                 {
                     b.Property<int>("Id")
@@ -668,6 +789,142 @@ namespace STEM.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("Schools");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.ExperimentLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Log")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("SessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId");
+
+                    b.ToTable("ExperimentLogs");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.LiveMonitoring", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SessionId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TeacherId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId");
+
+                    b.HasIndex("TeacherId");
+
+                    b.ToTable("LiveMonitorings");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("LessonId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LessonId");
+
+                    b.ToTable("Simulations", (string)null);
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationSession", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("SimulationSessions");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationTemplate", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Config")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SimulationId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SimulationId");
+
+                    b.ToTable("SimulationTemplates");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Users.LoginHistory", b =>
@@ -857,17 +1114,6 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("SchoolId");
 
                     b.ToTable("Users");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Assessments.Rubric", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Projects.Assignment", "Assignment")
-                        .WithMany()
-                        .HasForeignKey("AssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Assignment");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Classes.Announcement", b =>
@@ -1070,7 +1316,71 @@ namespace STEM.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("STEM.Core.Entities.Projects.FileEntity", "File")
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("Assignment");
+
+                    b.Navigation("File");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Certificate", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
+                        .WithMany()
+                        .HasForeignKey("CourseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Course");
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Feedback", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Grade", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Quizzes.Rubric", null)
+                        .WithMany("Grades")
+                        .HasForeignKey("RubricId");
+
+                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Leaderboard", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Quizzes.Quiz", b =>
@@ -1104,6 +1414,69 @@ namespace STEM.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Quiz");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.ExperimentLog", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Simulations.SimulationSession", "Session")
+                        .WithMany("ExperimentLogs")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Session");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.LiveMonitoring", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Simulations.SimulationSession", "Session")
+                        .WithMany("LiveMonitorings")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("STEM.Core.Entities.Users.User", "Teacher")
+                        .WithMany()
+                        .HasForeignKey("TeacherId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Session");
+
+                    b.Navigation("Teacher");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationEntity", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Courses.Lesson", "Lesson")
+                        .WithMany()
+                        .HasForeignKey("LessonId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Lesson");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationSession", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Student");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationTemplate", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Simulations.SimulationEntity", "Simulation")
+                        .WithMany("SimulationTemplates")
+                        .HasForeignKey("SimulationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Simulation");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Users.LoginHistory", b =>
@@ -1168,11 +1541,28 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("QuizAnswers");
                 });
 
+            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Rubric", b =>
+                {
+                    b.Navigation("Grades");
+                });
+
             modelBuilder.Entity("STEM.Core.Entities.Schools.School", b =>
                 {
                     b.Navigation("Classes");
 
                     b.Navigation("Users");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationEntity", b =>
+                {
+                    b.Navigation("SimulationTemplates");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationSession", b =>
+                {
+                    b.Navigation("ExperimentLogs");
+
+                    b.Navigation("LiveMonitorings");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Users.User", b =>
