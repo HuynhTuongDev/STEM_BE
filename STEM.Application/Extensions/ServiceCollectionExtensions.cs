@@ -35,6 +35,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<UpdateUserProfileHandler>();
         services.AddScoped<UploadAvatarHandler>();
         services.AddScoped<GetUsersListHandler>();
+        services.AddScoped<GetUserDetailHandler>();
 
         // Validators
         services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();

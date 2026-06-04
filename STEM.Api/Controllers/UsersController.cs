@@ -16,16 +16,20 @@ public class UsersController : ControllerBase
     private readonly UpdateUserProfileHandler _updateUserProfileHandler;
     private readonly UploadAvatarHandler _uploadAvatarHandler;
     private readonly GetUsersListHandler _getUsersListHandler;
+    private readonly GetUserDetailHandler _getUserDetailHandler;
+
     public UsersController(
         GetUserProfileHandler getUserProfileHandler,
         UpdateUserProfileHandler updateUserProfileHandler,
         UploadAvatarHandler uploadAvatarHandler,
-        GetUsersListHandler getUsersListHandler)
+        GetUsersListHandler getUsersListHandler,
+        GetUserDetailHandler getUserDetailHandler)
     {
         _getUserProfileHandler = getUserProfileHandler;
         _updateUserProfileHandler = updateUserProfileHandler;
         _uploadAvatarHandler = uploadAvatarHandler;
         _getUsersListHandler = getUsersListHandler;
+        _getUserDetailHandler = getUserDetailHandler;
     }
 
     [HttpGet("profile")]
@@ -108,6 +112,26 @@ public class UsersController : ControllerBase
             return StatusCode(500, new { success = false, message = "An error occurred while fetching the users list.", error = ex.Message });
         }
     }
+
+    [HttpGet("{id:int}")]
+    [Authorize(Policy = "AdminOnly")]
+    public async Task<IActionResult> GetUserDetail(int id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await _getUserDetailHandler.Handle(id, cancellationToken);
+            return Ok(new { success = true, data = result });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "An error occurred while fetching the user detail.", error = ex.Message });
+        }
+    }
+
     private int GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
