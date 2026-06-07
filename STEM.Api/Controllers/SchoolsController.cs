@@ -9,24 +9,30 @@ namespace STEM.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-[AllowAnonymous]
 public class SchoolsController : ControllerBase
 {
     private readonly IRepository<School> _schoolRepository;
     private readonly RegisterSchoolHandler _registerSchoolHandler;
+    private readonly UpdateSchoolHandler _updateSchoolHandler;
+    private readonly DeleteSchoolHandler _deleteSchoolHandler;
 
     public SchoolsController(
         IRepository<School> schoolRepository,
-        RegisterSchoolHandler registerSchoolHandler)
+        RegisterSchoolHandler registerSchoolHandler,
+        UpdateSchoolHandler updateSchoolHandler,
+        DeleteSchoolHandler deleteSchoolHandler)
     {
         _schoolRepository = schoolRepository;
         _registerSchoolHandler = registerSchoolHandler;
+        _updateSchoolHandler = updateSchoolHandler;
+        _deleteSchoolHandler = deleteSchoolHandler;
     }
 
     /// <summary>
     /// Đăng ký trường mới (tạo School + User đại diện).
-    /// Cần Master Admin duyệt.
+    /// Cần Master Admin duyệt. Public – không cần đăng nhập.
     /// </summary>
+    [AllowAnonymous]
     [HttpPost("register")]
     public async Task<IActionResult> RegisterSchool(
         [FromBody] SchoolRegistrationRequest request,
@@ -53,7 +59,9 @@ public class SchoolsController : ControllerBase
 
     /// <summary>
     /// Lấy danh sách tất cả trường đã được duyệt.
+    /// Public – không cần đăng nhập.
     /// </summary>
+    [AllowAnonymous]
     [HttpGet]
     public async Task<IActionResult> GetSchools(CancellationToken cancellationToken = default)
     {
@@ -80,8 +88,10 @@ public class SchoolsController : ControllerBase
 
     /// <summary>
     /// Lấy thông tin chi tiết một trường.
+    /// Chỉ School Administrator mới có quyền truy cập.
     /// </summary>
-    [HttpGet("{id}")]
+    [Authorize(Policy = "SchoolAdminOnly")]
+    [HttpGet("{id:int}")]
     public async Task<IActionResult> GetSchool(int id, CancellationToken cancellationToken = default)
     {
         try
@@ -99,6 +109,59 @@ public class SchoolsController : ControllerBase
                 school.RepresentativeName,
                 school.Status
             }});
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Cập nhật thông tin một trường.
+    /// Chỉ School Administrator mới có quyền truy cập.
+    /// </summary>
+    [Authorize(Policy = "SchoolAdminOnly")]
+    [HttpPut("{id:int}")]
+    public async Task<IActionResult> UpdateSchool(
+        int id,
+        [FromBody] UpdateSchoolRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _updateSchoolHandler.Handle(id, request, cancellationToken);
+            return Ok(new { success = true, message = "School updated successfully." });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Xóa một trường khỏi hệ thống.
+    /// Chỉ School Administrator mới có quyền truy cập.
+    /// </summary>
+    [Authorize(Policy = "SchoolAdminOnly")]
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> DeleteSchool(int id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _deleteSchoolHandler.Handle(id, cancellationToken);
+            return Ok(new { success = true, message = "School deleted successfully." });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
         }
         catch (Exception ex)
         {

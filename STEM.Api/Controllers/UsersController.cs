@@ -94,7 +94,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "SchoolAdminOnly")]
     public async Task<IActionResult> GetUsers([FromQuery] GetUsersRequest request, CancellationToken cancellationToken = default)
     {
         try
@@ -114,7 +114,7 @@ public class UsersController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "SchoolAdminOnly")]
     public async Task<IActionResult> GetUserDetail(int id, CancellationToken cancellationToken = default)
     {
         try

@@ -23,6 +23,8 @@ public static class ServiceCollectionExtensions
 
         // School Handlers
         services.AddScoped<RegisterSchoolHandler>();
+        services.AddScoped<UpdateSchoolHandler>();
+        services.AddScoped<DeleteSchoolHandler>();
 
         // LoginHistory Handlers
         services.AddScoped<GetLoginHistoriesHandler>();
