@@ -41,7 +41,11 @@ public class SchoolsController : ControllerBase
         try
         {
             await _registerSchoolHandler.Handle(request, cancellationToken);
-            return Ok(new { success = true, message = "School registration submitted. Pending Master Admin approval." });
+            return Ok(new 
+            { 
+                success = true, 
+                message = "School registration submitted. Please check your email to verify your account. After verification, your account will require Master Admin approval." 
+            });
         }
         catch (FluentValidation.ValidationException ex)
         {
@@ -90,7 +94,7 @@ public class SchoolsController : ControllerBase
     /// Lấy thông tin chi tiết một trường.
     /// Chỉ School Administrator mới có quyền truy cập.
     /// </summary>
-    [Authorize(Policy = "SchoolAdminOnly")]
+    [Authorize(Policy = "MasterOnly")]
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetSchool(int id, CancellationToken cancellationToken = default)
     {
@@ -120,7 +124,7 @@ public class SchoolsController : ControllerBase
     /// Cập nhật thông tin một trường.
     /// Chỉ School Administrator mới có quyền truy cập.
     /// </summary>
-    [Authorize(Policy = "SchoolAdminOnly")]
+    [Authorize(Policy = "MasterOnly")]
     [HttpPut("{id:int}")]
     public async Task<IActionResult> UpdateSchool(
         int id,
@@ -150,7 +154,7 @@ public class SchoolsController : ControllerBase
     /// Xóa một trường khỏi hệ thống.
     /// Chỉ School Administrator mới có quyền truy cập.
     /// </summary>
-    [Authorize(Policy = "SchoolAdminOnly")]
+    [Authorize(Policy = "MasterOnly")]
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> DeleteSchool(int id, CancellationToken cancellationToken = default)
     {
