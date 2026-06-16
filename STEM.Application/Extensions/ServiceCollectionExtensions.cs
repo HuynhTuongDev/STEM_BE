@@ -3,6 +3,7 @@ using STEM.Application.UseCases.Auth;
 using STEM.Application.UseCases.LoginHistory;
 using STEM.Application.UseCases.Notifications;
 using STEM.Application.UseCases.Schools;
+using STEM.Application.UseCases.Courses;
 using STEM.Application.UseCases.Users;
 using FluentValidation;
 using STEM.Application.Validators;
@@ -38,6 +39,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<UploadAvatarHandler>();
         services.AddScoped<GetUsersListHandler>();
         services.AddScoped<GetUserDetailHandler>();
+
+        // Course Handlers
+        services.AddScoped<GetCoursesListHandler>();
+        services.AddScoped<GetCourseDetailHandler>();
+        services.AddScoped<CreateCourseHandler>();
+        services.AddScoped<UpdateCourseHandler>();
+        services.AddScoped<DeleteCourseHandler>();
 
         // Validators
         services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
