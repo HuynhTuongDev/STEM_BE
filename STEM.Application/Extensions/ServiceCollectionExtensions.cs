@@ -16,11 +16,11 @@ public static class ServiceCollectionExtensions
     {
         // Auth Handlers
         services.AddScoped<LoginHandler>();
-        services.AddScoped<RegisterHandler>();
         services.AddScoped<VerifyEmailHandler>();
         services.AddScoped<ForgotPasswordHandler>();
         services.AddScoped<ResetPasswordHandler>();
         services.AddScoped<ChangePasswordHandler>();
+        services.AddScoped<CreateUserBySchoolAdminHandler>();
 
         // School Handlers
         services.AddScoped<RegisterSchoolHandler>();
@@ -48,7 +48,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DeleteCourseHandler>();
 
         // Validators
-        services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
+        services.AddValidatorsFromAssemblyContaining<CreateUserBySchoolAdminValidator>();
 
         return services;
     }

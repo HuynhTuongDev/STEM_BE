@@ -29,7 +29,7 @@ public class ChangePasswordHandler
         }
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
-        user.UpdatedAt = DateTime.UtcNow;
+        user.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync(cancellationToken);

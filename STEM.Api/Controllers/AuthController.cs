@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Dtos.Auth;
 using STEM.Application.UseCases.Auth;
+using System.Security.Claims;
 
 namespace STEM.Api.Controllers;
 
@@ -10,26 +11,26 @@ namespace STEM.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly LoginHandler _loginHandler;
-    private readonly RegisterHandler _registerHandler;
     private readonly VerifyEmailHandler _verifyEmailHandler;
     private readonly ForgotPasswordHandler _forgotPasswordHandler;
     private readonly ResetPasswordHandler _resetPasswordHandler;
     private readonly ChangePasswordHandler _changePasswordHandler;
+    private readonly CreateUserBySchoolAdminHandler _createUserBySchoolAdminHandler;
 
     public AuthController(
         LoginHandler loginHandler,
-        RegisterHandler registerHandler,
         VerifyEmailHandler verifyEmailHandler,
         ForgotPasswordHandler forgotPasswordHandler,
         ResetPasswordHandler resetPasswordHandler,
-        ChangePasswordHandler changePasswordHandler)
+        ChangePasswordHandler changePasswordHandler,
+        CreateUserBySchoolAdminHandler createUserBySchoolAdminHandler)
     {
         _loginHandler = loginHandler;
-        _registerHandler = registerHandler;
         _verifyEmailHandler = verifyEmailHandler;
         _forgotPasswordHandler = forgotPasswordHandler;
         _resetPasswordHandler = resetPasswordHandler;
         _changePasswordHandler = changePasswordHandler;
+        _createUserBySchoolAdminHandler = createUserBySchoolAdminHandler;
     }
 
     [HttpPost("login")]
@@ -51,22 +52,38 @@ public class AuthController : ControllerBase
         }
     }
 
-    [HttpPost("register")]
-    [AllowAnonymous]
-    public async Task<IActionResult> Register([FromBody] RegisterRequest request)
+    [HttpPost("create-user")]
+    [Authorize(Policy = "SchoolAdminOnly")]
+    public async Task<IActionResult> CreateUser(
+        [FromBody] CreateUserBySchoolAdminRequest request,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            await _registerHandler.Handle(request);
-            return Ok(new { message = "Registration successful. Please check your email to verify your account." });
+            var userIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (!int.TryParse(userIdClaim, out int currentUserId))
+            {
+                return Unauthorized(new { success = false, message = "User is not authenticated properly." });
+            }
+
+            await _createUserBySchoolAdminHandler.Handle(currentUserId, request, cancellationToken);
+            return Ok(new { success = true, message = "User created successfully." });
+        }
+        catch (FluentValidation.ValidationException ex)
+        {
+            return BadRequest(new { success = false, errors = ex.Errors.Select(e => e.ErrorMessage) });
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { success = false, message = ex.Message });
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "An error occurred during registration.", error = ex.Message });
+            return StatusCode(500, new { success = false, message = "An error occurred while creating user.", error = ex.Message });
         }
     }
 

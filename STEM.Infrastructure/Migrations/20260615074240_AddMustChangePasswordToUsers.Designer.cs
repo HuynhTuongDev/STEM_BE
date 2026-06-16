@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using STEM.Infrastructure.Data;
@@ -11,9 +12,11 @@ using STEM.Infrastructure.Data;
 namespace STEM.Infrastructure.Migrations
 {
     [DbContext(typeof(StemDbContext))]
-    partial class StemDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260615074240_AddMustChangePasswordToUsers")]
+    partial class AddMustChangePasswordToUsers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -823,6 +826,9 @@ namespace STEM.Infrastructure.Migrations
                     b.Property<bool>("IsEmailVerified")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text");
 
@@ -841,6 +847,9 @@ namespace STEM.Infrastructure.Migrations
                     b.Property<int?>("SchoolId")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime?>("TemporaryPasswordExpires")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -857,28 +866,6 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("SchoolId");
 
                     b.ToTable("Users");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Projects.Assignment", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Projects.Project", "Project")
-                        .WithMany("Metrics")
-                        .HasForeignKey("AssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Projects.Submission", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Projects.Project", "Project")
-                        .WithMany("Submissions")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Assessments.Rubric", b =>
@@ -1012,19 +999,19 @@ namespace STEM.Infrastructure.Migrations
 
             modelBuilder.Entity("STEM.Core.Entities.Courses.Material", b =>
                 {
-                    b.HasOne("STEM.Core.Entities.Courses.Module", "Module")
+                    b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
                         .WithMany()
-                        .HasForeignKey("ModuleId")
+                        .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("Module");
+                    b.Navigation("Course");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Courses.Module", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
-                        .WithMany("Modules")
+                        .WithMany()
                         .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1047,6 +1034,8 @@ namespace STEM.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Project");
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.Assignment", b =>
@@ -1060,31 +1049,26 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("Class");
                 });
 
+            modelBuilder.Entity("STEM.Core.Entities.Projects.Metric", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Projects.Assignment", "Assignment")
+                        .WithMany("Metrics")
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Assignment");
+                });
+
             modelBuilder.Entity("STEM.Core.Entities.Projects.Project", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Classes.Class", "Class")
-                        .WithMany("Projects")
+                        .WithMany()
                         .HasForeignKey("ClassId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
-                        .WithMany("Projects")
-                        .HasForeignKey("CourseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "Teacher")
-                        .WithMany()
-                        .HasForeignKey("TeacherId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.Navigation("Class");
-
-                    b.Navigation("Course");
-
-                    b.Navigation("Teacher");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.Submission", b =>
@@ -1095,21 +1079,13 @@ namespace STEM.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
                     b.Navigation("Assignment");
-
-                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Quizzes.Quiz", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
-                        .WithMany("Quizzes")
+                        .WithMany()
                         .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1139,27 +1115,10 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("Quiz");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Schools.School", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Users.User", "Representative")
-                        .WithMany()
-                        .HasForeignKey("RepresentativeId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "ApprovedBy")
-                        .WithMany()
-                        .HasForeignKey("ApprovedById");
-
-                    b.Navigation("ApprovedBy");
-
-                    b.Navigation("Representative");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Users.LoginHistory", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Users.User", "User")
-                        .WithMany("LoginHistories")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1227,8 +1186,6 @@ namespace STEM.Infrastructure.Migrations
 
             modelBuilder.Entity("STEM.Core.Entities.Users.User", b =>
                 {
-                    b.Navigation("LoginHistories");
-
                     b.Navigation("RefreshTokens");
                 });
 #pragma warning restore 612, 618
