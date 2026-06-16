@@ -31,6 +31,7 @@ public class GetUserDetailHandler
             Address          = user.Address,
             IsActive         = user.IsActive,
             IsEmailVerified  = user.IsEmailVerified,
+            RoleId           = user.RoleId,
             Role             = user.Role?.Name ?? string.Empty,
             SchoolId         = user.SchoolId,
             CreatedAt        = user.CreatedAt,

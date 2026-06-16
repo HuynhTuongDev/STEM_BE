@@ -12,6 +12,7 @@ public class UserDetailResponse
     public string? Address { get; set; }
     public bool IsActive { get; set; }
     public bool IsEmailVerified { get; set; }
+    public int RoleId { get; set; }
     public string Role { get; set; } = string.Empty;
     public int? SchoolId { get; set; }
     public DateTime CreatedAt { get; set; }
