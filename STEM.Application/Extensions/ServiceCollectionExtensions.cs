@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using STEM.Application.UseCases.Auth;
 using STEM.Application.UseCases.LoginHistory;
 using STEM.Application.UseCases.Notifications;
+using STEM.Application.UseCases.Simulation;
 using STEM.Application.UseCases.Users;
 using FluentValidation;
 using STEM.Application.Validators;
@@ -25,6 +26,15 @@ public static class ServiceCollectionExtensions
 
         // Notification Handlers
         services.AddScoped<NotificationHandler>();
+
+        // Simulation Handlers
+        services.AddScoped<SimulationHandler>();
+        services.AddScoped<AiSuggestHandler>();
+        services.AddHttpClient("Anthropic", client =>
+        {
+            client.BaseAddress = new Uri("https://api.anthropic.com");
+            client.DefaultRequestHeaders.Add("anthropic-version", "2023-06-01");
+        });
 
         // User Handlers
         services.AddScoped<GetUserProfileHandler>();

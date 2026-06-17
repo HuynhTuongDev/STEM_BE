@@ -117,6 +117,14 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             entity.ToTable("Simulations");
         });
 
+        modelBuilder.Entity<SimulationTemplate>(entity =>
+        {
+            entity.HasMany(t => t.SimulationSessions)
+                .WithOne(s => s.Template)
+                .HasForeignKey(s => s.TemplateId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         // Configure Certificates
         modelBuilder.Entity<Certificate>(entity =>
         {
