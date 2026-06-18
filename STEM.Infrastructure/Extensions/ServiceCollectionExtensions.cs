@@ -7,6 +7,7 @@ using STEM.Infrastructure.Data;
 using STEM.Infrastructure.Repositories;
 using STEM.Infrastructure.Services;
 using STEM.Infrastructure.Services.Authentication;
+using STEM.Infrastructure.Services.Wokwi;
 using Supabase;
 
 namespace STEM.Infrastructure.Extensions;
@@ -25,9 +26,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
+        services.AddScoped<ISimulationRepository, SimulationRepository>();
+        services.AddScoped<ISimulationSessionRepository, SimulationSessionRepository>();
         services.AddScoped<ICourseRepository, CourseRepository>();
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddScoped<ITokenService, TokenService>();
+        services.AddScoped<IWokwiService, WokwiService>();
         services.AddTransient<IEmailService, EmailService>();
 
         // Supabase Configuration

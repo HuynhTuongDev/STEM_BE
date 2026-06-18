@@ -81,5 +81,28 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
                 .HasForeignKey(pm => pm.StudentId)
                 .OnDelete(DeleteBehavior.Restrict);
         });
+
+        // Configure Simulation relationships
+        modelBuilder.Entity<SimulationEntity>(entity =>
+        {
+            entity.ToTable("Simulations");
+        });
+
+        modelBuilder.Entity<SimulationTemplate>(entity =>
+        {
+            entity.HasMany(t => t.SimulationSessions)
+                .WithOne(s => s.Template)
+                .HasForeignKey(s => s.TemplateId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Configure Certificates
+        modelBuilder.Entity<Certificate>(entity =>
+        {
+            entity.HasOne(c => c.Student)
+                .WithMany()
+                .HasForeignKey(c => c.StudentId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
     }
 }
