@@ -1,5 +1,6 @@
 using STEM.Application.Dtos.Auth;
 using STEM.Application.Interfaces;
+using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Auth;
@@ -18,7 +19,11 @@ public class ForgotPasswordHandler
     public async Task Handle(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
     {
         var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
-        if (user == null) return;
+        if (user == null)
+            throw new InvalidOperationException("If the email is registered, a password reset link has been sent.");
+
+        if (user.RoleId != 2) // Only School Administrator can reset password
+            throw new UnauthorizedAccessException("Password reset is only available for School Administrators.");
 
         var resetToken = Guid.NewGuid().ToString("N");
         var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
@@ -32,7 +37,7 @@ public class ForgotPasswordHandler
 
         try
         {
-            var resetLink = $"https://yourfrontend.com/reset-password?email={user.Email}&token={resetToken}";
+            var resetLink = $"https://yourfrontend.com/reset-password?email={Uri.EscapeDataString(user.Email)}&token={resetToken}";
             var body = $"Reset your password by clicking <a href='{resetLink}'>here</a>.";
             await _emailService.SendEmailAsync(user.Email, "Reset Password", body, cancellationToken);
         }

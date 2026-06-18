@@ -23,7 +23,10 @@ public class ChangePasswordHandler
         if (user == null)
             throw new KeyNotFoundException("User not found.");
 
-        if (!BCrypt.Net.BCrypt.Verify(request.OldPassword, user.PasswordHash))
+        if (user.RoleId != 2)
+            throw new UnauthorizedAccessException("Password change is only available for School Administrators.");
+
+        if (string.IsNullOrWhiteSpace(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.OldPassword, user.PasswordHash))
         {
             throw new UnauthorizedAccessException("Incorrect old password.");
         }

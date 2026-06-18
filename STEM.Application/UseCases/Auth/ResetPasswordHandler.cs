@@ -23,6 +23,9 @@ public class ResetPasswordHandler
         if (user == null)
             throw new InvalidOperationException("User not found.");
 
+        if (user.RoleId != 2)
+            throw new UnauthorizedAccessException("Password reset is only available for School Administrators.");
+
         if (user.ResetToken != request.Token)
             throw new InvalidOperationException("Invalid reset token.");
 

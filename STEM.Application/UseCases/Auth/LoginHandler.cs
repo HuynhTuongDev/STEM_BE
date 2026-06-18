@@ -42,14 +42,20 @@ public class LoginHandler
         await _validator.ValidateAndThrowAsync(request, cancellationToken);
 
         var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
-        if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-            throw new UnauthorizedAccessException("Invalid email or password.");
-
-        if (!user.IsEmailVerified)
-            throw new UnauthorizedAccessException("Email is not verified.");
+        if (user == null)
+            throw new UnauthorizedAccessException("User not found.");
 
         if (!user.IsActive)
             throw new UnauthorizedAccessException("Account is disabled.");
+
+        if (user.RoleId == 2) // School Administrator - requires password
+        {
+            if (string.IsNullOrWhiteSpace(request.Password))
+                throw new UnauthorizedAccessException("Password is required for School Administrator.");
+
+            if (string.IsNullOrWhiteSpace(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+                throw new UnauthorizedAccessException("Invalid password.");
+        }
 
         var token = _tokenService.GenerateAccessToken(user);
         var refreshToken = await CreateRefreshTokenAsync(user, cancellationToken);

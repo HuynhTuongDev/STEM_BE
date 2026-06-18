@@ -1,4 +1,3 @@
-using BCrypt.Net;
 using Microsoft.Extensions.Configuration;
 using STEM.Application.Dtos.Auth;
 using STEM.Application.Interfaces;
@@ -45,7 +44,6 @@ public class CreateUserBySchoolAdminHandler
         if (currentUser.SchoolId == null)
             throw new UnauthorizedAccessException("School Admin must be associated with a school.");
 
-        var tempPassword = GenerateTemporaryPassword();
         var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
         var user = new User
@@ -53,7 +51,6 @@ public class CreateUserBySchoolAdminHandler
             Email = request.Email,
             FullName = request.FullName,
             Phone = request.Phone,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(tempPassword),
             IsActive = true,
             IsEmailVerified = true,
             RoleId = request.RoleId,
@@ -65,31 +62,10 @@ public class CreateUserBySchoolAdminHandler
         await _userRepository.AddAsync(user, cancellationToken);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
-        await SendWelcomeEmailAsync(user, tempPassword, cancellationToken);
+        await SendWelcomeEmailAsync(user, cancellationToken);
     }
 
-    private static string GenerateTemporaryPassword()
-    {
-        const string uppercase = "ABCDEFGHJKLMNPQRSTUVWXYZ";
-        const string lowercase = "abcdefghjkmnpqrstuvwxyz";
-        const string digits = "23456789";
-        const string special = "!@#$%^&*";
-        var random = new Random();
-
-        return new string(new char[]
-        {
-            uppercase[random.Next(uppercase.Length)],
-            lowercase[random.Next(lowercase.Length)],
-            digits[random.Next(digits.Length)],
-            special[random.Next(special.Length)],
-            uppercase[random.Next(uppercase.Length)],
-            lowercase[random.Next(lowercase.Length)],
-            digits[random.Next(digits.Length)],
-            uppercase[random.Next(uppercase.Length)]
-        });
-    }
-
-    private async Task SendWelcomeEmailAsync(User user, string tempPassword, CancellationToken cancellationToken)
+    private async Task SendWelcomeEmailAsync(User user, CancellationToken cancellationToken)
     {
         var frontendBaseUrl = _configuration["AppSettings:FrontendBaseUrl"] ?? "https://localhost:3000";
         var roleName = user.RoleId == 3 ? "Giáo viên" : "Học sinh";
@@ -98,12 +74,7 @@ public class CreateUserBySchoolAdminHandler
             <h2>Chào mừng đến với STEM</h2>
             <p>Xin chào <strong>{user.FullName}</strong>,</p>
             <p>Tài khoản <strong>{roleName}</strong> của bạn đã được tạo bởi Quản trị viên trường.</p>
-            <p><strong>Thông tin đăng nhập:</strong></p>
-            <ul>
-                <li><strong>Email:</strong> {user.Email}</li>
-                <li><strong>Mật khẩu:</strong> {tempPassword}</li>
-            </ul>
-            <p><strong>Lưu ý:</strong> Bạn nên <strong>đổi mật khẩu</strong> sau khi đăng nhập.</p>
+            <p>Bạn có thể đăng nhập bằng Google với email <strong>{user.Email}</strong>.</p>
             <p><a href='{frontendBaseUrl}/login' style='background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;'>Đăng nhập ngay</a></p>
         ";
         await _emailService.SendEmailAsync(user.Email, $"Chào mừng đến với STEM - Tài khoản {roleName}", body, cancellationToken);
