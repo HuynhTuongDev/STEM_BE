@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using STEM.Infrastructure.Data;
@@ -11,9 +12,11 @@ using STEM.Infrastructure.Data;
 namespace STEM.Infrastructure.Migrations
 {
     [DbContext(typeof(StemDbContext))]
-    partial class StemDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260618155710_Update_PasswordHash")]
+    partial class Update_PasswordHash
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -748,7 +751,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("LessonId");
 
-                    b.ToTable("Simulations");
+                    b.ToTable("Simulations", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationSession", b =>
@@ -1039,19 +1042,19 @@ namespace STEM.Infrastructure.Migrations
                     b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
                         .WithMany()
                         .HasForeignKey("CourseId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("STEM.Core.Entities.Schools.School", "School")
                         .WithMany("Classes")
                         .HasForeignKey("SchoolId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("STEM.Core.Entities.Users.User", "Teacher")
                         .WithMany()
                         .HasForeignKey("TeacherId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Course");
@@ -1106,13 +1109,12 @@ namespace STEM.Infrastructure.Migrations
                 {
                     b.HasOne("STEM.Core.Entities.Schools.School", "School")
                         .WithMany()
-                        .HasForeignKey("SchoolId")
-                        .OnDelete(DeleteBehavior.SetNull);
+                        .HasForeignKey("SchoolId");
 
                     b.HasOne("STEM.Core.Entities.Users.User", "Teacher")
                         .WithMany()
                         .HasForeignKey("TeacherId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("School");
@@ -1282,7 +1284,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasOne("STEM.Core.Entities.Users.User", "Teacher")
                         .WithMany()
                         .HasForeignKey("TeacherId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Session");
@@ -1306,13 +1308,13 @@ namespace STEM.Infrastructure.Migrations
                     b.HasOne("STEM.Core.Entities.Users.User", "Student")
                         .WithMany()
                         .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("STEM.Core.Entities.Simulations.SimulationTemplate", "Template")
                         .WithMany("SimulationSessions")
                         .HasForeignKey("TemplateId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Student");
@@ -1358,7 +1360,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasOne("STEM.Core.Entities.Users.Role", "Role")
                         .WithMany()
                         .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("STEM.Core.Entities.Schools.School", "School")
