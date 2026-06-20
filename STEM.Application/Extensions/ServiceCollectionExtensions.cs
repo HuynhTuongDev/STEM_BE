@@ -5,6 +5,7 @@ using STEM.Application.UseCases.Notifications;
 using STEM.Application.UseCases.Simulation;
 using STEM.Application.UseCases.Schools;
 using STEM.Application.UseCases.Courses;
+using STEM.Application.UseCases.Classes;
 using STEM.Application.UseCases.Users;
 using FluentValidation;
 using STEM.Application.Validators;
@@ -56,6 +57,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CreateCourseHandler>();
         services.AddScoped<UpdateCourseHandler>();
         services.AddScoped<DeleteCourseHandler>();
+
+        // Class Handlers
+        services.AddScoped<GetClassesListHandler>();
+        services.AddScoped<GetClassDetailHandler>();
+        services.AddScoped<CreateClassHandler>();
+        services.AddScoped<UpdateClassHandler>();
+        services.AddScoped<DeleteClassHandler>();
 
         // Validators
         services.AddValidatorsFromAssemblyContaining<CreateUserBySchoolAdminValidator>();

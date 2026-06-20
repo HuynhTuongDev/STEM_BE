@@ -104,7 +104,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         // Class -> Course
         modelBuilder.Entity<Class>()
             .HasOne(c => c.Course)
-            .WithMany()
+            .WithMany(c => c.Classes)
             .HasForeignKey(c => c.CourseId)
             .OnDelete(DeleteBehavior.Restrict);
 
@@ -132,7 +132,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         // Course -> Modules
         modelBuilder.Entity<Module>()
             .HasOne(m => m.Course)
-            .WithMany()
+            .WithMany(c => c.Modules)
             .HasForeignKey(m => m.CourseId)
             .OnDelete(DeleteBehavior.Cascade);
 
@@ -146,7 +146,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         // Material -> Course
         modelBuilder.Entity<Material>()
             .HasOne(m => m.Course)
-            .WithMany()
+            .WithMany(c => c.Materials)
             .HasForeignKey(m => m.CourseId)
             .OnDelete(DeleteBehavior.Cascade);
 
@@ -160,7 +160,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         // Enrollment
         modelBuilder.Entity<Enrollment>()
             .HasOne(e => e.Class)
-            .WithMany()
+            .WithMany(c => c.Enrollments)
             .HasForeignKey(e => e.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
 
@@ -173,14 +173,14 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         // Announcement -> Class
         modelBuilder.Entity<Announcement>()
             .HasOne(a => a.Class)
-            .WithMany()
+            .WithMany(c => c.Announcements)
             .HasForeignKey(a => a.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
 
         // Schedule -> Class
         modelBuilder.Entity<Schedule>()
             .HasOne(s => s.Class)
-            .WithMany()
+            .WithMany(c => c.Schedules)
             .HasForeignKey(s => s.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
 
@@ -228,7 +228,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         // Quiz -> Course
         modelBuilder.Entity<Quiz>()
             .HasOne(q => q.Course)
-            .WithMany()
+            .WithMany(c => c.Quizzes)
             .HasForeignKey(q => q.CourseId)
             .OnDelete(DeleteBehavior.Cascade);
 

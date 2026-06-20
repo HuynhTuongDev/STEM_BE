@@ -29,6 +29,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISimulationRepository, SimulationRepository>();
         services.AddScoped<ISimulationSessionRepository, SimulationSessionRepository>();
         services.AddScoped<ICourseRepository, CourseRepository>();
+        services.AddScoped<IClassRepository, ClassRepository>();
+        services.AddScoped<IClassRepository, ClassRepository>();
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IWokwiService, WokwiService>();

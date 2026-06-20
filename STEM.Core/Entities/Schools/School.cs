@@ -1,3 +1,4 @@
+using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Users;
 
 namespace STEM.Core.Entities.Schools;
@@ -15,10 +16,9 @@ public class School : BaseEntity
     public string Address { get; set; } = string.Empty;
     public string RepresentativeEmail { get; set; } = string.Empty;
     public string RepresentativeName { get; set; } = string.Empty;
-    public string? ProofOfActivity { get; set; } // URL to document
+    public string? ProofOfActivity { get; set; }
     public SchoolStatus Status { get; set; } = SchoolStatus.Pending;
 
-    // Navigation property for users belonging to this school
     public ICollection<User> Users { get; set; } = new List<User>();
-    public ICollection<Classes.Class> Classes { get; set; } = new List<Classes.Class>();
+    public ICollection<Class> Classes { get; set; } = new List<Class>();
 }
