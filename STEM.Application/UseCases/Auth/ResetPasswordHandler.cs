@@ -1,39 +1,43 @@
+using BCrypt.Net;
 using STEM.Application.Dtos.Auth;
-using STEM.Application.Interfaces;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Auth;
 
-/// <summary>
-/// Handler for forgot password use case
-/// </summary>
-public class ForgotPasswordHandler
+public class ResetPasswordHandler
 {
     private readonly IUserRepository _userRepository;
-    private readonly IEmailService _emailService;
 
-    public ForgotPasswordHandler(IUserRepository userRepository, IEmailService emailService)
+    public ResetPasswordHandler(IUserRepository userRepository)
     {
         _userRepository = userRepository;
-        _emailService = emailService;
     }
 
-    public async Task Handle(ForgotPasswordRequest request, CancellationToken cancellationToken = default)
+    public async Task Handle(ResetPasswordRequest request, CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
-        if (user == null) return;
+        if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Token) ||
+            string.IsNullOrWhiteSpace(request.NewPassword))
+            throw new InvalidOperationException("Email, token, and new password are required.");
 
-        var resetToken = Guid.NewGuid().ToString("N");
-        user.ResetToken = resetToken;
-        user.ResetTokenExpires = DateTime.SpecifyKind(DateTime.UtcNow.AddHours(1), DateTimeKind.Utc);
+        var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
+        if (user == null)
+            throw new InvalidOperationException("User not found.");
+
+        if (user.RoleId != 2)
+            throw new UnauthorizedAccessException("Password reset is only available for School Administrators.");
+
+        if (user.ResetToken != request.Token)
+            throw new InvalidOperationException("Invalid reset token.");
+
+        if (user.ResetTokenExpires == null || user.ResetTokenExpires < DateTime.UtcNow)
+            throw new InvalidOperationException("Reset token has expired.");
+
+        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
+        user.ResetToken = null;
+        user.ResetTokenExpires = null;
         user.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync(cancellationToken);
-
-        var resetLink = $"https://yourfrontend.com/reset-password?email={user.Email}&token={resetToken}";
-        var body = $"Reset your password by clicking <a href='{resetLink}'>here</a>.";
-
-        await _emailService.SendEmailAsync(user.Email, "Reset Password", body, cancellationToken);
     }
 }

@@ -24,12 +24,12 @@ public class EmailService : IEmailService
     {
         try
         {
-            var smtpHost = _configuration["Email:SmtpHost"] ?? throw new InvalidOperationException("SmtpHost not configured");
-            var smtpPort = int.Parse(_configuration["Email:SmtpPort"] ?? "587");
-            var smtpUser = _configuration["Email:SmtpUser"] ?? throw new InvalidOperationException("SmtpUser not configured");
-            var smtpPassword = _configuration["Email:SmtpPassword"] ?? throw new InvalidOperationException("SmtpPassword not configured");
-            var fromEmail = _configuration["Email:FromEmail"] ?? throw new InvalidOperationException("FromEmail not configured");
-            var fromName = _configuration["Email:FromName"] ?? "STEM";
+            var smtpHost = _configuration["EmailSettings:SmtpServer"] ?? throw new InvalidOperationException("SmtpServer not configured");
+            var smtpPort = int.Parse(_configuration["EmailSettings:SmtpPort"] ?? "587");
+            var smtpUser = _configuration["EmailSettings:SmtpUser"] ?? throw new InvalidOperationException("SmtpUser not configured");
+            var smtpPassword = _configuration["EmailSettings:SmtpPass"] ?? throw new InvalidOperationException("SmtpPass not configured");
+            var fromEmail = _configuration["EmailSettings:FromEmail"] ?? throw new InvalidOperationException("FromEmail not configured");
+            var fromName = _configuration["EmailSettings:FromName"] ?? "STEM";
 
             var message = new MimeMessage();
             message.From.Add(new MailboxAddress(fromName, fromEmail));

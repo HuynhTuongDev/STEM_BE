@@ -1,83 +1,151 @@
 using BCrypt.Net;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using STEM.Application.Dtos.Auth;
 using STEM.Application.Interfaces;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
+using FluentValidation;
 
 namespace STEM.Application.UseCases.Auth;
 
-/// <summary>
-/// Handler for user login use case
-/// </summary>
 public class LoginHandler
 {
     private readonly IUserRepository _userRepository;
     private readonly ILoginHistoryRepository _loginHistoryRepository;
-    private readonly IJwtProvider _jwtProvider;
+    private readonly IRepository<RefreshToken> _refreshTokenRepository;
+    private readonly ITokenService _tokenService;
     private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IConfiguration _configuration;
+    private readonly IValidator<LoginRequest> _validator;
 
     public LoginHandler(
         IUserRepository userRepository,
         ILoginHistoryRepository loginHistoryRepository,
-        IJwtProvider jwtProvider,
-        IHttpContextAccessor httpContextAccessor)
+        IRepository<RefreshToken> refreshTokenRepository,
+        ITokenService tokenService,
+        IHttpContextAccessor httpContextAccessor,
+        IConfiguration configuration,
+        IValidator<LoginRequest> validator)
     {
         _userRepository = userRepository;
         _loginHistoryRepository = loginHistoryRepository;
-        _jwtProvider = jwtProvider;
+        _refreshTokenRepository = refreshTokenRepository;
+        _tokenService = tokenService;
         _httpContextAccessor = httpContextAccessor;
+        _configuration = configuration;
+        _validator = validator;
     }
 
     public async Task<LoginResponse> Handle(LoginRequest request, CancellationToken cancellationToken = default)
     {
-        var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
-        if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-        {
-            throw new UnauthorizedAccessException("Invalid email or password.");
-        }
+        await _validator.ValidateAndThrowAsync(request, cancellationToken);
 
-        if (!user.IsEmailVerified)
-        {
-            throw new UnauthorizedAccessException("Email is not verified.");
-        }
+        var user = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
+        if (user == null)
+            throw new UnauthorizedAccessException("User not found.");
 
         if (!user.IsActive)
-        {
             throw new UnauthorizedAccessException("Account is disabled.");
+
+        if (user.RoleId == 2) // School Administrator - requires password
+        {
+            if (string.IsNullOrWhiteSpace(request.Password))
+                throw new UnauthorizedAccessException("Password is required for School Administrator.");
+
+            if (string.IsNullOrWhiteSpace(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+                throw new UnauthorizedAccessException("Invalid password.");
         }
 
-        var token = _jwtProvider.GenerateToken(user);
+        var token = _tokenService.GenerateAccessToken(user);
+        var refreshToken = await CreateRefreshTokenAsync(user, cancellationToken);
 
-        // Record login history
         try
         {
             var ipAddress = _httpContextAccessor?.HttpContext?.Connection?.RemoteIpAddress?.ToString() ?? "Unknown";
             var userAgent = _httpContextAccessor?.HttpContext?.Request?.Headers["User-Agent"].ToString() ?? "Unknown";
+            var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
-            var loginHistory = new STEM.Core.Entities.Users.LoginHistory
+            await _loginHistoryRepository.AddAsync(new STEM.Core.Entities.Users.LoginHistory
             {
                 UserId = user.Id,
-                LoginTime = DateTime.UtcNow,
                 IpAddress = ipAddress,
-                DeviceName = userAgent
-            };
-
-            await _loginHistoryRepository.AddAsync(loginHistory, cancellationToken);
+                DeviceName = userAgent,
+                CreatedAt = now,
+                UpdatedAt = now
+            }, cancellationToken);
             await _loginHistoryRepository.SaveChangesAsync(cancellationToken);
         }
         catch (Exception ex)
         {
-            // Log the exception but don't fail the login process
             Console.WriteLine($"Failed to record login history: {ex.Message}");
         }
 
-        return new LoginResponse
+        return BuildLoginResponse(user, token, refreshToken);
+    }
+
+    public async Task<LoginResponse> RefreshTokenAsync(string refreshTokenStr, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(refreshTokenStr))
+            throw new UnauthorizedAccessException("Refresh token is required.");
+
+        var refreshTokens = await _refreshTokenRepository.FindAsync(
+            rt => rt.Token == refreshTokenStr,
+            cancellationToken);
+        var refreshToken = refreshTokens.FirstOrDefault();
+
+        if (refreshToken == null)
+            throw new UnauthorizedAccessException("Invalid refresh token.");
+
+        if (refreshToken.ExpiresAt < DateTime.UtcNow)
+            throw new UnauthorizedAccessException("Refresh token has expired.");
+
+        var user = await _userRepository.GetByIdAsync(refreshToken.UserId, cancellationToken);
+        if (user == null)
+            throw new UnauthorizedAccessException("User not found.");
+
+        if (!user.IsActive)
+            throw new UnauthorizedAccessException("Account is disabled.");
+
+        var newAccessToken = _tokenService.GenerateAccessToken(user);
+        var newRefreshToken = await CreateRefreshTokenAsync(user, cancellationToken);
+
+        return BuildLoginResponse(user, newAccessToken, newRefreshToken);
+    }
+
+    private static LoginResponse BuildLoginResponse(User user, string accessToken, string refreshToken) =>
+        new()
         {
-            Token = token,
+            Token = accessToken,
+            RefreshToken = refreshToken,
             Email = user.Email,
-            FullName = user.FullName,
-            Role = user.RoleId.ToString()
+            FullName = string.IsNullOrWhiteSpace(user.FullName) ? user.Email : user.FullName,
+            Role = user.Role?.Name ?? user.RoleId.ToString()
         };
+
+    private async Task<string> CreateRefreshTokenAsync(User user, CancellationToken cancellationToken)
+    {
+        var existingTokens = await _refreshTokenRepository.FindAsync(
+            rt => rt.UserId == user.Id,
+            cancellationToken);
+        foreach (var existingToken in existingTokens)
+            _refreshTokenRepository.Delete(existingToken);
+
+        var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
+        var expirationDays = int.Parse(_configuration["JwtSettings:RefreshTokenExpirationInDays"] ?? "7");
+
+        var refreshToken = new RefreshToken
+        {
+            UserId = user.Id,
+            Token = _tokenService.GenerateRefreshToken(),
+            ExpiresAt = now.AddDays(expirationDays),
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        await _refreshTokenRepository.AddAsync(refreshToken, cancellationToken);
+        await _refreshTokenRepository.SaveChangesAsync(cancellationToken);
+
+        return refreshToken.Token;
     }
 }

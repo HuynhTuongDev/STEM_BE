@@ -17,7 +17,7 @@ public class JwtProvider : IJwtProvider
         _configuration = configuration;
     }
 
-    public string GenerateToken(User user)
+    public string GenerateToken(User user, string displayName)
     {
         var secretKey = _configuration["JwtSettings:Secret"];
         if (string.IsNullOrEmpty(secretKey))
@@ -30,10 +30,12 @@ public class JwtProvider : IJwtProvider
 
         var claims = new[]
         {
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
-            new Claim("name", user.FullName),
-            new Claim(ClaimTypes.Role, user.RoleId.ToString()) // Replace with actual role name if available
+            new Claim(ClaimTypes.Name, displayName),
+            new Claim("name", displayName),
+            new Claim(ClaimTypes.Role, user.Role?.Name ?? user.RoleId.ToString())
         };
 
         var token = new JwtSecurityToken(

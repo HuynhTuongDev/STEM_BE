@@ -22,6 +22,37 @@ namespace STEM.Infrastructure.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("STEM.Core.Entities.Assessments.Rubric", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AssignmentId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Criteria")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("MaxScore")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AssignmentId");
+
+                    b.ToTable("Rubrics");
+                });
+
             modelBuilder.Entity("STEM.Core.Entities.Classes.Announcement", b =>
                 {
                     b.Property<int>("Id")
@@ -54,39 +85,6 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("Announcements");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Classes.Attendee", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("ClassId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClassId");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("Attendees");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Classes.Class", b =>
                 {
                     b.Property<int>("Id")
@@ -94,6 +92,10 @@ namespace STEM.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ClassCode")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<int>("CourseId")
                         .HasColumnType("integer");
@@ -103,6 +105,9 @@ namespace STEM.Infrastructure.Migrations
 
                     b.Property<DateTime>("EndDate")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("SchoolId")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("timestamp with time zone");
@@ -116,6 +121,8 @@ namespace STEM.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("CourseId");
+
+                    b.HasIndex("SchoolId");
 
                     b.HasIndex("TeacherId");
 
@@ -181,81 +188,6 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("Schedules");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Common.AuditLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("EntityId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("EntityName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("NewValues")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("OldValues")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AuditLogs");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Common.Message", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("ReceiverId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("SenderId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ReceiverId");
-
-                    b.HasIndex("SenderId");
-
-                    b.ToTable("Messages");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Common.Notification", b =>
                 {
                     b.Property<int>("Id")
@@ -271,6 +203,16 @@ namespace STEM.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<bool>("IsRead")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Type")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -284,29 +226,6 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("Notifications");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Courses.Category", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Categories");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Courses.Course", b =>
                 {
                     b.Property<int>("Id")
@@ -315,15 +234,15 @@ namespace STEM.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int>("CategoryId")
-                        .HasColumnType("integer");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int?>("SchoolId")
+                        .HasColumnType("integer");
 
                     b.Property<int>("TeacherId")
                         .HasColumnType("integer");
@@ -337,7 +256,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("CategoryId");
+                    b.HasIndex("SchoolId");
 
                     b.HasIndex("TeacherId");
 
@@ -460,6 +379,35 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("Modules");
                 });
 
+            modelBuilder.Entity("STEM.Core.Entities.Participants.ProjectMember", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
+
+                    b.HasIndex("StudentId");
+
+                    b.ToTable("ProjectMembers");
+                });
+
             modelBuilder.Entity("STEM.Core.Entities.Projects.Assignment", b =>
                 {
                     b.Property<int>("Id")
@@ -567,68 +515,6 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("Projects");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Projects.ProjectMember", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("ProjectId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Role")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("ProjectMembers");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Projects.ProjectNumber", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("ProjectId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ProjectId");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("ProjectNumbers");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Projects.Submission", b =>
                 {
                     b.Property<int>("Id")
@@ -653,148 +539,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("AssignmentId");
 
-                    b.HasIndex("FileId");
-
                     b.ToTable("Submissions");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Badge", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Badges");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Certificate", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("CourseId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CourseId");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("Certificates");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Feedback", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Content")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("Feedbacks");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Grade", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("RubricId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("Score")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RubricId");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("Grades");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Leaderboard", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("Score")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("Leaderboards");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Quizzes.Quiz", b =>
@@ -884,7 +629,7 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("QuizQuestions");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Rubric", b =>
+            modelBuilder.Entity("STEM.Core.Entities.Schools.School", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -892,27 +637,37 @@ namespace STEM.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Address")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Criteria")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
 
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("ProofOfActivity")
+                        .HasColumnType("text");
+
+                    b.Property<string>("RepresentativeEmail")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("RepresentativeName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Rubrics");
+                    b.ToTable("Schools");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.ExperimentLog", b =>
@@ -993,7 +748,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("LessonId");
 
-                    b.ToTable("Simulations", (string)null);
+                    b.ToTable("Simulations");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationSession", b =>
@@ -1010,7 +765,14 @@ namespace STEM.Infrastructure.Migrations
                     b.Property<DateTime>("StartTime")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<int>("StudentId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("TemplateId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -1019,6 +781,8 @@ namespace STEM.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("StudentId");
+
+                    b.HasIndex("TemplateId");
 
                     b.ToTable("SimulationSessions");
                 });
@@ -1038,8 +802,16 @@ namespace STEM.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<int>("SimulationId")
                         .HasColumnType("integer");
+
+                    b.Property<string>("SimulationName")
+                        .IsRequired()
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1070,9 +842,6 @@ namespace STEM.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<DateTime>("LoginTime")
-                        .HasColumnType("timestamp with time zone");
-
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1086,29 +855,6 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("LoginHistories");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Users.Permission", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Code")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Permissions");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Users.RefreshToken", b =>
                 {
                     b.Property<int>("Id")
@@ -1118,6 +864,9 @@ namespace STEM.Infrastructure.Migrations
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
                     b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime>("ExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Token")
@@ -1164,14 +913,14 @@ namespace STEM.Infrastructure.Migrations
                         {
                             Id = 1,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Name = "Admin",
+                            Name = "Master Administrator",
                             UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
                         {
                             Id = 2,
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Name = "Student",
+                            Name = "School Administrator",
                             UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         },
                         new
@@ -1180,36 +929,14 @@ namespace STEM.Infrastructure.Migrations
                             CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
                             Name = "Teacher",
                             UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
+                        },
+                        new
+                        {
+                            Id = 4,
+                            CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            Name = "Student",
+                            UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc)
                         });
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Users.RolePermission", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("PermissionId")
-                        .HasColumnType("integer");
-
-                    b.Property<int>("RoleId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PermissionId");
-
-                    b.HasIndex("RoleId");
-
-                    b.ToTable("RolePermissions");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Users.User", b =>
@@ -1220,12 +947,17 @@ namespace STEM.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Address")
+                        .HasColumnType("text");
+
                     b.Property<string>("Avatar")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateOnly?>("DateOfBirth")
+                        .HasColumnType("date");
 
                     b.Property<string>("Email")
                         .IsRequired()
@@ -1235,6 +967,9 @@ namespace STEM.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("Gender")
+                        .HasColumnType("text");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -1242,11 +977,9 @@ namespace STEM.Infrastructure.Migrations
                         .HasColumnType("boolean");
 
                     b.Property<string>("PasswordHash")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("Phone")
-                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<string>("ResetToken")
@@ -1256,6 +989,9 @@ namespace STEM.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<int>("RoleId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("SchoolId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -1271,89 +1007,56 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("RoleId");
 
+                    b.HasIndex("SchoolId");
+
                     b.ToTable("Users");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Users.UserProfile", b =>
+            modelBuilder.Entity("STEM.Core.Entities.Assessments.Rubric", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
+                    b.HasOne("STEM.Core.Entities.Projects.Assignment", "Assignment")
+                        .WithMany()
+                        .HasForeignKey("AssignmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Address")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime>("DateOfBirth")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Gender")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("UserProfiles");
+                    b.Navigation("Assignment");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Classes.Announcement", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Classes.Class", "Class")
-                        .WithMany()
+                        .WithMany("Announcements")
                         .HasForeignKey("ClassId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Class");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Classes.Attendee", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Classes.Class", "Class")
-                        .WithMany()
-                        .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Class");
-
-                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Classes.Class", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
-                        .WithMany()
+                        .WithMany("Classes")
                         .HasForeignKey("CourseId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("STEM.Core.Entities.Schools.School", "School")
+                        .WithMany("Classes")
+                        .HasForeignKey("SchoolId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("STEM.Core.Entities.Users.User", "Teacher")
                         .WithMany()
                         .HasForeignKey("TeacherId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Course");
+
+                    b.Navigation("School");
 
                     b.Navigation("Teacher");
                 });
@@ -1361,7 +1064,7 @@ namespace STEM.Infrastructure.Migrations
             modelBuilder.Entity("STEM.Core.Entities.Classes.Enrollment", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Classes.Class", "Class")
-                        .WithMany()
+                        .WithMany("Enrollments")
                         .HasForeignKey("ClassId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1380,31 +1083,12 @@ namespace STEM.Infrastructure.Migrations
             modelBuilder.Entity("STEM.Core.Entities.Classes.Schedule", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Classes.Class", "Class")
-                        .WithMany()
+                        .WithMany("Schedules")
                         .HasForeignKey("ClassId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Class");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Common.Message", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Users.User", "Receiver")
-                        .WithMany("ReceivedMessages")
-                        .HasForeignKey("ReceiverId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "Sender")
-                        .WithMany("SentMessages")
-                        .HasForeignKey("SenderId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Receiver");
-
-                    b.Navigation("Sender");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Common.Notification", b =>
@@ -1420,19 +1104,18 @@ namespace STEM.Infrastructure.Migrations
 
             modelBuilder.Entity("STEM.Core.Entities.Courses.Course", b =>
                 {
-                    b.HasOne("STEM.Core.Entities.Courses.Category", "Category")
+                    b.HasOne("STEM.Core.Entities.Schools.School", "School")
                         .WithMany()
-                        .HasForeignKey("CategoryId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .HasForeignKey("SchoolId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.HasOne("STEM.Core.Entities.Users.User", "Teacher")
                         .WithMany()
                         .HasForeignKey("TeacherId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
-                    b.Navigation("Category");
+                    b.Navigation("School");
 
                     b.Navigation("Teacher");
                 });
@@ -1462,7 +1145,7 @@ namespace STEM.Infrastructure.Migrations
             modelBuilder.Entity("STEM.Core.Entities.Courses.Material", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
-                        .WithMany()
+                        .WithMany("Materials")
                         .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1473,12 +1156,31 @@ namespace STEM.Infrastructure.Migrations
             modelBuilder.Entity("STEM.Core.Entities.Courses.Module", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
-                        .WithMany()
+                        .WithMany("Modules")
                         .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Course");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Participants.ProjectMember", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Projects.Project", "Project")
+                        .WithMany("Members")
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.Assignment", b =>
@@ -1514,44 +1216,6 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("Class");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Projects.ProjectMember", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Projects.Project", "Project")
-                        .WithMany()
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Projects.ProjectNumber", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Projects.Project", "Project")
-                        .WithMany("ProjectNumbers")
-                        .HasForeignKey("ProjectId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Project");
-
-                    b.Navigation("Student");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Projects.Submission", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Projects.Assignment", "Assignment")
@@ -1560,77 +1224,13 @@ namespace STEM.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("STEM.Core.Entities.Projects.FileEntity", "File")
-                        .WithMany()
-                        .HasForeignKey("FileId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
                     b.Navigation("Assignment");
-
-                    b.Navigation("File");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Certificate", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
-                        .WithMany()
-                        .HasForeignKey("CourseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Course");
-
-                    b.Navigation("Student");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Feedback", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Student");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Grade", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Quizzes.Rubric", null)
-                        .WithMany("Grades")
-                        .HasForeignKey("RubricId");
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Student");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Leaderboard", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Quizzes.Quiz", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
-                        .WithMany()
+                        .WithMany("Quizzes")
                         .HasForeignKey("CourseId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1682,7 +1282,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasOne("STEM.Core.Entities.Users.User", "Teacher")
                         .WithMany()
                         .HasForeignKey("TeacherId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Session");
@@ -1706,10 +1306,18 @@ namespace STEM.Infrastructure.Migrations
                     b.HasOne("STEM.Core.Entities.Users.User", "Student")
                         .WithMany()
                         .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("STEM.Core.Entities.Simulations.SimulationTemplate", "Template")
+                        .WithMany("SimulationSessions")
+                        .HasForeignKey("TemplateId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Student");
+
+                    b.Navigation("Template");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationTemplate", b =>
@@ -1737,31 +1345,12 @@ namespace STEM.Infrastructure.Migrations
             modelBuilder.Entity("STEM.Core.Entities.Users.RefreshToken", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Users.User", "User")
-                        .WithMany()
+                        .WithMany("RefreshTokens")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("User");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Users.RolePermission", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Users.Permission", "Permission")
-                        .WithMany()
-                        .HasForeignKey("PermissionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Users.Role", "Role")
-                        .WithMany()
-                        .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Permission");
-
-                    b.Navigation("Role");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Users.User", b =>
@@ -1769,21 +1358,37 @@ namespace STEM.Infrastructure.Migrations
                     b.HasOne("STEM.Core.Entities.Users.Role", "Role")
                         .WithMany()
                         .HasForeignKey("RoleId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("STEM.Core.Entities.Schools.School", "School")
+                        .WithMany("Users")
+                        .HasForeignKey("SchoolId")
+                        .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Role");
+
+                    b.Navigation("School");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Users.UserProfile", b =>
+            modelBuilder.Entity("STEM.Core.Entities.Classes.Class", b =>
                 {
-                    b.HasOne("STEM.Core.Entities.Users.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                    b.Navigation("Announcements");
 
-                    b.Navigation("User");
+                    b.Navigation("Enrollments");
+
+                    b.Navigation("Schedules");
+                });
+
+            modelBuilder.Entity("STEM.Core.Entities.Courses.Course", b =>
+                {
+                    b.Navigation("Classes");
+
+                    b.Navigation("Materials");
+
+                    b.Navigation("Modules");
+
+                    b.Navigation("Quizzes");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.Assignment", b =>
@@ -1795,7 +1400,7 @@ namespace STEM.Infrastructure.Migrations
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.Project", b =>
                 {
-                    b.Navigation("ProjectNumbers");
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Quizzes.Quiz", b =>
@@ -1808,9 +1413,11 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("QuizAnswers");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Quizzes.Rubric", b =>
+            modelBuilder.Entity("STEM.Core.Entities.Schools.School", b =>
                 {
-                    b.Navigation("Grades");
+                    b.Navigation("Classes");
+
+                    b.Navigation("Users");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationEntity", b =>
@@ -1825,11 +1432,14 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("LiveMonitorings");
                 });
 
+            modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationTemplate", b =>
+                {
+                    b.Navigation("SimulationSessions");
+                });
+
             modelBuilder.Entity("STEM.Core.Entities.Users.User", b =>
                 {
-                    b.Navigation("ReceivedMessages");
-
-                    b.Navigation("SentMessages");
+                    b.Navigation("RefreshTokens");
                 });
 #pragma warning restore 612, 618
         }

@@ -1,4 +1,4 @@
-using STEM.Core.Entities.Courses;
+﻿using STEM.Core.Entities.Courses;
 
 namespace STEM.Core.Entities.Simulations;
 
