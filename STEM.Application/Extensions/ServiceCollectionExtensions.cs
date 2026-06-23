@@ -7,6 +7,7 @@ using STEM.Application.UseCases.Schools;
 using STEM.Application.UseCases.Courses;
 using STEM.Application.UseCases.Classes;
 using STEM.Application.UseCases.Users;
+using STEM.Application.UseCases.Students;
 using FluentValidation;
 using STEM.Application.Validators;
 
@@ -50,6 +51,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<UploadAvatarHandler>();
         services.AddScoped<GetUsersListHandler>();
         services.AddScoped<GetUserDetailHandler>();
+
+        // Student Handlers
+        services.AddScoped<GetStudentsHandler>();
+        services.AddScoped<GetStudentLearningProgressHandler>();
 
         // Course Handlers
         services.AddScoped<GetCoursesListHandler>();
