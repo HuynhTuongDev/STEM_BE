@@ -30,6 +30,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
 
     public DbSet<Class> Classes => Set<Class>();
     public DbSet<Enrollment> Enrollments => Set<Enrollment>();
+    public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<Schedule> Schedules => Set<Schedule>();
 
@@ -169,6 +170,37 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany()
             .HasForeignKey(e => e.StudentId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Attendance
+        modelBuilder.Entity<AttendanceRecord>()
+            .HasIndex(a => new { a.ClassId, a.StudentId, a.AttendanceDate })
+            .IsUnique();
+
+        modelBuilder.Entity<AttendanceRecord>()
+            .Property(a => a.Status)
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<AttendanceRecord>()
+            .Property(a => a.Note)
+            .HasMaxLength(500);
+
+        modelBuilder.Entity<AttendanceRecord>()
+            .HasOne(a => a.Class)
+            .WithMany(c => c.AttendanceRecords)
+            .HasForeignKey(a => a.ClassId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AttendanceRecord>()
+            .HasOne(a => a.Student)
+            .WithMany()
+            .HasForeignKey(a => a.StudentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<AttendanceRecord>()
+            .HasOne(a => a.MarkedBy)
+            .WithMany()
+            .HasForeignKey(a => a.MarkedById)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Announcement -> Class
         modelBuilder.Entity<Announcement>()

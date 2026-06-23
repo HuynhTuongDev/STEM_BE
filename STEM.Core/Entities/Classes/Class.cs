@@ -19,4 +19,5 @@ public class Class : BaseEntity
     public ICollection<Enrollment> Enrollments { get; set; } = new List<Enrollment>();
     public ICollection<Schedule> Schedules { get; set; } = new List<Schedule>();
     public ICollection<Announcement> Announcements { get; set; } = new List<Announcement>();
+    public ICollection<AttendanceRecord> AttendanceRecords { get; set; } = new List<AttendanceRecord>();
 }

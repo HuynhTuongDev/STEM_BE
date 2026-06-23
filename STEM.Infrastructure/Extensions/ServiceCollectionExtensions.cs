@@ -30,7 +30,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISimulationSessionRepository, SimulationSessionRepository>();
         services.AddScoped<ICourseRepository, CourseRepository>();
         services.AddScoped<IClassRepository, ClassRepository>();
-        services.AddScoped<IClassRepository, ClassRepository>();
+        services.AddScoped<IAttendanceRepository, AttendanceRepository>();
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IWokwiService, WokwiService>();
