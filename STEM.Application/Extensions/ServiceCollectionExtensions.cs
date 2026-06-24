@@ -23,6 +23,7 @@ public static class ServiceCollectionExtensions
     {
         // Auth Handlers
         services.AddScoped<LoginHandler>();
+        services.AddScoped<GoogleLoginHandler>();
         services.AddScoped<VerifyEmailHandler>();
         services.AddScoped<ForgotPasswordHandler>();
         services.AddScoped<ResetPasswordHandler>();

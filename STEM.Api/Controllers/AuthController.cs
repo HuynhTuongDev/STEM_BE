@@ -11,6 +11,7 @@ namespace STEM.Api.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly LoginHandler _loginHandler;
+    private readonly GoogleLoginHandler _googleLoginHandler;
     private readonly VerifyEmailHandler _verifyEmailHandler;
     private readonly ForgotPasswordHandler _forgotPasswordHandler;
     private readonly ResetPasswordHandler _resetPasswordHandler;
@@ -19,6 +20,7 @@ public class AuthController : ControllerBase
 
     public AuthController(
         LoginHandler loginHandler,
+        GoogleLoginHandler googleLoginHandler,
         VerifyEmailHandler verifyEmailHandler,
         ForgotPasswordHandler forgotPasswordHandler,
         ResetPasswordHandler resetPasswordHandler,
@@ -26,6 +28,7 @@ public class AuthController : ControllerBase
         CreateUserBySchoolAdminHandler createUserBySchoolAdminHandler)
     {
         _loginHandler = loginHandler;
+        _googleLoginHandler = googleLoginHandler;
         _verifyEmailHandler = verifyEmailHandler;
         _forgotPasswordHandler = forgotPasswordHandler;
         _resetPasswordHandler = resetPasswordHandler;
@@ -49,6 +52,25 @@ public class AuthController : ControllerBase
         catch (Exception)
         {
             return BadRequest(new { message = "An error occurred during login." });
+        }
+    }
+
+    [HttpPost("google-login")]
+    [AllowAnonymous]
+    public async Task<IActionResult> GoogleLogin([FromBody] GoogleLoginRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _googleLoginHandler.Handle(request, cancellationToken);
+            return Ok(response);
+        }
+        catch (UnauthorizedAccessException ex)
+        {
+            return Unauthorized(new { message = ex.Message });
+        }
+        catch (Exception)
+        {
+            return BadRequest(new { message = "An error occurred during Google login." });
         }
     }
 
