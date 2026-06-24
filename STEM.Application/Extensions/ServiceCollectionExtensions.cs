@@ -55,6 +55,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<UploadAvatarHandler>();
         services.AddScoped<GetUsersListHandler>();
         services.AddScoped<GetUserDetailHandler>();
+        services.AddScoped<UpdateTeacherHandler>();
+        services.AddScoped<DeleteTeacherHandler>();
 
         // Attendance Handlers
         services.AddScoped<CreateAttendanceHandler>();
