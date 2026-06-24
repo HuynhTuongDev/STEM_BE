@@ -10,6 +10,8 @@ using STEM.Application.UseCases.Users;
 using STEM.Application.UseCases.Attendance;
 using STEM.Application.UseCases.Assignments;
 using STEM.Application.UseCases.Quizzes;
+using STEM.Application.UseCases.Grading;
+using STEM.Application.UseCases.VirtualLabs;
 using FluentValidation;
 using STEM.Application.Validators;
 
@@ -72,6 +74,19 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetQuizDetailHandler>();
         services.AddScoped<UpdateQuizHandler>();
         services.AddScoped<DeleteQuizHandler>();
+
+        // Grading Handlers
+        services.AddScoped<GetSubmissionsHandler>();
+        services.AddScoped<GetSubmissionDetailHandler>();
+        services.AddScoped<GradeSubmissionHandler>();
+        services.AddScoped<UpdateSubmissionGradeHandler>();
+
+        // Virtual Lab Handlers
+        services.AddScoped<CreateVirtualLabHandler>();
+        services.AddScoped<GetVirtualLabsHandler>();
+        services.AddScoped<GetVirtualLabDetailHandler>();
+        services.AddScoped<UpdateVirtualLabHandler>();
+        services.AddScoped<DeleteVirtualLabHandler>();
 
         // Course Handlers
         services.AddScoped<GetCoursesListHandler>();

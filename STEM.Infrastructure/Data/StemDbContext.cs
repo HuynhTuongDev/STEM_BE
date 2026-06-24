@@ -250,6 +250,32 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(s => s.AssignmentId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.Score)
+            .HasColumnType("numeric(5,2)");
+
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.Feedback)
+            .HasMaxLength(1000);
+
+        modelBuilder.Entity<Submission>()
+            .HasOne(s => s.Student)
+            .WithMany()
+            .HasForeignKey(s => s.StudentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Submission>()
+            .HasOne(s => s.File)
+            .WithMany()
+            .HasForeignKey(s => s.FileId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Submission>()
+            .HasOne(s => s.GradedBy)
+            .WithMany()
+            .HasForeignKey(s => s.GradedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Metric -> Assignment
         modelBuilder.Entity<Metric>()
             .HasOne(m => m.Assignment)
