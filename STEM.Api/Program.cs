@@ -98,6 +98,18 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole(RoleNames.MasterAdministrator, RoleNames.SchoolAdministrator));
 });
 
+// Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173", "https://localhost:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -109,6 +121,9 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// Use CORS before Authentication/Authorization
+app.UseCors("AllowFrontend");
 
 // Use Authentication before Authorization
 app.UseAuthentication();

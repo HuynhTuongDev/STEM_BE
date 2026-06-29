@@ -85,6 +85,53 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("Announcements");
                 });
 
+            modelBuilder.Entity("STEM.Core.Entities.Classes.AttendanceRecord", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateOnly>("AttendanceDate")
+                        .HasColumnType("date");
+
+                    b.Property<int>("ClassId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("MarkedById")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)");
+
+                    b.Property<int>("StudentId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MarkedById");
+
+                    b.HasIndex("StudentId");
+
+                    b.HasIndex("ClassId", "StudentId", "AttendanceDate")
+                        .IsUnique();
+
+                    b.ToTable("AttendanceRecords");
+                });
+
             modelBuilder.Entity("STEM.Core.Entities.Classes.Class", b =>
                 {
                     b.Property<int>("Id")
@@ -529,7 +576,23 @@ namespace STEM.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Feedback")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
                     b.Property<int>("FileId")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("GradedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("GradedById")
+                        .HasColumnType("integer");
+
+                    b.Property<decimal?>("Score")
+                        .HasColumnType("numeric(5,2)");
+
+                    b.Property<int?>("StudentId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("UpdatedAt")
@@ -538,6 +601,12 @@ namespace STEM.Infrastructure.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("AssignmentId");
+
+                    b.HasIndex("FileId");
+
+                    b.HasIndex("GradedById");
+
+                    b.HasIndex("StudentId");
 
                     b.ToTable("Submissions");
                 });
@@ -1034,6 +1103,33 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("Class");
                 });
 
+            modelBuilder.Entity("STEM.Core.Entities.Classes.AttendanceRecord", b =>
+                {
+                    b.HasOne("STEM.Core.Entities.Classes.Class", "Class")
+                        .WithMany("AttendanceRecords")
+                        .HasForeignKey("ClassId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("STEM.Core.Entities.Users.User", "MarkedBy")
+                        .WithMany()
+                        .HasForeignKey("MarkedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Class");
+
+                    b.Navigation("MarkedBy");
+
+                    b.Navigation("Student");
+                });
+
             modelBuilder.Entity("STEM.Core.Entities.Classes.Class", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Courses.Course", "Course")
@@ -1224,7 +1320,29 @@ namespace STEM.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("STEM.Core.Entities.Projects.FileEntity", "File")
+                        .WithMany()
+                        .HasForeignKey("FileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("STEM.Core.Entities.Users.User", "GradedBy")
+                        .WithMany()
+                        .HasForeignKey("GradedById")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
+                        .WithMany()
+                        .HasForeignKey("StudentId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
                     b.Navigation("Assignment");
+
+                    b.Navigation("File");
+
+                    b.Navigation("GradedBy");
+
+                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Quizzes.Quiz", b =>
@@ -1374,6 +1492,8 @@ namespace STEM.Infrastructure.Migrations
             modelBuilder.Entity("STEM.Core.Entities.Classes.Class", b =>
                 {
                     b.Navigation("Announcements");
+
+                    b.Navigation("AttendanceRecords");
 
                     b.Navigation("Enrollments");
 

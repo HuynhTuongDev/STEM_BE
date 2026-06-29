@@ -7,6 +7,11 @@ using STEM.Application.UseCases.Schools;
 using STEM.Application.UseCases.Courses;
 using STEM.Application.UseCases.Classes;
 using STEM.Application.UseCases.Users;
+using STEM.Application.UseCases.Attendance;
+using STEM.Application.UseCases.Assignments;
+using STEM.Application.UseCases.Quizzes;
+using STEM.Application.UseCases.Grading;
+using STEM.Application.UseCases.VirtualLabs;
 using STEM.Application.UseCases.Students;
 using FluentValidation;
 using STEM.Application.Validators;
@@ -19,6 +24,7 @@ public static class ServiceCollectionExtensions
     {
         // Auth Handlers
         services.AddScoped<LoginHandler>();
+        services.AddScoped<GoogleLoginHandler>();
         services.AddScoped<VerifyEmailHandler>();
         services.AddScoped<ForgotPasswordHandler>();
         services.AddScoped<ResetPasswordHandler>();
@@ -51,6 +57,40 @@ public static class ServiceCollectionExtensions
         services.AddScoped<UploadAvatarHandler>();
         services.AddScoped<GetUsersListHandler>();
         services.AddScoped<GetUserDetailHandler>();
+        services.AddScoped<UpdateTeacherHandler>();
+        services.AddScoped<DeleteTeacherHandler>();
+
+        // Attendance Handlers
+        services.AddScoped<CreateAttendanceHandler>();
+        services.AddScoped<UpdateAttendanceHandler>();
+        services.AddScoped<GetAttendanceHandler>();
+
+        // Assignment Handlers
+        services.AddScoped<CreateAssignmentHandler>();
+        services.AddScoped<GetAssignmentsHandler>();
+        services.AddScoped<GetAssignmentDetailHandler>();
+        services.AddScoped<UpdateAssignmentHandler>();
+        services.AddScoped<DeleteAssignmentHandler>();
+
+        // Quiz Handlers
+        services.AddScoped<CreateQuizHandler>();
+        services.AddScoped<GetQuizzesHandler>();
+        services.AddScoped<GetQuizDetailHandler>();
+        services.AddScoped<UpdateQuizHandler>();
+        services.AddScoped<DeleteQuizHandler>();
+
+        // Grading Handlers
+        services.AddScoped<GetSubmissionsHandler>();
+        services.AddScoped<GetSubmissionDetailHandler>();
+        services.AddScoped<GradeSubmissionHandler>();
+        services.AddScoped<UpdateSubmissionGradeHandler>();
+
+        // Virtual Lab Handlers
+        services.AddScoped<CreateVirtualLabHandler>();
+        services.AddScoped<GetVirtualLabsHandler>();
+        services.AddScoped<GetVirtualLabDetailHandler>();
+        services.AddScoped<UpdateVirtualLabHandler>();
+        services.AddScoped<DeleteVirtualLabHandler>();
 
         // Student Handlers
         services.AddScoped<GetStudentsHandler>();

@@ -1,4 +1,3 @@
-using BCrypt.Net;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using STEM.Application.Dtos.Auth;
@@ -48,13 +47,9 @@ public class LoginHandler
         if (!user.IsActive)
             throw new UnauthorizedAccessException("Account is disabled.");
 
-        if (user.RoleId == 2) // School Administrator - requires password
+        if (user.RoleId == 3 || user.RoleId == 4) // Student/Teacher - must use Google OAuth
         {
-            if (string.IsNullOrWhiteSpace(request.Password))
-                throw new UnauthorizedAccessException("Password is required for School Administrator.");
-
-            if (string.IsNullOrWhiteSpace(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
-                throw new UnauthorizedAccessException("Invalid password.");
+            throw new UnauthorizedAccessException("Vui lòng đăng nhập bằng Google OAuth.");
         }
 
         var token = _tokenService.GenerateAccessToken(user);
