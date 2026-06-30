@@ -18,6 +18,10 @@ public class School : BaseEntity
     public string RepresentativeName { get; set; } = string.Empty;
     public string? ProofOfActivity { get; set; }
     public SchoolStatus Status { get; set; } = SchoolStatus.Pending;
+    public string? StudentScale { get; set; }
+    public string? RepresentativePosition { get; set; }
+    public string? Website { get; set; }
+    public string? Notes { get; set; }
 
     public ICollection<User> Users { get; set; } = new List<User>();
     public ICollection<Class> Classes { get; set; } = new List<Class>();

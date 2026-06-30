@@ -51,6 +51,10 @@ public class RegisterSchoolHandler
             RepresentativeEmail = request.RepresentativeEmail,
             ProofOfActivity = request.ProofOfActivity,
             Status = SchoolStatus.Pending,
+            StudentScale = request.StudentScale,
+            RepresentativePosition = request.RepresentativePosition,
+            Website = request.Website,
+            Notes = request.Notes,
             CreatedAt = now,
             UpdatedAt = now
         };

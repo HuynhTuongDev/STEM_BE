@@ -34,16 +34,35 @@ public class SchoolRequestsController : ControllerBase
                 s => s.Status == SchoolStatus.Pending,
                 cancellationToken);
 
-            var result = pendingSchools.Select(s => new
-            {
-                s.Id,
-                s.Name,
-                s.Address,
-                s.RepresentativeName,
-                s.RepresentativeEmail,
-                s.ProofOfActivity,
-                s.CreatedAt,
-                AdminUser = s.Users.FirstOrDefault(u => u.RoleId == 2)
+            var representativeEmails = pendingSchools.Select(s => s.RepresentativeEmail).Distinct().ToList();
+            var users = await _userRepository.FindAsync(
+                u => representativeEmails.Contains(u.Email),
+                cancellationToken);
+            var userMap = users.GroupBy(u => u.Email).ToDictionary(g => g.Key, g => g.First());
+
+            var result = pendingSchools.Select(s => {
+                userMap.TryGetValue(s.RepresentativeEmail, out var adminUser);
+                return new
+                {
+                    s.Id,
+                    s.Name,
+                    s.Address,
+                    s.RepresentativeName,
+                    s.RepresentativeEmail,
+                    s.ProofOfActivity,
+                    s.CreatedAt,
+                    s.StudentScale,
+                    s.RepresentativePosition,
+                    s.Website,
+                    s.Notes,
+                    AdminUser = adminUser != null ? new
+                    {
+                        adminUser.Id,
+                        adminUser.Email,
+                        adminUser.FullName,
+                        adminUser.Phone
+                    } : null
+                };
             }).OrderByDescending(s => s.CreatedAt);
 
             return Ok(new { success = true, data = result });
