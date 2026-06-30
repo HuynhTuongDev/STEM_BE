@@ -12,6 +12,7 @@ using STEM.Application.UseCases.Assignments;
 using STEM.Application.UseCases.Quizzes;
 using STEM.Application.UseCases.Grading;
 using STEM.Application.UseCases.VirtualLabs;
+using STEM.Application.UseCases.Students;
 using FluentValidation;
 using STEM.Application.Validators;
 
@@ -23,6 +24,7 @@ public static class ServiceCollectionExtensions
     {
         // Auth Handlers
         services.AddScoped<LoginHandler>();
+        services.AddScoped<GoogleLoginHandler>();
         services.AddScoped<VerifyEmailHandler>();
         services.AddScoped<ForgotPasswordHandler>();
         services.AddScoped<ResetPasswordHandler>();
@@ -89,6 +91,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetVirtualLabDetailHandler>();
         services.AddScoped<UpdateVirtualLabHandler>();
         services.AddScoped<DeleteVirtualLabHandler>();
+
+        // Student Handlers
+        services.AddScoped<GetStudentsHandler>();
+        services.AddScoped<GetStudentLearningProgressHandler>();
 
         // Course Handlers
         services.AddScoped<GetCoursesListHandler>();

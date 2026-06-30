@@ -83,6 +83,9 @@ public class TeachersController : ControllerBase
             if (result.RoleId != 3)
                 return NotFound(new { success = false, message = "User is not a teacher." });
 
+            if (result.SchoolId != currentUser.SchoolId)
+                return NotFound(new { success = false, message = "Teacher not found in your school." });
+
             return Ok(new { success = true, data = result });
         }
         catch (KeyNotFoundException)

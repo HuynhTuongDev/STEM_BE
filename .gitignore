@@ -1,46 +1,64 @@
-### C#
-# Build results
-[Bb]in/
-[Oo]bj/
-[Dd]ebug/
-[Rr]elease/
+# =========================================================================
+# User-specific files & IDE configs
+# =========================================================================
+*.rsuser
+*.suo
 *.user
 *.userosscache
 *.sln.docstates
-*.lscache
 
-# Visual Studio cache/options directory
+# Visual Studio cache directory and local history
 .vs/
-
-# User-specific files
+.idea/
+.vscode/
 *.suo
-*.user
+*.ntvs*
+*.njsproj
+*.sln.docstates
 
-# Debug symbols
-*.pdb
+# =========================================================================
+# Build and Output Directories
+# =========================================================================
+# .NET Build outputs
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+x64/
+x86/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+bbin/
+obj/
+bin/
 
-# NuGet Packages
-*.nupkg
-**/[Pp]ackages/*
-!**/[Pp]ackages/build/
-*.nuget.props
-*.nuget.targets
+# Node/Frontend Build outputs
+node_modules/
+/dist
+/.next/
+/out
+/build
 
-# .NET build artifacts
-artifacts/
+# Logs and databases
+[Ll]og/
+[Ll]ogs/
+*.log
+*.sqlite
+*.db
 
-# Publish output
-publish/
+# =========================================================================
+# Configuration and Secrets (CRITICAL)
+# =========================================================================
+# ASP.NET Core appsettings secrets
+appsettings.json
+appsettings.*.json
 
-### Windows
-# Windows thumbnail cache files
-Thumbs.db
+# Environment variables and local secrets
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
 
-# Folder config file
-[Dd]esktop.ini
-
-# Recycle Bin used on file shares
-$RECYCLE.BIN/
-
-# Windows shortcuts
-*.lnk
+# Prisma local configs if applicable
+/prisma/migrations/

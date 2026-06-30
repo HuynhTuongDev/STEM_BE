@@ -4,6 +4,7 @@ using STEM.Application.Dtos.Auth;
 using STEM.Application.Interfaces;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
+using UserLoginHistory = STEM.Core.Entities.Users.LoginHistory;
 
 namespace STEM.Application.UseCases.Auth;
 
@@ -91,7 +92,7 @@ public class AuthSessionService
             var userAgent = _httpContextAccessor?.HttpContext?.Request?.Headers["User-Agent"].ToString() ?? "Unknown";
             var now = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
-            await _loginHistoryRepository.AddAsync(new LoginHistory
+            await _loginHistoryRepository.AddAsync(new UserLoginHistory
             {
                 UserId = userId,
                 IpAddress = ipAddress,
