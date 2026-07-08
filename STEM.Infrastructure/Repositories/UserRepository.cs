@@ -68,8 +68,7 @@ public class UserRepository : Repository<User>, IUserRepository
         {
             var term = searchTerm.Trim().ToLower();
             query = query.Where(u => u.FullName.ToLower().Contains(term) 
-                                     || u.Email.ToLower().Contains(term) 
-                                     || (u.Phone != null && u.Phone.ToLower().Contains(term)));
+                                     || u.Email.ToLower().Contains(term));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);

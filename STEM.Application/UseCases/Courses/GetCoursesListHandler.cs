@@ -47,7 +47,6 @@ public class GetCoursesListHandler
             pageSize,
             request.SearchTerm,
             filterSchoolId,
-            request.TeacherId,
             cancellationToken);
 
         var items = courses.Select(c => new CourseListItemResponse
@@ -55,8 +54,6 @@ public class GetCoursesListHandler
             Id = c.Id,
             Title = c.Title,
             Description = c.Description,
-            TeacherId = c.TeacherId,
-            TeacherName = c.Teacher?.FullName ?? string.Empty,
             SchoolId = c.SchoolId,
             SchoolName = c.School?.Name,
             CreatedAt = c.CreatedAt

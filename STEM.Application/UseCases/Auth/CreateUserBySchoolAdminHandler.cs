@@ -49,8 +49,10 @@ public class CreateUserBySchoolAdminHandler
         var user = new User
         {
             Email = request.Email,
-            FullName = request.FullName,
-            Phone = request.Phone,
+            FullName = string.IsNullOrWhiteSpace(request.FullName)
+                ? request.Email.Substring(0, request.Email.IndexOf('@'))
+                : request.FullName.Trim(),
+            Phone = string.IsNullOrWhiteSpace(request.Phone) ? string.Empty : request.Phone.Trim(),
             IsActive = true,
             IsEmailVerified = true,
             RoleId = request.RoleId,

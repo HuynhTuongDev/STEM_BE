@@ -45,8 +45,6 @@ public class GetCourseDetailHandler
             Id = course.Id,
             Title = course.Title,
             Description = course.Description,
-            TeacherId = course.TeacherId,
-            TeacherName = course.Teacher?.FullName ?? string.Empty,
             SchoolId = course.SchoolId,
             SchoolName = course.School?.Name,
             CreatedAt = course.CreatedAt,

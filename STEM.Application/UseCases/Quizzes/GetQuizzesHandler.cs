@@ -57,6 +57,7 @@ public class GetQuizzesHandler
             pageNumber,
             pageSize,
             request.SearchTerm,
+            request.ClassId,
             request.CourseId,
             schoolId,
             teacherId,

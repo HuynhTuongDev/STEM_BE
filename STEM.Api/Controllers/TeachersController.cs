@@ -102,7 +102,10 @@ public class TeachersController : ControllerBase
     /// Cập nhật thông tin giáo viên.
     /// Chỉ SchoolAdmin mới được phép.
     /// </summary>
-    [HttpPut("{id}")]
+    [HttpPut("{id:int}")]
+    [ProducesResponseType(typeof(UserDetailResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateTeacher(
         int id,
         [FromBody] UpdateTeacherRequest request,
@@ -110,13 +113,12 @@ public class TeachersController : ControllerBase
     {
         try
         {
-            request.Id = id;
             var currentUserId = GetCurrentUserId();
-            var success = await _updateTeacherHandler.Handle(request, currentUserId, cancellationToken);
-            if (!success)
+            var updatedTeacher = await _updateTeacherHandler.Handle(request, currentUserId, cancellationToken);
+            if (updatedTeacher is null)
                 return NotFound(new { success = false, message = "Teacher not found." });
 
-            return Ok(new { success = true, message = "Teacher updated successfully." });
+            return Ok(new { success = true, data = updatedTeacher, message = "Teacher updated successfully." });
         }
         catch (FluentValidation.ValidationException ex)
         {

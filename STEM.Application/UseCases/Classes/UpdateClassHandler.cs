@@ -74,13 +74,23 @@ public class UpdateClassHandler
         classEntity.ClassCode = request.ClassCode;
         classEntity.CourseId = request.CourseId;
         classEntity.TeacherId = request.TeacherId;
-        classEntity.StartDate = request.StartDate;
-        classEntity.EndDate = request.EndDate;
+        classEntity.StartDate = NormalizeToUtc(request.StartDate);
+        classEntity.EndDate = NormalizeToUtc(request.EndDate);
         classEntity.UpdatedAt = DateTime.UtcNow;
 
         _classRepository.Update(classEntity);
         await _classRepository.SaveChangesAsync(cancellationToken);
 
         return true;
+    }
+
+    private static DateTime NormalizeToUtc(DateTime date)
+    {
+        return date.Kind switch
+        {
+            DateTimeKind.Utc => date,
+            DateTimeKind.Local => date.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(date, DateTimeKind.Utc)
+        };
     }
 }

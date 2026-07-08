@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using STEM.Application.Dtos.Classes;
 using STEM.Application.UseCases.Classes;
 using System.Security.Claims;
@@ -94,6 +95,11 @@ public class ClassesController : ControllerBase
         catch (ArgumentException ex)
         {
             return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (DbUpdateException ex)
+        {
+            var inner = ex.InnerException?.Message ?? ex.Message;
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi tạo lớp học.", error = inner });
         }
         catch (Exception ex)
         {

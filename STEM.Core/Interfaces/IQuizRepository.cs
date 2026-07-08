@@ -4,7 +4,7 @@ namespace STEM.Core.Repository;
 
 public interface IQuizRepository : IRepository<Quiz>
 {
-    Task<IEnumerable<Quiz>> GetByCourseIdAsync(int courseId, CancellationToken cancellationToken = default);
+    Task<IEnumerable<Quiz>> GetByClassIdAsync(int classId, CancellationToken cancellationToken = default);
 
     Task<Quiz?> GetByIdWithDetailsAsync(int id, CancellationToken cancellationToken = default);
 
@@ -12,6 +12,7 @@ public interface IQuizRepository : IRepository<Quiz>
         int pageNumber,
         int pageSize,
         string? searchTerm,
+        int? classId,
         int? courseId,
         int? schoolId,
         int? teacherId,

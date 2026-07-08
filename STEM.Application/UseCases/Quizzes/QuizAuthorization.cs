@@ -1,23 +1,24 @@
-using STEM.Core.Entities.Courses;
+using STEM.Application.Dtos.Quizzes;
 using STEM.Core.Entities.Quizzes;
+using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Users;
 
 namespace STEM.Application.UseCases.Quizzes;
 
 internal static class QuizAuthorization
 {
-    public static bool CanManageCourse(User user, Course course)
+    public static bool CanManageClass(User user, Class classEntity)
     {
         var roleName = user.Role?.Name;
 
         if (roleName == RoleNames.SchoolAdministrator)
         {
-            return user.SchoolId.HasValue && course.SchoolId == user.SchoolId.Value;
+            return user.SchoolId.HasValue && classEntity.SchoolId == user.SchoolId.Value;
         }
 
         if (roleName == RoleNames.Teacher)
         {
-            return course.TeacherId == user.Id;
+            return classEntity.TeacherId == user.Id;
         }
 
         return false;
@@ -26,26 +27,25 @@ internal static class QuizAuthorization
     public static bool CanViewQuiz(User user, Quiz quiz)
     {
         var roleName = user.Role?.Name;
-        var course = quiz.Course;
-        if (course == null)
+        var classEntity = quiz.Class;
+        if (classEntity == null)
         {
             return false;
         }
 
         if (roleName == RoleNames.SchoolAdministrator)
         {
-            return user.SchoolId.HasValue && course.SchoolId == user.SchoolId.Value;
+            return user.SchoolId.HasValue && classEntity.SchoolId == user.SchoolId.Value;
         }
 
         if (roleName == RoleNames.Teacher)
         {
-            return course.TeacherId == user.Id;
+            return classEntity.TeacherId == user.Id;
         }
 
         if (roleName == RoleNames.Student)
         {
-            return course.Classes.Any(classEntity =>
-                classEntity.Enrollments.Any(enrollment => enrollment.StudentId == user.Id));
+            return classEntity.Enrollments.Any(enrollment => enrollment.StudentId == user.Id);
         }
 
         return false;

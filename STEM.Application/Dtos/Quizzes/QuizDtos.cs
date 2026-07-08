@@ -3,6 +3,7 @@ namespace STEM.Application.Dtos.Quizzes;
 public class GetQuizzesRequest
 {
     public string? SearchTerm { get; set; }
+    public int? ClassId { get; set; }
     public int? CourseId { get; set; }
     public int PageNumber { get; set; } = 1;
     public int PageSize { get; set; } = 20;
@@ -10,7 +11,7 @@ public class GetQuizzesRequest
 
 public class CreateQuizRequest
 {
-    public int CourseId { get; set; }
+    public int ClassId { get; set; }
     public string Title { get; set; } = string.Empty;
     public List<CreateQuizQuestionRequest> Questions { get; set; } = new();
 }
@@ -29,7 +30,7 @@ public class CreateQuizAnswerRequest
 
 public class UpdateQuizRequest
 {
-    public int CourseId { get; set; }
+    public int ClassId { get; set; }
     public string Title { get; set; } = string.Empty;
     public List<UpdateQuizQuestionRequest> Questions { get; set; } = new();
 }
@@ -49,12 +50,14 @@ public class UpdateQuizAnswerRequest
 public class QuizResponse
 {
     public int Id { get; set; }
+    public int ClassId { get; set; }
+    public string ClassCode { get; set; } = string.Empty;
     public int CourseId { get; set; }
     public string CourseTitle { get; set; } = string.Empty;
     public int TeacherId { get; set; }
     public string TeacherName { get; set; } = string.Empty;
-    public int? SchoolId { get; set; }
-    public string? SchoolName { get; set; }
+    public int SchoolId { get; set; }
+    public string SchoolName { get; set; } = string.Empty;
     public string Title { get; set; } = string.Empty;
     public int QuestionsCount { get; set; }
     public IReadOnlyCollection<QuizQuestionResponse> Questions { get; set; } = Array.Empty<QuizQuestionResponse>();

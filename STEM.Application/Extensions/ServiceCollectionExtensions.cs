@@ -95,6 +95,9 @@ public static class ServiceCollectionExtensions
         // Student Handlers
         services.AddScoped<GetStudentsHandler>();
         services.AddScoped<GetStudentLearningProgressHandler>();
+        services.AddScoped<CreateStudentHandler>();
+        services.AddScoped<UpdateStudentHandler>();
+        services.AddScoped<DeleteStudentHandler>();
 
         // Course Handlers
         services.AddScoped<GetCoursesListHandler>();

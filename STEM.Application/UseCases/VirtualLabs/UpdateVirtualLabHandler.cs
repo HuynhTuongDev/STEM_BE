@@ -1,5 +1,8 @@
 using STEM.Application.Dtos.VirtualLabs;
 using STEM.Application.Interfaces;
+using STEM.Core.Entities.Simulations;
+using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.VirtualLabs;
@@ -7,15 +10,18 @@ namespace STEM.Application.UseCases.VirtualLabs;
 public class UpdateVirtualLabHandler
 {
     private readonly ISimulationRepository _simulationRepository;
+    private readonly IClassRepository _classRepository;
     private readonly IUserRepository _userRepository;
     private readonly IWokwiService _wokwiService;
 
     public UpdateVirtualLabHandler(
         ISimulationRepository simulationRepository,
+        IClassRepository classRepository,
         IUserRepository userRepository,
         IWokwiService wokwiService)
     {
         _simulationRepository = simulationRepository;
+        _classRepository = classRepository;
         _userRepository = userRepository;
         _wokwiService = wokwiService;
     }
@@ -26,7 +32,7 @@ public class UpdateVirtualLabHandler
         int currentUserId,
         CancellationToken cancellationToken = default)
     {
-        CreateVirtualLabHandler.ValidateRequest(request.LessonId, request.SimulationName, request.DiagramJson);
+        CreateVirtualLabHandler.ValidateRequest(request.ClassId, request.SimulationName, request.DiagramJson);
         ValidateDiagram(request.DiagramJson);
 
         var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
@@ -46,15 +52,15 @@ public class UpdateVirtualLabHandler
             throw new UnauthorizedAccessException("You are not allowed to update this virtual lab.");
         }
 
-        var targetLesson = await _simulationRepository.GetLessonWithDetailsAsync(request.LessonId, cancellationToken);
-        if (targetLesson == null)
+        var targetClass = await _classRepository.GetByIdWithDetailsAsync(request.ClassId, cancellationToken);
+        if (targetClass == null)
         {
-            throw new KeyNotFoundException("Lesson not found.");
+            throw new KeyNotFoundException("Class not found.");
         }
 
-        if (!VirtualLabAuthorization.CanManageLesson(currentUser, targetLesson))
+        if (!VirtualLabAuthorization.CanManageClass(currentUser, targetClass))
         {
-            throw new UnauthorizedAccessException("You are not allowed to move this virtual lab to the selected lesson.");
+            throw new UnauthorizedAccessException("You are not allowed to move this virtual lab to the selected class.");
         }
 
         if (lab.Simulation == null)
@@ -67,8 +73,8 @@ public class UpdateVirtualLabHandler
         lab.Description = request.Description.Trim();
         lab.Config = request.DiagramJson;
         lab.UpdatedAt = now;
-        lab.Simulation.LessonId = request.LessonId;
-        lab.Simulation.Lesson = targetLesson;
+        lab.Simulation.ClassId = request.ClassId;
+        lab.Simulation.Class = targetClass;
         lab.Simulation.UpdatedAt = now;
 
         _simulationRepository.Update(lab);

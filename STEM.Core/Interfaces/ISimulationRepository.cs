@@ -1,11 +1,11 @@
 using STEM.Core.Entities.Simulations;
-using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Classes;
 
 namespace STEM.Core.Repository;
 
 public interface ISimulationRepository : IRepository<SimulationTemplate>
 {
-    Task<Lesson?> GetLessonWithDetailsAsync(int lessonId, CancellationToken cancellationToken = default);
+    Task<Class?> GetClassWithDetailsAsync(int classId, CancellationToken cancellationToken = default);
 
     Task<SimulationTemplate?> GetTemplateWithDetailsAsync(int id, CancellationToken cancellationToken = default);
 
@@ -13,7 +13,7 @@ public interface ISimulationRepository : IRepository<SimulationTemplate>
         int pageNumber,
         int pageSize,
         string? searchTerm,
-        int? lessonId,
+        int? classId,
         int? courseId,
         int? schoolId,
         int? teacherId,
