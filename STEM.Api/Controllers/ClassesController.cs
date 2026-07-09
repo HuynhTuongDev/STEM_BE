@@ -17,19 +17,25 @@ public class ClassesController : ControllerBase
     private readonly CreateClassHandler _createClassHandler;
     private readonly UpdateClassHandler _updateClassHandler;
     private readonly DeleteClassHandler _deleteClassHandler;
+    private readonly AssignStudentsToClassHandler _assignStudentsToClassHandler;
+    private readonly RemoveStudentFromClassHandler _removeStudentFromClassHandler;
 
     public ClassesController(
         GetClassesListHandler getClassesListHandler,
         GetClassDetailHandler getClassDetailHandler,
         CreateClassHandler createClassHandler,
         UpdateClassHandler updateClassHandler,
-        DeleteClassHandler deleteClassHandler)
+        DeleteClassHandler deleteClassHandler,
+        AssignStudentsToClassHandler assignStudentsToClassHandler,
+        RemoveStudentFromClassHandler removeStudentFromClassHandler)
     {
         _getClassesListHandler = getClassesListHandler;
         _getClassDetailHandler = getClassDetailHandler;
         _createClassHandler = createClassHandler;
         _updateClassHandler = updateClassHandler;
         _deleteClassHandler = deleteClassHandler;
+        _assignStudentsToClassHandler = assignStudentsToClassHandler;
+        _removeStudentFromClassHandler = removeStudentFromClassHandler;
     }
 
     [HttpGet]
@@ -157,6 +163,58 @@ public class ClassesController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi xóa lớp học.", error = ex.Message });
+        }
+    }
+
+    [HttpPost("{classId}/assign-students")]
+    [Authorize(Policy = "SchoolAdminOnly")]
+    public async Task<IActionResult> AssignStudentsToClass(int classId, [FromBody] AssignStudentsRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            await _assignStudentsToClassHandler.Handle(classId, request, currentUserId);
+            return Ok(new { success = true, message = "Đã thêm học sinh vào lớp thành công." });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi thêm học sinh vào lớp.", error = ex.Message });
+        }
+    }
+
+    [HttpDelete("{classId}/students/{studentId}")]
+    [Authorize(Policy = "SchoolAdminOnly")]
+    public async Task<IActionResult> RemoveStudentFromClass(int classId, int studentId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            await _removeStudentFromClassHandler.Handle(classId, studentId, currentUserId, cancellationToken);
+            return Ok(new { success = true, message = "Đã xóa học sinh khỏi lớp thành công." });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi xóa học sinh khỏi lớp.", error = ex.Message });
         }
     }
 

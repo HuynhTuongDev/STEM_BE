@@ -81,4 +81,27 @@ public class UserRepository : Repository<User>, IUserRepository
 
         return (users, totalCount);
     }
+
+    public async Task<IEnumerable<User>> GetStudentsNotInClassAsync(int classId, int schoolId, string? searchTerm, CancellationToken cancellationToken = default)
+    {
+        var studentRoleName = RoleNames.Student;
+        var query = _dbSet
+            .Include(u => u.Role)
+            .Include(u => u.School)
+            .Where(u => !_context.Enrollments.Any(e => e.ClassId == classId && e.StudentId == u.Id))
+            .Where(u => u.SchoolId == schoolId)
+            .Where(u => u.Role != null && u.Role.Name == studentRoleName)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.Trim().ToLower();
+            query = query.Where(u => u.FullName.ToLower().Contains(term) 
+                                     || u.Email.ToLower().Contains(term));
+        }
+
+        return await query
+            .OrderBy(u => u.FullName)
+            .ToListAsync(cancellationToken);
+    }
 }

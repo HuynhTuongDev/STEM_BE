@@ -14,4 +14,6 @@ public interface IUserRepository : IRepository<User>
         bool? isActive,
         int? schoolId,
         CancellationToken cancellationToken = default);
+
+    Task<IEnumerable<User>> GetStudentsNotInClassAsync(int classId, int schoolId, string? searchTerm, CancellationToken cancellationToken = default);
 }

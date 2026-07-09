@@ -159,6 +159,76 @@ public class StudentsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Bulk create students from Excel import.
+    /// </summary>
+    [HttpPost("bulk")]
+    [ProducesResponseType(StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> BulkCreateStudents(
+        [FromBody] BulkCreateStudentsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var results = new List<BulkCreateStudentResult>();
+
+            // Check duplicate emails within the request itself
+            var duplicateEmails = request.Students
+                .GroupBy(s => s.Email.Trim().ToLower())
+                .Where(g => g.Count() > 1)
+                .Select(g => g.Key)
+                .ToList();
+
+            if (duplicateEmails.Any())
+            {
+                return BadRequest(new { success = false, message = $"Các email bị trùng trong file: {string.Join(", ", duplicateEmails)}" });
+            }
+
+            foreach (var studentRequest in request.Students)
+            {
+                try
+                {
+                    var result = await _createStudentHandler.Handle(studentRequest, currentUserId, cancellationToken);
+                    results.Add(new BulkCreateStudentResult
+                    {
+                        Email = studentRequest.Email,
+                        FullName = studentRequest.FullName,
+                        Success = true,
+                        Message = "Created successfully"
+                    });
+                }
+                catch (InvalidOperationException ex)
+                {
+                    results.Add(new BulkCreateStudentResult
+                    {
+                        Email = studentRequest.Email,
+                        FullName = studentRequest.FullName,
+                        Success = false,
+                        Message = ex.Message
+                    });
+                }
+                catch (Exception ex)
+                {
+                    results.Add(new BulkCreateStudentResult
+                    {
+                        Email = studentRequest.Email,
+                        FullName = studentRequest.FullName,
+                        Success = false,
+                        Message = ex.Message
+                    });
+                }
+            }
+
+            return StatusCode(StatusCodes.Status201Created, new { success = true, data = results });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+    }
+
     [HttpPut("{id:int}")]
     [ProducesResponseType(typeof(StudentResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]

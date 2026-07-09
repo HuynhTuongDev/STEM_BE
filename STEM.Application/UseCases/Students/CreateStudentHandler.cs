@@ -53,7 +53,7 @@ public class CreateStudentHandler
             Gender = request.Gender?.Trim(),
             DateOfBirth = request.DateOfBirth,
             Address = request.Address?.Trim(),
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password ?? "TempPassword123"),
             RoleId = studentRole.Id,
             SchoolId = currentUser.SchoolId,
             IsActive = request.IsActive,

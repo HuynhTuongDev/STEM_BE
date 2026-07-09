@@ -112,6 +112,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CreateClassHandler>();
         services.AddScoped<UpdateClassHandler>();
         services.AddScoped<DeleteClassHandler>();
+        services.AddScoped<AssignStudentsToClassHandler>();
+        services.AddScoped<RemoveStudentFromClassHandler>();
 
         // Validators
         services.AddValidatorsFromAssemblyContaining<CreateUserBySchoolAdminValidator>();
