@@ -13,6 +13,7 @@ using STEM.Application.UseCases.Quizzes;
 using STEM.Application.UseCases.Grading;
 using STEM.Application.UseCases.VirtualLabs;
 using STEM.Application.UseCases.Students;
+using STEM.Application.UseCases.Schedules;
 using FluentValidation;
 using STEM.Application.Validators;
 
@@ -114,6 +115,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DeleteClassHandler>();
         services.AddScoped<AssignStudentsToClassHandler>();
         services.AddScoped<RemoveStudentFromClassHandler>();
+
+        // Schedule Handlers
+        services.AddScoped<CreateScheduleHandler>();
+        services.AddScoped<UpdateScheduleHandler>();
+        services.AddScoped<DeleteScheduleHandler>();
+        services.AddScoped<GetTeacherScheduleHandler>();
+        services.AddScoped<GetStudentScheduleHandler>();
 
         // Validators
         services.AddValidatorsFromAssemblyContaining<CreateUserBySchoolAdminValidator>();

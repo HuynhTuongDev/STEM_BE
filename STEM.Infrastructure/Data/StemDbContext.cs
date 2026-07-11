@@ -33,6 +33,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<Schedule> Schedules => Set<Schedule>();
+    public DbSet<Room> Rooms => Set<Room>();
 
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
@@ -220,6 +221,11 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany(c => c.Schedules)
             .HasForeignKey(s => s.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Room configuration
+        modelBuilder.Entity<Room>()
+            .HasIndex(r => r.RoomCode)
+            .IsUnique();
 
         // Project -> Class
         modelBuilder.Entity<Project>()

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
@@ -102,6 +103,28 @@ public class UserRepository : Repository<User>, IUserRepository
 
         return await query
             .OrderBy(u => u.FullName)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IEnumerable<Schedule>> GetStudentSchedulesAsync(int studentId, DateTime? fromDate, DateTime? toDate, CancellationToken cancellationToken = default)
+    {
+        var query = _context.Enrollments
+            .Include(e => e.Class)
+                .ThenInclude(c => c.Course)
+            .Include(e => e.Class.Schedules)
+            .Where(e => e.StudentId == studentId)
+            .SelectMany(e => e.Class.Schedules)
+            .AsQueryable();
+
+        if (fromDate.HasValue)
+            query = query.Where(s => s.StartTime >= fromDate.Value);
+
+        if (toDate.HasValue)
+            query = query.Where(s => s.EndTime <= toDate.Value);
+
+        return await query
+            .Include(s => s.Class)
+            .OrderBy(s => s.StartTime)
             .ToListAsync(cancellationToken);
     }
 }

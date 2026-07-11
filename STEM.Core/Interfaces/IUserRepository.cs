@@ -1,3 +1,4 @@
+using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Users;
 
 namespace STEM.Core.Repository;
@@ -16,4 +17,5 @@ public interface IUserRepository : IRepository<User>
         CancellationToken cancellationToken = default);
 
     Task<IEnumerable<User>> GetStudentsNotInClassAsync(int classId, int schoolId, string? searchTerm, CancellationToken cancellationToken = default);
+    Task<IEnumerable<Schedule>> GetStudentSchedulesAsync(int studentId, DateTime? fromDate, DateTime? toDate, CancellationToken cancellationToken = default);
 }
