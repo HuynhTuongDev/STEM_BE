@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Dtos.Classes;
 using STEM.Application.UseCases.Classes;
+using STEM.Core.Entities.Users;
 using System.Security.Claims;
 
 namespace STEM.Api.Controllers;
@@ -49,6 +50,34 @@ public class ClassesController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy danh sách lớp học.", error = ex.Message });
+        }
+    }
+
+    [HttpGet("my-classes/{id:int}")]
+    [Authorize(Roles = RoleNames.Teacher)]
+    public async Task<IActionResult> GetMyClasses(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            if (id <= 0)
+                return BadRequest(new { success = false, message = "TeacherId is required." });
+
+            if (id != currentUserId)
+                return Forbid();
+
+            var result = await _getClassesListHandler.HandleTeacherClasses(id, currentUserId, cancellationToken);
+            return Ok(new { success = true, data = result });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "ÄÃ£ xáº£y ra lá»—i khi láº¥y danh sÃ¡ch lá»›p há»c cá»§a giÃ¡o viÃªn.", error = ex.Message });
         }
     }
 

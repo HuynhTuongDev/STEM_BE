@@ -2,7 +2,6 @@ namespace STEM.Application.Dtos.Auth;
 
 public class GoogleLoginRequest
 {
-<<<<<<< HEAD
     public string? IdToken { get; set; }
     public string? Credential { get; set; }
 
@@ -12,7 +11,4 @@ public class GoogleLoginRequest
             ? Credential?.Trim() ?? string.Empty
             : IdToken.Trim();
     }
-=======
-    public string IdToken { get; set; } = string.Empty;
->>>>>>> origin/develop
 }

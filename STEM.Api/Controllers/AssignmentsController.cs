@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Dtos.Assignments;
@@ -156,6 +157,82 @@ public class AssignmentsController : ControllerBase
         }
     }
 
+    [HttpGet("{id:int}/simulation/base-diagram")]
+    public async Task<IActionResult> GetSimulationBaseDiagram(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _getAssignmentDetailHandler.Handle(id, GetCurrentUserId(), cancellationToken);
+            if (!string.Equals(response.AssignmentType, "practical_simulation", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { success = false, message = "Assignment is not a practical simulation." });
+
+            if (response.SimulationDetail == null)
+                return NotFound(new { success = false, message = "Simulation detail not found." });
+
+            return Ok(new { success = true, data = response.SimulationDetail.BaseDiagram });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to get simulation base diagram.", error = ex.Message });
+        }
+    }
+
+    [HttpPost("{id:int}/simulation/validate")]
+    public async Task<IActionResult> ValidateSimulationCircuit(
+        int id,
+        [FromBody] SimulationValidateRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (request.Circuit.ValueKind == JsonValueKind.Undefined)
+                return BadRequest(new { success = false, message = "Circuit is required." });
+
+            var response = await _getAssignmentDetailHandler.Handle(id, GetCurrentUserId(), cancellationToken);
+            if (!string.Equals(response.AssignmentType, "practical_simulation", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { success = false, message = "Assignment is not a practical simulation." });
+
+            if (response.SimulationDetail == null)
+                return NotFound(new { success = false, message = "Simulation detail not found." });
+
+            var expected = NormalizeJson(response.SimulationDetail.AnswerKey);
+            var actual = NormalizeJson(request.Circuit);
+            var isValid = expected == actual;
+
+            return Ok(new
+            {
+                success = true,
+                data = new SimulationValidateResponse
+                {
+                    IsValid = isValid,
+                    Message = isValid ? "Circuit matches the answer key." : "Circuit does not match the answer key."
+                }
+            });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to validate simulation circuit.", error = ex.Message });
+        }
+    }
+
     private int GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
@@ -165,5 +242,10 @@ public class AssignmentsController : ControllerBase
         }
 
         throw new UnauthorizedAccessException("User is not authenticated.");
+    }
+
+    private static string NormalizeJson(JsonElement value)
+    {
+        return JsonSerializer.Serialize(value);
     }
 }

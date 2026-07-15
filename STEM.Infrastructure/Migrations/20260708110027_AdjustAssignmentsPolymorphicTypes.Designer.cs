@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using STEM.Infrastructure.Data;
@@ -11,9 +12,11 @@ using STEM.Infrastructure.Data;
 namespace STEM.Infrastructure.Migrations
 {
     [DbContext(typeof(StemDbContext))]
-    partial class StemDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260708110027_AdjustAssignmentsPolymorphicTypes")]
+    partial class AdjustAssignmentsPolymorphicTypes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -926,91 +929,6 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("Schools");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.ComponentGlueRegistry", b =>
-                {
-                    b.Property<string>("ComponentType")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("PinRequirementsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<bool>("Supported")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("ComponentType");
-
-                    b.ToTable("ComponentGlueRegistry");
-
-                    b.HasData(
-                        new
-                        {
-                            ComponentType = "led",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "LED",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"digital_output\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "push_button",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Push Button",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"digital_input\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "buzzer",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Buzzer",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"pwm_output\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "potentiometer",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Potentiometer",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"analog_input\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "servo",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Servo",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"pwm_output\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "dht22",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "DHT22",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"data\",\"kind\":\"digital_bidirectional\"}]}",
-                            Supported = false,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        });
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Simulations.ExperimentLog", b =>
                 {
                     b.Property<int>("Id")
@@ -1037,152 +955,6 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("SessionId");
 
                     b.ToTable("ExperimentLogs");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.Lab", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AllowedComponentTypesJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("BoardType")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("CircuitConfigJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("CreatedById")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int?>("LinkedAssignmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SimulationMode")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("StarterCode")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("ThumbnailUrl")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("WokwiProjectId")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<string>("WokwiProjectUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Category");
-
-                    b.HasIndex("CreatedById");
-
-                    b.HasIndex("LinkedAssignmentId");
-
-                    b.HasIndex("Status");
-
-                    b.ToTable("Labs");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.LabClassAssignment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("ClassId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("LabId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClassId");
-
-                    b.HasIndex("LabId", "ClassId")
-                        .IsUnique();
-
-                    b.ToTable("LabClassAssignments");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.LabProgress", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("DurationSeconds")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("LabId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("LastOpenedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("OpenCount")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("StartedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentId");
-
-                    b.HasIndex("LabId", "StudentId")
-                        .IsUnique();
-
-                    b.ToTable("LabProgresses");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.LiveMonitoring", b =>
@@ -1883,62 +1655,6 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("Session");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.Lab", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Users.User", "CreatedBy")
-                        .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Projects.Assignment", "LinkedAssignment")
-                        .WithMany()
-                        .HasForeignKey("LinkedAssignmentId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("CreatedBy");
-
-                    b.Navigation("LinkedAssignment");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.LabClassAssignment", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Classes.Class", "Class")
-                        .WithMany()
-                        .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Simulations.Lab", "Lab")
-                        .WithMany("ClassAssignments")
-                        .HasForeignKey("LabId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Class");
-
-                    b.Navigation("Lab");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.LabProgress", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Simulations.Lab", "Lab")
-                        .WithMany("Progresses")
-                        .HasForeignKey("LabId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Lab");
-
-                    b.Navigation("Student");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Simulations.LiveMonitoring", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Simulations.SimulationSession", "Session")
@@ -2094,13 +1810,6 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("Classes");
 
                     b.Navigation("Users");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.Lab", b =>
-                {
-                    b.Navigation("ClassAssignments");
-
-                    b.Navigation("Progresses");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationEntity", b =>

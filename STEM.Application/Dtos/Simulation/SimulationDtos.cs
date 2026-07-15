@@ -100,3 +100,35 @@ public class ComponentMetaResponse
 
     public Dictionary<string, string> DefaultAttrs { get; set; } = new Dictionary<string, string>();
 }
+
+public class CompileSimulationRequest
+{
+    public int? AssignmentId { get; set; }
+    public Guid? LabId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Board { get; set; } = "arduino:avr:uno";
+}
+
+public class CompileSimulationError
+{
+    public int? Line { get; set; }
+    public string Message { get; set; } = string.Empty;
+}
+
+public class CompileSimulationResponse
+{
+    public bool Success { get; set; }
+    public string? JobId { get; set; }
+    public string? HexBase64 { get; set; }
+    public IReadOnlyCollection<CompileSimulationError> Errors { get; set; } = Array.Empty<CompileSimulationError>();
+    public string? CompilerOutput { get; set; }
+}
+
+public class CompileJobResponse
+{
+    public string JobId { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public CompileSimulationResponse? Result { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
+}

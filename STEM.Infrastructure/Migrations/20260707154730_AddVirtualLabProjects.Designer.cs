@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using STEM.Infrastructure.Data;
@@ -11,9 +12,11 @@ using STEM.Infrastructure.Data;
 namespace STEM.Infrastructure.Migrations
 {
     [DbContext(typeof(StemDbContext))]
-    partial class StemDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260707154730_AddVirtualLabProjects")]
+    partial class AddVirtualLabProjects
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -463,43 +466,11 @@ namespace STEM.Infrastructure.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<bool>("AllowResubmit")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("AssignmentType")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
                     b.Property<int>("ClassId")
                         .HasColumnType("integer");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("CreatedById")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime?>("DueDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<decimal>("MaxScore")
-                        .HasColumnType("numeric(6,2)");
-
-                    b.Property<int?>("ResubmitLimit")
-                        .HasColumnType("integer");
-
-                    b.Property<int?>("RubricId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
 
                     b.Property<string>("Title")
                         .IsRequired()
@@ -513,137 +484,6 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("ClassId");
 
                     b.ToTable("Assignments");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Projects.AssignmentQuizDetail", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AssignmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("QuestionsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<bool>("ShuffleQuestions")
-                        .HasColumnType("boolean");
-
-                    b.Property<int?>("TimeLimitSeconds")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignmentId")
-                        .IsUnique();
-
-                    b.ToTable("AssignmentQuizDetails");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Projects.AssignmentReportDetail", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AllowedFileExtensionsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("AllowedSubmissionTypesJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<int>("AssignmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Instructions")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("MaxFileSizeMb")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignmentId")
-                        .IsUnique();
-
-                    b.ToTable("AssignmentReportDetails");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Projects.AssignmentSimulationDetail", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("AllowedComponentTypesJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("AnswerKeyJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<int>("AssignmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<bool>("AutoGradingEnabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<double>("AutoGradingWeight")
-                        .HasColumnType("double precision");
-
-                    b.Property<string>("BaseDiagramJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("EnvironmentSource")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("StarterCode")
-                        .HasColumnType("text");
-
-                    b.Property<string>("StudentInputMode")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignmentId")
-                        .IsUnique();
-
-                    b.ToTable("AssignmentSimulationDetails");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.FileEntity", b =>
@@ -736,19 +576,6 @@ namespace STEM.Infrastructure.Migrations
                     b.Property<int>("AssignmentId")
                         .HasColumnType("integer");
 
-                    b.Property<int>("AttemptNumber")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("AutoGradeResultJson")
-                        .HasColumnType("jsonb");
-
-                    b.Property<decimal?>("AutoScore")
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<string>("ContentJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -756,11 +583,8 @@ namespace STEM.Infrastructure.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("character varying(1000)");
 
-                    b.Property<int?>("FileId")
+                    b.Property<int>("FileId")
                         .HasColumnType("integer");
-
-                    b.Property<decimal?>("FinalScore")
-                        .HasColumnType("numeric(5,2)");
 
                     b.Property<DateTime?>("GradedAt")
                         .HasColumnType("timestamp with time zone");
@@ -771,16 +595,8 @@ namespace STEM.Infrastructure.Migrations
                     b.Property<decimal?>("Score")
                         .HasColumnType("numeric(5,2)");
 
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
                     b.Property<int?>("StudentId")
                         .HasColumnType("integer");
-
-                    b.Property<DateTime?>("SubmittedAt")
-                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -926,91 +742,6 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("Schools");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.ComponentGlueRegistry", b =>
-                {
-                    b.Property<string>("ComponentType")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("PinRequirementsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<bool>("Supported")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("ComponentType");
-
-                    b.ToTable("ComponentGlueRegistry");
-
-                    b.HasData(
-                        new
-                        {
-                            ComponentType = "led",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "LED",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"digital_output\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "push_button",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Push Button",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"digital_input\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "buzzer",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Buzzer",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"pwm_output\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "potentiometer",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Potentiometer",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"analog_input\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "servo",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Servo",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"pwm_output\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "dht22",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "DHT22",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"data\",\"kind\":\"digital_bidirectional\"}]}",
-                            Supported = false,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        });
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Simulations.ExperimentLog", b =>
                 {
                     b.Property<int>("Id")
@@ -1037,152 +768,6 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("SessionId");
 
                     b.ToTable("ExperimentLogs");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.Lab", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AllowedComponentTypesJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("BoardType")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("Category")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("CircuitConfigJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("CreatedById")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int?>("LinkedAssignmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("SimulationMode")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("StarterCode")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("ThumbnailUrl")
-                        .IsRequired()
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.Property<string>("Title")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("WokwiProjectId")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<string>("WokwiProjectUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Category");
-
-                    b.HasIndex("CreatedById");
-
-                    b.HasIndex("LinkedAssignmentId");
-
-                    b.HasIndex("Status");
-
-                    b.ToTable("Labs");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.LabClassAssignment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("ClassId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<Guid>("LabId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ClassId");
-
-                    b.HasIndex("LabId", "ClassId")
-                        .IsUnique();
-
-                    b.ToTable("LabClassAssignments");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.LabProgress", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("DurationSeconds")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("LabId")
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("LastOpenedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("OpenCount")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("StartedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("integer");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("StudentId");
-
-                    b.HasIndex("LabId", "StudentId")
-                        .IsUnique();
-
-                    b.ToTable("LabProgresses");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.LiveMonitoring", b =>
@@ -1752,39 +1337,6 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("Class");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Projects.AssignmentQuizDetail", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Projects.Assignment", "Assignment")
-                        .WithOne("QuizDetail")
-                        .HasForeignKey("STEM.Core.Entities.Projects.AssignmentQuizDetail", "AssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Assignment");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Projects.AssignmentReportDetail", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Projects.Assignment", "Assignment")
-                        .WithOne("ReportDetail")
-                        .HasForeignKey("STEM.Core.Entities.Projects.AssignmentReportDetail", "AssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Assignment");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Projects.AssignmentSimulationDetail", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Projects.Assignment", "Assignment")
-                        .WithOne("SimulationDetail")
-                        .HasForeignKey("STEM.Core.Entities.Projects.AssignmentSimulationDetail", "AssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Assignment");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Projects.Metric", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Projects.Assignment", "Assignment")
@@ -1818,7 +1370,8 @@ namespace STEM.Infrastructure.Migrations
                     b.HasOne("STEM.Core.Entities.Projects.FileEntity", "File")
                         .WithMany()
                         .HasForeignKey("FileId")
-                        .OnDelete(DeleteBehavior.Cascade);
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
 
                     b.HasOne("STEM.Core.Entities.Users.User", "GradedBy")
                         .WithMany()
@@ -1881,62 +1434,6 @@ namespace STEM.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Session");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.Lab", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Users.User", "CreatedBy")
-                        .WithMany()
-                        .HasForeignKey("CreatedById")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Projects.Assignment", "LinkedAssignment")
-                        .WithMany()
-                        .HasForeignKey("LinkedAssignmentId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.Navigation("CreatedBy");
-
-                    b.Navigation("LinkedAssignment");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.LabClassAssignment", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Classes.Class", "Class")
-                        .WithMany()
-                        .HasForeignKey("ClassId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Simulations.Lab", "Lab")
-                        .WithMany("ClassAssignments")
-                        .HasForeignKey("LabId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Class");
-
-                    b.Navigation("Lab");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.LabProgress", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Simulations.Lab", "Lab")
-                        .WithMany("Progresses")
-                        .HasForeignKey("LabId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Lab");
-
-                    b.Navigation("Student");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.LiveMonitoring", b =>
@@ -2065,12 +1562,6 @@ namespace STEM.Infrastructure.Migrations
                 {
                     b.Navigation("Metrics");
 
-                    b.Navigation("QuizDetail");
-
-                    b.Navigation("ReportDetail");
-
-                    b.Navigation("SimulationDetail");
-
                     b.Navigation("Submissions");
                 });
 
@@ -2094,13 +1585,6 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("Classes");
 
                     b.Navigation("Users");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.Lab", b =>
-                {
-                    b.Navigation("ClassAssignments");
-
-                    b.Navigation("Progresses");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.SimulationEntity", b =>

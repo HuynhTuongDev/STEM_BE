@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using STEM.Application.Interfaces;
+using STEM.Application.Validators.VirtualLab;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 using STEM.Infrastructure.Repositories;
@@ -38,6 +39,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IWokwiService, WokwiService>();
         services.AddTransient<IEmailService, EmailService>();
+        
+        services.AddScoped<DiagramValidator>();
+        services.AddScoped<IVirtualLabProjectService, VirtualLabProjectService>();
+        services.AddHttpClient<ILabService, LabService>();
+        services.AddScoped<ISimulationCompileService, SimulationCompileService>();
 
         // Supabase Configuration
         var supabaseUrl = configuration["Supabase:Url"];

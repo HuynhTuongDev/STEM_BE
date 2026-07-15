@@ -68,4 +68,38 @@ public class GetClassesListHandler
             Items = items
         };
     }
+
+    public async Task<List<ClassListItemResponse>> HandleTeacherClasses(
+        int teacherId,
+        int currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
+        if (currentUser == null)
+            throw new UnauthorizedAccessException("Current user not found.");
+
+        if (currentUser.Role?.Name != RoleNames.Teacher || currentUser.Id != teacherId)
+            throw new UnauthorizedAccessException("Teacher can only view their own classes.");
+
+        var classes = await _classRepository.GetByTeacherIdAsync(teacherId, cancellationToken);
+
+        return classes
+            .OrderByDescending(c => c.CreatedAt)
+            .Select(c => new ClassListItemResponse
+            {
+                Id = c.Id,
+                ClassCode = c.ClassCode,
+                SchoolId = c.SchoolId,
+                SchoolName = c.School?.Name,
+                CourseId = c.CourseId,
+                CourseName = c.Course?.Title ?? string.Empty,
+                TeacherId = c.TeacherId,
+                TeacherName = c.Teacher?.FullName ?? string.Empty,
+                StartDate = c.StartDate,
+                EndDate = c.EndDate,
+                CreatedAt = c.CreatedAt,
+                StudentCount = c.Enrollments?.Count ?? 0
+            })
+            .ToList();
+    }
 }

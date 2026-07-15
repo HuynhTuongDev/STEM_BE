@@ -1,10 +1,6 @@
-<<<<<<< HEAD
-using FluentValidation;
-=======
 using Google.Apis.Auth;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
->>>>>>> origin/develop
 using STEM.Application.Dtos.Auth;
 using STEM.Application.Interfaces;
 using STEM.Core.Entities.Users;
@@ -14,56 +10,6 @@ namespace STEM.Application.UseCases.Auth;
 
 public class GoogleLoginHandler
 {
-<<<<<<< HEAD
-    private const int TeacherRoleId = 3;
-
-    private readonly IGoogleTokenVerifier _googleTokenVerifier;
-    private readonly IUserRepository _userRepository;
-    private readonly AuthSessionService _authSessionService;
-    private readonly IValidator<GoogleLoginRequest> _validator;
-
-    public GoogleLoginHandler(
-        IGoogleTokenVerifier googleTokenVerifier,
-        IUserRepository userRepository,
-        AuthSessionService authSessionService,
-        IValidator<GoogleLoginRequest> validator)
-    {
-        _googleTokenVerifier = googleTokenVerifier;
-        _userRepository = userRepository;
-        _authSessionService = authSessionService;
-        _validator = validator;
-    }
-
-    public async Task<LoginResponse> Handle(GoogleLoginRequest request, CancellationToken cancellationToken = default)
-    {
-        await _validator.ValidateAndThrowAsync(request, cancellationToken);
-
-        var googleUser = await _googleTokenVerifier.VerifyAsync(request.GetIdToken(), cancellationToken);
-        if (!googleUser.EmailVerified)
-        {
-            throw new UnauthorizedAccessException("Google email is not verified.");
-        }
-
-        var user = await _userRepository.GetByEmailAsync(googleUser.Email, cancellationToken);
-        if (user == null)
-        {
-            throw new UnauthorizedAccessException("Teacher account not found.");
-        }
-
-        if (!user.IsActive)
-        {
-            throw new UnauthorizedAccessException("Account is disabled.");
-        }
-
-        var isTeacher = user.RoleId == TeacherRoleId
-            || string.Equals(user.Role?.Name, RoleNames.Teacher, StringComparison.OrdinalIgnoreCase);
-        if (!isTeacher)
-        {
-            throw new UnauthorizedAccessException("Only teachers can login with Google.");
-        }
-
-        return await _authSessionService.CreateLoginSessionAsync(user, cancellationToken: cancellationToken);
-=======
     private readonly IUserRepository _userRepository;
     private readonly ILoginHistoryRepository _loginHistoryRepository;
     private readonly IRepository<RefreshToken> _refreshTokenRepository;
@@ -89,7 +35,8 @@ public class GoogleLoginHandler
 
     public async Task<GoogleLoginResponse> Handle(GoogleLoginRequest request, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.IdToken))
+        var idToken = request.GetIdToken();
+        if (string.IsNullOrWhiteSpace(idToken))
             throw new UnauthorizedAccessException("ID token is required.");
 
         var clientId = _configuration["GoogleSettings:ClientId"];
@@ -104,7 +51,7 @@ public class GoogleLoginHandler
                 Audience = new[] { clientId }
             };
 
-            payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, validationSettings);
+            payload = await GoogleJsonWebSignature.ValidateAsync(idToken, validationSettings);
             
             var validIssuers = new[] { "https://accounts.google.com", "https://accounts.google.com/" };
             if (string.IsNullOrEmpty(payload.Issuer) || !validIssuers.Contains(payload.Issuer))
@@ -210,6 +157,5 @@ public class GoogleLoginHandler
         await _refreshTokenRepository.SaveChangesAsync(cancellationToken);
 
         return refreshToken.Token;
->>>>>>> origin/develop
     }
 }

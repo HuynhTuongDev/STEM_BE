@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using STEM.Infrastructure.Data;
@@ -11,9 +12,11 @@ using STEM.Infrastructure.Data;
 namespace STEM.Infrastructure.Migrations
 {
     [DbContext(typeof(StemDbContext))]
-    partial class StemDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260709032231_AddLabsWokwiEmbed")]
+    partial class AddLabsWokwiEmbed
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -926,91 +929,6 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("Schools");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Simulations.ComponentGlueRegistry", b =>
-                {
-                    b.Property<string>("ComponentType")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("PinRequirementsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<bool>("Supported")
-                        .HasColumnType("boolean");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("ComponentType");
-
-                    b.ToTable("ComponentGlueRegistry");
-
-                    b.HasData(
-                        new
-                        {
-                            ComponentType = "led",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "LED",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"digital_output\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "push_button",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Push Button",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"digital_input\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "buzzer",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Buzzer",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"pwm_output\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "potentiometer",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Potentiometer",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"analog_input\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "servo",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "Servo",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"pin\",\"kind\":\"pwm_output\"}]}",
-                            Supported = true,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        },
-                        new
-                        {
-                            ComponentType = "dht22",
-                            CreatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc),
-                            Label = "DHT22",
-                            PinRequirementsJson = "{\"pins\":[{\"name\":\"data\",\"kind\":\"digital_bidirectional\"}]}",
-                            Supported = false,
-                            UpdatedAt = new DateTime(2026, 7, 9, 0, 0, 0, 0, DateTimeKind.Utc)
-                        });
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Simulations.ExperimentLog", b =>
                 {
                     b.Property<int>("Id")
@@ -1045,23 +963,10 @@ namespace STEM.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<string>("AllowedComponentTypesJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("BoardType")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
                     b.Property<string>("Category")
                         .IsRequired()
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
-
-                    b.Property<string>("CircuitConfigJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -1075,14 +980,6 @@ namespace STEM.Infrastructure.Migrations
 
                     b.Property<int?>("LinkedAssignmentId")
                         .HasColumnType("integer");
-
-                    b.Property<string>("SimulationMode")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)");
-
-                    b.Property<string>("StarterCode")
-                        .HasColumnType("text");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1103,6 +1000,7 @@ namespace STEM.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("WokwiProjectId")
+                        .IsRequired()
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 

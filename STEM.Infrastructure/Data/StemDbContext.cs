@@ -37,6 +37,9 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<Assignment> Assignments => Set<Assignment>();
+    public DbSet<AssignmentQuizDetail> AssignmentQuizDetails => Set<AssignmentQuizDetail>();
+    public DbSet<AssignmentReportDetail> AssignmentReportDetails => Set<AssignmentReportDetail>();
+    public DbSet<AssignmentSimulationDetail> AssignmentSimulationDetails => Set<AssignmentSimulationDetail>();
     public DbSet<Submission> Submissions => Set<Submission>();
     public DbSet<Metric> Metrics => Set<Metric>();
     public DbSet<FileEntity> FileEntities => Set<FileEntity>();
@@ -46,6 +49,12 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<SimulationSession> SimulationSessions => Set<SimulationSession>();
     public DbSet<ExperimentLog> ExperimentLogs => Set<ExperimentLog>();
     public DbSet<LiveMonitoring> LiveMonitorings => Set<LiveMonitoring>();
+    
+    public DbSet<VirtualLabProject> VirtualLabProjects => Set<VirtualLabProject>();
+    public DbSet<Lab> Labs => Set<Lab>();
+    public DbSet<LabClassAssignment> LabClassAssignments => Set<LabClassAssignment>();
+    public DbSet<LabProgress> LabProgresses => Set<LabProgress>();
+    public DbSet<ComponentGlueRegistry> ComponentGlueRegistry => Set<ComponentGlueRegistry>();
 
     public DbSet<Quiz> Quizzes => Set<Quiz>();
     public DbSet<QuizQuestion> QuizQuestions => Set<QuizQuestion>();
@@ -243,6 +252,68 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(a => a.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<Assignment>()
+            .Property(a => a.AssignmentType)
+            .HasMaxLength(40);
+
+        modelBuilder.Entity<Assignment>()
+            .Property(a => a.Status)
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<Assignment>()
+            .Property(a => a.MaxScore)
+            .HasColumnType("numeric(6,2)");
+
+        modelBuilder.Entity<AssignmentQuizDetail>()
+            .HasOne(d => d.Assignment)
+            .WithOne(a => a.QuizDetail)
+            .HasForeignKey<AssignmentQuizDetail>(d => d.AssignmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AssignmentQuizDetail>()
+            .Property(d => d.QuestionsJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentReportDetail>()
+            .HasOne(d => d.Assignment)
+            .WithOne(a => a.ReportDetail)
+            .HasForeignKey<AssignmentReportDetail>(d => d.AssignmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AssignmentReportDetail>()
+            .Property(d => d.AllowedSubmissionTypesJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentReportDetail>()
+            .Property(d => d.AllowedFileExtensionsJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .HasOne(d => d.Assignment)
+            .WithOne(a => a.SimulationDetail)
+            .HasForeignKey<AssignmentSimulationDetail>(d => d.AssignmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .Property(d => d.BaseDiagramJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .Property(d => d.AllowedComponentTypesJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .Property(d => d.AnswerKeyJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .Property(d => d.EnvironmentSource)
+            .HasMaxLength(40);
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .Property(d => d.StudentInputMode)
+            .HasMaxLength(40);
+
         // Submission -> Assignment
         modelBuilder.Entity<Submission>()
             .HasOne(s => s.Assignment)
@@ -253,6 +324,26 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         modelBuilder.Entity<Submission>()
             .Property(s => s.Score)
             .HasColumnType("numeric(5,2)");
+
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.AutoScore)
+            .HasColumnType("numeric(5,2)");
+
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.FinalScore)
+            .HasColumnType("numeric(5,2)");
+
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.Status)
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.ContentJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.AutoGradeResultJson)
+            .HasColumnType("jsonb");
 
         modelBuilder.Entity<Submission>()
             .Property(s => s.Feedback)
@@ -366,5 +457,167 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany()
             .HasForeignKey(l => l.TeacherId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Lab>()
+            .HasOne(l => l.CreatedBy)
+            .WithMany()
+            .HasForeignKey(l => l.CreatedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Lab>()
+            .HasOne(l => l.LinkedAssignment)
+            .WithMany()
+            .HasForeignKey(l => l.LinkedAssignmentId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.Title)
+            .HasMaxLength(200);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.Category)
+            .HasMaxLength(40);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.ThumbnailUrl)
+            .HasMaxLength(2048);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.SimulationMode)
+            .HasMaxLength(40);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.BoardType)
+            .HasMaxLength(40);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.CircuitConfigJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.AllowedComponentTypesJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.WokwiProjectId)
+            .HasMaxLength(80);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.WokwiProjectUrl)
+            .HasMaxLength(2048);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.Status)
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<Lab>()
+            .HasIndex(l => l.Status);
+
+        modelBuilder.Entity<Lab>()
+            .HasIndex(l => l.Category);
+
+        modelBuilder.Entity<LabClassAssignment>()
+            .HasOne(assignment => assignment.Lab)
+            .WithMany(lab => lab.ClassAssignments)
+            .HasForeignKey(assignment => assignment.LabId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LabClassAssignment>()
+            .HasOne(assignment => assignment.Class)
+            .WithMany()
+            .HasForeignKey(assignment => assignment.ClassId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LabClassAssignment>()
+            .HasIndex(assignment => new { assignment.LabId, assignment.ClassId })
+            .IsUnique();
+
+        modelBuilder.Entity<LabProgress>()
+            .HasOne(progress => progress.Lab)
+            .WithMany(lab => lab.Progresses)
+            .HasForeignKey(progress => progress.LabId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LabProgress>()
+            .HasOne(progress => progress.Student)
+            .WithMany()
+            .HasForeignKey(progress => progress.StudentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<LabProgress>()
+            .HasIndex(progress => new { progress.LabId, progress.StudentId })
+            .IsUnique();
+
+        modelBuilder.Entity<ComponentGlueRegistry>()
+            .HasKey(component => component.ComponentType);
+
+        modelBuilder.Entity<ComponentGlueRegistry>()
+            .Property(component => component.ComponentType)
+            .HasMaxLength(80);
+
+        modelBuilder.Entity<ComponentGlueRegistry>()
+            .Property(component => component.Label)
+            .HasMaxLength(120);
+
+        modelBuilder.Entity<ComponentGlueRegistry>()
+            .Property(component => component.PinRequirementsJson)
+            .HasColumnType("jsonb");
+
+        var componentSeedTime = new DateTime(2026, 7, 9, 0, 0, 0, DateTimeKind.Utc);
+        modelBuilder.Entity<ComponentGlueRegistry>().HasData(
+            new ComponentGlueRegistry
+            {
+                ComponentType = "led",
+                Label = "LED",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"pin","kind":"digital_output"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "push_button",
+                Label = "Push Button",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"pin","kind":"digital_input"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "buzzer",
+                Label = "Buzzer",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"pin","kind":"pwm_output"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "potentiometer",
+                Label = "Potentiometer",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"pin","kind":"analog_input"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "servo",
+                Label = "Servo",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"pin","kind":"pwm_output"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "dht22",
+                Label = "DHT22",
+                Supported = false,
+                PinRequirementsJson = """{"pins":[{"name":"data","kind":"digital_bidirectional"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            });
     }
 }
