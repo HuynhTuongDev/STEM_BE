@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using STEM.Application.Dtos.VirtualLab;
 using STEM.Application.Interfaces;
-using STEM.Application.Validators.VirtualLab;
+using STEM.Application.UseCases.Simulation;
 using STEM.Core.Entities.Simulations;
 using STEM.Infrastructure.Data;
 
@@ -13,20 +13,21 @@ namespace STEM.Infrastructure.Services;
 public class VirtualLabProjectService : IVirtualLabProjectService
 {
     private readonly StemDbContext _context;
-    private readonly DiagramValidator _validator;
+    private readonly VirtualLabDiagramService _diagramService;
 
-    public VirtualLabProjectService(StemDbContext context, DiagramValidator validator)
+    public VirtualLabProjectService(StemDbContext context, VirtualLabDiagramService diagramService)
     {
         _context = context;
-        _validator = validator;
+        _diagramService = diagramService;
     }
 
-    public async Task<VirtualLabProject> CreateProjectAsync(VirtualLabProjectRequest request, int? userId)
+    public async Task<VirtualLabProject> CreateProjectAsync(VirtualLabProjectRequest request, int userId)
     {
-        var (isValid, errors) = _validator.Validate(request.Diagram);
-        if (!isValid)
+        var diagramJson = ToDiagramJson(request.Diagram);
+        var analysis = _diagramService.Analyze(diagramJson);
+        if (!analysis.Validation.IsValid)
         {
-            throw new ArgumentException(string.Join("; ", errors));
+            throw new ArgumentException(string.Join("; ", analysis.Validation.Errors));
         }
 
         var project = new VirtualLabProject
@@ -37,9 +38,7 @@ public class VirtualLabProjectService : IVirtualLabProjectService
             Board = request.Board,
             Language = request.Language,
             CodeContent = request.Code,
-            DiagramJson = request.Diagram.ValueKind == JsonValueKind.String 
-                ? request.Diagram.GetString() 
-                : request.Diagram.GetRawText(),
+            DiagramJson = analysis.DiagramJson,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -50,32 +49,57 @@ public class VirtualLabProjectService : IVirtualLabProjectService
         return project;
     }
 
-    public async Task<VirtualLabProject?> GetProjectAsync(Guid id)
-    {
-        return await _context.VirtualLabProjects.FindAsync(id);
-    }
-
-    public async Task<VirtualLabProject?> UpdateProjectAsync(Guid id, VirtualLabProjectRequest request)
+    public async Task<VirtualLabProject?> GetProjectAsync(Guid id, int currentUserId)
     {
         var project = await _context.VirtualLabProjects.FindAsync(id);
         if (project == null) return null;
 
-        var (isValid, errors) = _validator.Validate(request.Diagram);
-        if (!isValid)
+        EnsureOwnership(project, currentUserId);
+        return project;
+    }
+
+    public async Task<VirtualLabProject?> UpdateProjectAsync(Guid id, VirtualLabProjectRequest request, int currentUserId)
+    {
+        var project = await _context.VirtualLabProjects.FindAsync(id);
+        if (project == null) return null;
+
+        EnsureOwnership(project, currentUserId);
+
+        var diagramJson = ToDiagramJson(request.Diagram);
+        var analysis = _diagramService.Analyze(diagramJson);
+        if (!analysis.Validation.IsValid)
         {
-            throw new ArgumentException(string.Join("; ", errors));
+            throw new ArgumentException(string.Join("; ", analysis.Validation.Errors));
         }
 
         project.Name = request.Name;
         project.Board = request.Board;
         project.Language = request.Language;
         project.CodeContent = request.Code;
-        project.DiagramJson = request.Diagram.ValueKind == JsonValueKind.String 
-            ? request.Diagram.GetString() 
-            : request.Diagram.GetRawText();
+        project.DiagramJson = analysis.DiagramJson;
         project.UpdatedAt = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
         return project;
+    }
+
+    private static void EnsureOwnership(VirtualLabProject project, int currentUserId)
+    {
+        if (project.UserId.HasValue && project.UserId != currentUserId)
+        {
+            throw new UnauthorizedAccessException("You are not allowed to access this virtual lab project.");
+        }
+    }
+
+    private static string ToDiagramJson(JsonElement diagram)
+    {
+        if (diagram.ValueKind == JsonValueKind.String)
+        {
+            return diagram.GetString() ?? "{}";
+        }
+
+        return diagram.ValueKind == JsonValueKind.Undefined
+            ? "{}"
+            : diagram.GetRawText();
     }
 }
