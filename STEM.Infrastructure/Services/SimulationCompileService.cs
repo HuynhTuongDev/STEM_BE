@@ -15,7 +15,17 @@ namespace STEM.Infrastructure.Services;
 public class SimulationCompileService : ISimulationCompileService
 {
     private const int MaxCodeLength = 200_000;
-    private const string SupportedBoard = "arduino:avr:uno";
+    private static readonly IReadOnlyDictionary<string, string> SupportedBoards =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["arduino:avr:uno"] = "arduino:avr:uno",
+            ["arduino_uno"] = "arduino:avr:uno",
+            ["uno"] = "arduino:avr:uno",
+            ["esp32"] = "esp32:esp32:esp32",
+            ["esp32dev"] = "esp32:esp32:esp32",
+            ["esp32:esp32:esp32"] = "esp32:esp32:esp32",
+            ["esp32:esp32:esp32dev"] = "esp32:esp32:esp32dev"
+        };
     private static readonly Regex LineErrorRegex = new(@"(?:^|\s)(?<line>\d+):\d+:\s+(?<message>.+)$", RegexOptions.Compiled);
     private static readonly ConcurrentDictionary<string, CompileJobResponse> Jobs = new();
 
@@ -81,10 +91,19 @@ public class SimulationCompileService : ISimulationCompileService
             };
         }
 
-        var arduinoCliPath = _configuration["SimulationCompile:ArduinoCliPath"] ?? "arduino-cli";
+        var dockerCliPath = _configuration["SimulationCompile:DockerCliPath"] ?? "docker";
+        var dockerImage = _configuration["SimulationCompile:DockerImage"] ?? "stem-arduino-cli-sandbox:latest";
+        // 1536m/90s are measured, not guessed: a cold compile of a trivial Blink
+        // sketch (--cpus 1.0, fresh tmpfs, no cross-request build cache) genuinely
+        // peaked near 945MB RSS and took 39s wall-clock. The old 512m/60s-clamped
+        // defaults OOM-killed and would timeout-kill that same legitimate compile.
+        var memoryLimit = _configuration["SimulationCompile:MemoryLimit"] ?? "1536m";
+        var cpuLimit = _configuration["SimulationCompile:CpuLimit"] ?? "1.0";
+        var pidsLimit = _configuration["SimulationCompile:PidsLimit"] ?? "128";
+        var buildTmpfsSize = _configuration["SimulationCompile:BuildTmpfsSizeMb"] ?? "256";
         var timeoutSeconds = int.TryParse(_configuration["SimulationCompile:TimeoutSeconds"], out var parsedTimeout)
-            ? Math.Clamp(parsedTimeout, 1, 60)
-            : 15;
+            ? Math.Clamp(parsedTimeout, 1, 120)
+            : 90;
         var workingRoot = _configuration["SimulationCompile:WorkingDirectory"];
         if (string.IsNullOrWhiteSpace(workingRoot))
         {
@@ -94,25 +113,69 @@ public class SimulationCompileService : ISimulationCompileService
         var jobRoot = Path.Combine(workingRoot, jobId);
         var sketchDir = Path.Combine(jobRoot, "sketch");
         var outputDir = Path.Combine(jobRoot, "out");
+        var containerName = $"stem-compile-{jobId}";
 
         try
         {
             Directory.CreateDirectory(sketchDir);
             Directory.CreateDirectory(outputDir);
-            await File.WriteAllTextAsync(Path.Combine(sketchDir, "sketch.ino"), request.Code, Encoding.UTF8, cancellationToken);
+            var sourceCode = GetSourceCode(request);
+            var boardFqbn = NormalizeBoard(request.Board);
+            // Encoding.UTF8 (the static property) emits a BOM by default, which gcc
+            // rejects as a stray token before the first real line ("'U0000feffvoid'
+            // does not name a type") — confirmed via a real compile through the API.
+            // UTF8Encoding(false) writes UTF-8 without the BOM preamble.
+            await File.WriteAllTextAsync(Path.Combine(sketchDir, "sketch.ino"), sourceCode, new UTF8Encoding(false), cancellationToken);
 
+            // Sandboxing: the only host filesystem the container ever sees is this
+            // job's own temp dir (sketch input read-only, output read-write), and the
+            // whole dir is deleted in the `finally` below regardless of outcome — both
+            // are within the explicitly-allowed "own temp working directory" exception.
+            // Build *scratch* (intermediate object files, never needs retrieval) lives
+            // on a size-capped tmpfs inside the disposable container and never touches
+            // host disk. Output is a host bind mount rather than tmpfs: tmpfs contents
+            // are torn down the instant the container exits, so `docker cp` afterward
+            // cannot see them ("Could not find the file ... in container" — confirmed
+            // via direct repro) — bind-mounting output sidesteps that race entirely.
+            // `--network none` cuts all network access for the container.
+            // `--memory`/`--cpus`/`--pids-limit` are hard kernel-enforced limits (not
+            // best-effort), and `--read-only` plus `--cap-drop ALL` mean nothing outside
+            // the tmpfs/output mounts is writable even if a limit is missed.
             using var process = new Process();
-            process.StartInfo.FileName = arduinoCliPath;
+            process.StartInfo.FileName = dockerCliPath;
             process.StartInfo.RedirectStandardOutput = true;
             process.StartInfo.RedirectStandardError = true;
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.CreateNoWindow = true;
-            process.StartInfo.ArgumentList.Add("compile");
-            process.StartInfo.ArgumentList.Add("--fqbn");
-            process.StartInfo.ArgumentList.Add(SupportedBoard);
-            process.StartInfo.ArgumentList.Add("--output-dir");
-            process.StartInfo.ArgumentList.Add(outputDir);
-            process.StartInfo.ArgumentList.Add(sketchDir);
+            var args = process.StartInfo.ArgumentList;
+            args.Add("run");
+            args.Add("--name"); args.Add(containerName);
+            args.Add("--network"); args.Add("none");
+            args.Add("--memory"); args.Add(memoryLimit);
+            args.Add("--memory-swap"); args.Add(memoryLimit);
+            args.Add("--cpus"); args.Add(cpuLimit);
+            args.Add("--pids-limit"); args.Add(pidsLimit);
+            args.Add("--cap-drop"); args.Add("ALL");
+            args.Add("--security-opt"); args.Add("no-new-privileges");
+            args.Add("--read-only");
+            args.Add("--user"); args.Add("10001:10001");
+            args.Add("-v"); args.Add($"{sketchDir}:/workspace/sketch:ro");
+            args.Add("-v"); args.Add($"{outputDir}:/workspace/output:rw");
+            args.Add("--tmpfs"); args.Add($"/workspace/build:rw,size={buildTmpfsSize}m,mode=1777");
+            // exec is required here: arduino-cli shells out to PyInstaller-packaged
+            // tools (esptool et al.) that self-extract into $TMPDIR at runtime and
+            // dlopen a bundled libpython .so from there — Docker's --tmpfs defaults
+            // to noexec, which makes that dlopen fail (confirmed via direct repro:
+            // "failed to map segment from shared object"). Measured real extracted
+            // size for esptool is ~10MB; 128m leaves headroom for multiple/concurrent
+            // PyInstaller tool invocations in one compile.
+            args.Add("--tmpfs"); args.Add("/tmp:rw,exec,size=128m,mode=1777");
+            args.Add(dockerImage);
+            args.Add("compile");
+            args.Add("--fqbn"); args.Add(boardFqbn);
+            args.Add("--build-path"); args.Add("/workspace/build/tmp");
+            args.Add("--output-dir"); args.Add("/workspace/output");
+            args.Add("/workspace/sketch");
 
             try
             {
@@ -120,7 +183,7 @@ public class SimulationCompileService : ISimulationCompileService
             }
             catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or FileNotFoundException)
             {
-                return BuildServiceUnavailable(jobId, arduinoCliPath);
+                return BuildServiceUnavailable(jobId, dockerCliPath);
             }
 
             var stdoutTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
@@ -129,6 +192,11 @@ public class SimulationCompileService : ISimulationCompileService
 
             if (!exited)
             {
+                // Second line of defense: killing the `docker run` client process does
+                // NOT stop the container in the daemon, so the container must be
+                // killed explicitly or the runaway build keeps consuming its
+                // (resource-limited, but still real) container until GC in `finally`.
+                await TryDockerKillAsync(dockerCliPath, containerName);
                 TryKill(process);
                 var timeoutStdout = await stdoutTask;
                 var timeoutStderr = await stderrTask;
@@ -149,6 +217,9 @@ public class SimulationCompileService : ISimulationCompileService
             var stderr = await stderrTask;
             var compilerOutput = string.Join(Environment.NewLine, new[] { stdout, stderr }.Where(value => !string.IsNullOrWhiteSpace(value)));
 
+            // Output lands directly in outputDir via the bind mount above — no
+            // docker cp step needed (and none would work reliably after exit; see
+            // the mount-setup comment above).
             if (process.ExitCode != 0)
             {
                 return new CompileSimulationResponse
@@ -160,12 +231,20 @@ public class SimulationCompileService : ISimulationCompileService
                 };
             }
 
-            var hexPath = Directory
-                .EnumerateFiles(outputDir, "*.hex", SearchOption.AllDirectories)
-                .OrderByDescending(File.GetLastWriteTimeUtc)
+            var firmwarePath = Directory
+                .EnumerateFiles(outputDir, "*.*", SearchOption.AllDirectories)
+                .Where(path =>
+                {
+                    var extension = Path.GetExtension(path);
+                    return extension.Equals(".bin", StringComparison.OrdinalIgnoreCase) ||
+                           extension.Equals(".hex", StringComparison.OrdinalIgnoreCase) ||
+                           extension.Equals(".elf", StringComparison.OrdinalIgnoreCase);
+                })
+                .OrderBy(path => FirmwareSortOrder(Path.GetExtension(path)))
+                .ThenByDescending(File.GetLastWriteTimeUtc)
                 .FirstOrDefault();
 
-            if (hexPath == null)
+            if (firmwarePath == null)
             {
                 return new CompileSimulationResponse
                 {
@@ -174,24 +253,68 @@ public class SimulationCompileService : ISimulationCompileService
                     CompilerOutput = compilerOutput,
                     Errors = new[]
                     {
-                        new CompileSimulationError { Message = "Compile completed but no .hex file was produced." }
+                        new CompileSimulationError { Message = "Compile completed but no firmware artifact (.bin/.hex/.elf) was produced." }
                     }
                 };
             }
 
-            var hexBytes = await File.ReadAllBytesAsync(hexPath, cancellationToken);
+            var firmwareBytes = await File.ReadAllBytesAsync(firmwarePath, cancellationToken);
+            var firmwareBase64 = Convert.ToBase64String(firmwareBytes);
+            var firmwareFormat = Path.GetExtension(firmwarePath).TrimStart('.').ToLowerInvariant();
             return new CompileSimulationResponse
             {
                 Success = true,
                 JobId = jobId,
-                HexBase64 = Convert.ToBase64String(hexBytes),
+                HexBase64 = firmwareFormat == "hex" ? firmwareBase64 : null,
+                FirmwareBase64 = firmwareBase64,
+                FirmwareFileName = Path.GetFileName(firmwarePath),
+                FirmwareFormat = firmwareFormat,
                 CompilerOutput = compilerOutput,
                 Errors = Array.Empty<CompileSimulationError>()
             };
         }
         finally
         {
+            await TryDockerRemoveAsync(dockerCliPath, containerName);
             TryDelete(jobRoot);
+        }
+    }
+
+    private static async Task TryDockerKillAsync(string dockerCliPath, string containerName)
+    {
+        await RunDockerCommandBestEffortAsync(dockerCliPath, new[] { "kill", containerName });
+    }
+
+    private static async Task TryDockerRemoveAsync(string dockerCliPath, string containerName)
+    {
+        await RunDockerCommandBestEffortAsync(dockerCliPath, new[] { "rm", "-f", containerName });
+    }
+
+    private static async Task RunDockerCommandBestEffortAsync(string dockerCliPath, IEnumerable<string> arguments)
+    {
+        try
+        {
+            using var process = new Process();
+            process.StartInfo.FileName = dockerCliPath;
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.RedirectStandardError = true;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
+            foreach (var argument in arguments)
+            {
+                process.StartInfo.ArgumentList.Add(argument);
+            }
+
+            process.Start();
+            await process.StandardOutput.ReadToEndAsync();
+            await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+        }
+        catch
+        {
+            // Best-effort cleanup/copy helper: failures here must never mask the
+            // actual compile result, and are covered by TryDelete(jobRoot) + the
+            // container's own lifecycle if `docker rm` itself fails.
         }
     }
 
@@ -201,16 +324,20 @@ public class SimulationCompileService : ISimulationCompileService
     {
         var errors = new List<CompileSimulationError>();
 
-        if (request.Board != SupportedBoard)
+        if (!SupportedBoards.ContainsKey(request.Board))
         {
-            errors.Add(new CompileSimulationError { Message = "Only arduino:avr:uno is supported." });
+            errors.Add(new CompileSimulationError
+            {
+                Message = $"Unsupported board '{request.Board}'. Supported boards: {string.Join(", ", SupportedBoards.Keys)}."
+            });
         }
 
-        if (string.IsNullOrWhiteSpace(request.Code))
+        var sourceCode = GetSourceCode(request);
+        if (string.IsNullOrWhiteSpace(sourceCode))
         {
-            errors.Add(new CompileSimulationError { Message = "Code is required." });
+            errors.Add(new CompileSimulationError { Message = "Source code is required." });
         }
-        else if (request.Code.Length > MaxCodeLength)
+        else if (sourceCode.Length > MaxCodeLength)
         {
             errors.Add(new CompileSimulationError { Message = $"Code is too large. Max length is {MaxCodeLength} characters." });
         }
@@ -248,6 +375,31 @@ public class SimulationCompileService : ISimulationCompileService
         return errors;
     }
 
+    private static string GetSourceCode(CompileSimulationRequest request)
+    {
+        return !string.IsNullOrWhiteSpace(request.SourceCode)
+            ? request.SourceCode
+            : request.Code;
+    }
+
+    private static string NormalizeBoard(string board)
+    {
+        return SupportedBoards.TryGetValue(board, out var normalized)
+            ? normalized
+            : board;
+    }
+
+    private static int FirmwareSortOrder(string extension)
+    {
+        return extension.ToLowerInvariant() switch
+        {
+            ".bin" => 0,
+            ".hex" => 1,
+            ".elf" => 2,
+            _ => 3
+        };
+    }
+
     private static async Task<bool> WaitForExitAsync(
         Process process,
         TimeSpan timeout,
@@ -258,7 +410,7 @@ public class SimulationCompileService : ISimulationCompileService
         return await Task.WhenAny(waitTask, timeoutTask) == waitTask;
     }
 
-    private static CompileSimulationResponse BuildServiceUnavailable(string jobId, string arduinoCliPath)
+    private static CompileSimulationResponse BuildServiceUnavailable(string jobId, string dockerCliPath)
     {
         return new CompileSimulationResponse
         {
@@ -268,7 +420,7 @@ public class SimulationCompileService : ISimulationCompileService
             {
                 new CompileSimulationError
                 {
-                    Message = $"Arduino CLI is not configured or not found at '{arduinoCliPath}'."
+                    Message = $"Docker is not configured or not found at '{dockerCliPath}'."
                 }
             }
         };
