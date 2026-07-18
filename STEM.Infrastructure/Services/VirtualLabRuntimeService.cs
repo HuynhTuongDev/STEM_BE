@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using STEM.Application.Dtos.Simulation;
 using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Simulation;
@@ -84,21 +85,39 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
                 UpdatedAt = DateTime.UtcNow
             };
             _context.VirtualLabProjects.Add(project);
-        }
-        else
-        {
-            project.DiagramJson = analysis.DiagramJson;
-            if (request.SourceCode != null)
+
+            try
             {
-                project.CodeContent = request.SourceCode;
+                await _context.SaveChangesAsync(cancellationToken);
+                return BuildDiagramResponse(sessionId, analysis, project.UpdatedAt);
             }
-
-            project.UpdatedAt = DateTime.UtcNow;
+            catch (DbUpdateException ex) when (IsDuplicateKey(ex))
+            {
+                // Race: another request for the same brand-new sessionId (e.g.
+                // React StrictMode's double-invoked effect, or a genuine
+                // double-submit) already inserted this row first. Fall back to
+                // updating the row the other request just created instead of
+                // surfacing the raw 500/DB stack trace.
+                _context.Entry(project).State = EntityState.Detached;
+                project = await LoadOwnedProjectAsync(projectId, currentUserId, asNoTracking: false, cancellationToken)
+                    ?? throw new InvalidOperationException(
+                        "VirtualLabProject not found after a duplicate-key conflict on create.");
+            }
         }
 
+        project.DiagramJson = analysis.DiagramJson;
+        if (request.SourceCode != null)
+        {
+            project.CodeContent = request.SourceCode;
+        }
+
+        project.UpdatedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync(cancellationToken);
         return BuildDiagramResponse(sessionId, analysis, project.UpdatedAt);
     }
+
+    private static bool IsDuplicateKey(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: "23505" };
 
     public async Task<RunEsp32SimulationResponse> RunEsp32Async(
         RunEsp32SimulationRequest request,
