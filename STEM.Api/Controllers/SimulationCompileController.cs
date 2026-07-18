@@ -34,27 +34,6 @@ public class SimulationCompileController : ControllerBase
         }
     }
 
-    [HttpGet("compile-jobs/{jobId}")]
-    public async Task<IActionResult> GetCompileJob(
-        string jobId,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var response = await _compileService.GetJobAsync(jobId, GetCurrentUserId(), cancellationToken);
-            if (response == null)
-            {
-                return NotFound(new { success = false, message = "Compile job not found." });
-            }
-
-            return Ok(new { success = true, data = response });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Failed to get compile job.", error = ex.Message });
-        }
-    }
-
     private int GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
