@@ -22,8 +22,9 @@ public interface IVirtualLabRuntimeService
         int? currentUserId,
         CancellationToken cancellationToken = default);
 
+    /// <summary>Throws UnauthorizedAccessException if request.StudentId is set and differs from currentUserId.</summary>
     Task<VirtualLabSubmissionResponse> SubmitVirtualLabAsync(
         VirtualLabSubmissionRequest request,
-        int? currentUserId,
+        int currentUserId,
         CancellationToken cancellationToken = default);
 }

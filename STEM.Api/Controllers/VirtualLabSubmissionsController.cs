@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Dtos.Simulation;
 using STEM.Application.Interfaces;
@@ -7,6 +8,7 @@ namespace STEM.Api.Controllers;
 
 [ApiController]
 [Route("api/submissions/virtual-lab")]
+[Authorize]
 public class VirtualLabSubmissionsController : ControllerBase
 {
     private readonly IVirtualLabRuntimeService _runtimeService;
@@ -28,7 +30,7 @@ public class VirtualLabSubmissionsController : ControllerBase
         {
             var response = await _runtimeService.SubmitVirtualLabAsync(
                 request,
-                TryGetCurrentUserId(),
+                GetCurrentUserId(),
                 cancellationToken);
 
             return Ok(response);
@@ -41,9 +43,9 @@ public class VirtualLabSubmissionsController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException)
         {
-            return Unauthorized(new { message = ex.Message });
+            return Forbid();
         }
         catch (KeyNotFoundException ex)
         {
@@ -51,9 +53,14 @@ public class VirtualLabSubmissionsController : ControllerBase
         }
     }
 
-    private int? TryGetCurrentUserId()
+    private int GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        return int.TryParse(userIdClaim, out var userId) ? userId : null;
+        if (int.TryParse(userIdClaim, out var userId))
+        {
+            return userId;
+        }
+
+        throw new UnauthorizedAccessException("User is not authenticated.");
     }
 }

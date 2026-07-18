@@ -159,16 +159,20 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
 
     public async Task<VirtualLabSubmissionResponse> SubmitVirtualLabAsync(
         VirtualLabSubmissionRequest request,
-        int? currentUserId,
+        int currentUserId,
         CancellationToken cancellationToken = default)
     {
+        if (request.StudentId.HasValue && request.StudentId.Value != currentUserId)
+        {
+            throw new UnauthorizedAccessException("You cannot submit on behalf of another student.");
+        }
+
         var assignment = await _context.Assignments
             .Include(item => item.SimulationDetail)
             .FirstOrDefaultAsync(item => item.Id == request.AssignmentId, cancellationToken)
             ?? throw new KeyNotFoundException("Assignment not found.");
 
-        var studentId = currentUserId ?? request.StudentId
-            ?? throw new UnauthorizedAccessException("Student id is required.");
+        var studentId = currentUserId;
 
         var analysis = _diagramService.Analyze(request.DiagramJson);
         var autoCheck = await BuildAutoGradeResultAsync(analysis, request, studentId, cancellationToken);
