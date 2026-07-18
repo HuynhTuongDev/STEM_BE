@@ -20,15 +20,18 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
     private readonly StemDbContext _context;
     private readonly VirtualLabDiagramService _diagramService;
     private readonly VirtualLabMockRunner _mockRunner;
+    private readonly ISimulationCompileService _compileService;
 
     public VirtualLabRuntimeService(
         StemDbContext context,
         VirtualLabDiagramService diagramService,
-        VirtualLabMockRunner mockRunner)
+        VirtualLabMockRunner mockRunner,
+        ISimulationCompileService compileService)
     {
         _context = context;
         _diagramService = diagramService;
         _mockRunner = mockRunner;
+        _compileService = compileService;
     }
 
     public async Task<DiagramSessionResponse?> GetDiagramAsync(
@@ -149,7 +152,7 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             ?? throw new UnauthorizedAccessException("Student id is required.");
 
         var analysis = _diagramService.Analyze(request.DiagramJson);
-        var autoCheck = BuildAutoGradeResult(analysis, request);
+        var autoCheck = await BuildAutoGradeResultAsync(analysis, request, studentId, cancellationToken);
         var autoScore = assignment.MaxScore * autoCheck.PassedChecks / Math.Max(autoCheck.TotalChecks, 1);
 
         var contentJson = JsonSerializer.Serialize(new
@@ -292,9 +295,11 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         return project;
     }
 
-    private static AutoGradeResultResponse BuildAutoGradeResult(
+    private async Task<AutoGradeResultResponse> BuildAutoGradeResultAsync(
         VirtualLabDiagramAnalysis analysis,
-        VirtualLabSubmissionRequest request)
+        VirtualLabSubmissionRequest request,
+        int studentId,
+        CancellationToken cancellationToken)
     {
         var checks = new List<AutoGradeCheckResponse>
         {
@@ -306,14 +311,7 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
                     ? "Diagram validation passed."
                     : string.Join("; ", analysis.Validation.Errors)
             },
-            new()
-            {
-                Name = "compile",
-                Passed = request.CompileResult?.Success == true,
-                Message = request.CompileResult?.Success == true
-                    ? "Compile passed."
-                    : "Compile result is missing or failed."
-            },
+            await BuildCompileCheckAsync(request, studentId, cancellationToken),
             new()
             {
                 Name = "behavior",
@@ -332,6 +330,55 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             PassedChecks = passedChecks,
             TotalChecks = checks.Count,
             Checks = checks
+        };
+    }
+
+    /// <summary>
+    /// Re-compiles request.SourceCode server-side instead of trusting request.CompileResult
+    /// (which is client-supplied and was previously taken on faith — a student could submit
+    /// {"compileResult":{"success":true}} for code that never actually compiled). Board and
+    /// language come only from the student's own VirtualLabProject record (resolved via
+    /// request.SessionId), never from a client-supplied default, so a missing/invalid
+    /// SessionId fails this tier outright rather than silently compiling against a guessed
+    /// board that could produce a misleading pass/fail.
+    /// </summary>
+    private async Task<AutoGradeCheckResponse> BuildCompileCheckAsync(
+        VirtualLabSubmissionRequest request,
+        int studentId,
+        CancellationToken cancellationToken)
+    {
+        const string missingSessionMessage = "Không thể xác định board/ngôn ngữ của bài nộp — thiếu liên kết session hợp lệ.";
+
+        if (!Guid.TryParse(request.SessionId, out var projectId))
+        {
+            return new AutoGradeCheckResponse { Name = "compile", Passed = false, Message = missingSessionMessage };
+        }
+
+        var project = await _context.VirtualLabProjects
+            .AsNoTracking()
+            .FirstOrDefaultAsync(item => item.Id == projectId, cancellationToken);
+
+        if (project == null)
+        {
+            return new AutoGradeCheckResponse { Name = "compile", Passed = false, Message = missingSessionMessage };
+        }
+
+        var compileResult = await _compileService.CompileAsync(new CompileSimulationRequest
+        {
+            SourceCode = request.SourceCode,
+            Board = project.Board,
+            Framework = project.Language
+        }, studentId, cancellationToken);
+
+        return new AutoGradeCheckResponse
+        {
+            Name = "compile",
+            Passed = compileResult.Success,
+            Message = compileResult.Success
+                ? "Compile passed."
+                : "Compile failed: " + (compileResult.Errors.Count > 0
+                    ? string.Join("; ", compileResult.Errors.Select(item => item.Message))
+                    : "unknown error.")
         };
     }
 
