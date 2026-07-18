@@ -174,6 +174,19 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
 
         var studentId = currentUserId;
 
+        var existingCount = await _context.Submissions
+            .CountAsync(item => item.AssignmentId == assignment.Id && item.StudentId == studentId, cancellationToken);
+
+        if (existingCount >= 1 && !assignment.AllowResubmit)
+        {
+            throw new InvalidOperationException("Assignment này không cho phép nộp lại.");
+        }
+
+        if (assignment.ResubmitLimit.HasValue && existingCount >= assignment.ResubmitLimit.Value)
+        {
+            throw new InvalidOperationException($"Đã đạt giới hạn số lần nộp lại ({assignment.ResubmitLimit.Value}).");
+        }
+
         var analysis = _diagramService.Analyze(request.DiagramJson);
         var autoCheck = await BuildAutoGradeResultAsync(analysis, request, studentId, cancellationToken);
         var autoScore = assignment.MaxScore * autoCheck.PassedChecks / Math.Max(autoCheck.TotalChecks, 1);
@@ -208,7 +221,23 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         };
 
         _context.Submissions.Add(submission);
-        await _context.SaveChangesAsync(cancellationToken);
+
+        try
+        {
+            await _context.SaveChangesAsync(cancellationToken);
+        }
+        catch (DbUpdateException ex) when (IsDuplicateKey(ex))
+        {
+            // Another request for the same (AssignmentId, StudentId) computed the same
+            // AttemptNumber concurrently and won the race. Unlike SaveDiagramAsync, don't
+            // silently convert this into an update — a Submission is an append-only
+            // attempt log, not a single mutable resource. Reject clearly so the client
+            // can resubmit, at which point existingCount/AttemptNumber will be current
+            // (and correctly blocked by AllowResubmit/ResubmitLimit if attempts are
+            // exhausted).
+            throw new InvalidOperationException(
+                "Có yêu cầu nộp bài khác đang xử lý cùng lúc, vui lòng thử lại.");
+        }
 
         return new VirtualLabSubmissionResponse
         {
