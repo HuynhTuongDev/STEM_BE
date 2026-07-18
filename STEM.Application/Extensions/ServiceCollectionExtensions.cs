@@ -46,6 +46,8 @@ public static class ServiceCollectionExtensions
         // Simulation Handlers
         services.AddScoped<SimulationHandler>();
         services.AddScoped<AiSuggestHandler>();
+        services.AddScoped<VirtualLabDiagramService>();
+        services.AddScoped<VirtualLabMockRunner>();
         services.AddHttpClient("Anthropic", client =>
         {
             client.BaseAddress = new Uri("https://api.anthropic.com");
