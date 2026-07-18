@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Quizzes;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
@@ -11,15 +12,20 @@ public class QuizRepository : Repository<Quiz>, IQuizRepository
     {
     }
 
-    public async Task<IEnumerable<Quiz>> GetByCourseIdAsync(
-        int courseId,
+    public async Task<IEnumerable<Quiz>> GetByClassIdAsync(
+        int classId,
         CancellationToken cancellationToken = default)
     {
         return await _dbSet
-            .Include(quiz => quiz.Course)
+            .Include(quiz => quiz.Class)
+                .ThenInclude(classEntity => classEntity!.Teacher)
+            .Include(quiz => quiz.Class)
+                .ThenInclude(classEntity => classEntity!.School)
+            .Include(quiz => quiz.Class)
+                .ThenInclude(classEntity => classEntity!.Course)
             .Include(quiz => quiz.QuizQuestions)
                 .ThenInclude(question => question.QuizAnswers)
-            .Where(quiz => quiz.CourseId == courseId)
+            .Where(quiz => quiz.ClassId == classId)
             .ToListAsync(cancellationToken);
     }
 
@@ -28,13 +34,14 @@ public class QuizRepository : Repository<Quiz>, IQuizRepository
         CancellationToken cancellationToken = default)
     {
         return await _dbSet
-            .Include(quiz => quiz.Course)
-                .ThenInclude(course => course!.Teacher)
-            .Include(quiz => quiz.Course)
-                .ThenInclude(course => course!.School)
-            .Include(quiz => quiz.Course)
-                .ThenInclude(course => course!.Classes)
-                .ThenInclude(classEntity => classEntity.Enrollments)
+            .Include(quiz => quiz.Class)
+                .ThenInclude(classEntity => classEntity!.Teacher)
+            .Include(quiz => quiz.Class)
+                .ThenInclude(classEntity => classEntity!.School)
+            .Include(quiz => quiz.Class)
+                .ThenInclude(classEntity => classEntity!.Course)
+            .Include(quiz => quiz.Class)
+                .ThenInclude(classEntity => classEntity!.Enrollments)
             .Include(quiz => quiz.QuizQuestions)
                 .ThenInclude(question => question.QuizAnswers)
             .FirstOrDefaultAsync(quiz => quiz.Id == id, cancellationToken);
@@ -44,6 +51,7 @@ public class QuizRepository : Repository<Quiz>, IQuizRepository
         int pageNumber,
         int pageSize,
         string? searchTerm,
+        int? classId,
         int? courseId,
         int? schoolId,
         int? teacherId,
@@ -51,10 +59,12 @@ public class QuizRepository : Repository<Quiz>, IQuizRepository
         CancellationToken cancellationToken = default)
     {
         var query = _dbSet
-            .Include(quiz => quiz.Course)
-                .ThenInclude(course => course!.Teacher)
-            .Include(quiz => quiz.Course)
-                .ThenInclude(course => course!.School)
+            .Include(quiz => quiz.Class)
+                .ThenInclude(classEntity => classEntity!.Teacher)
+            .Include(quiz => quiz.Class)
+                .ThenInclude(classEntity => classEntity!.School)
+            .Include(quiz => quiz.Class)
+                .ThenInclude(classEntity => classEntity!.Course)
             .Include(quiz => quiz.QuizQuestions)
             .AsQueryable();
 
@@ -64,27 +74,31 @@ public class QuizRepository : Repository<Quiz>, IQuizRepository
             query = query.Where(quiz => quiz.Title.ToLower().Contains(term));
         }
 
+        if (classId.HasValue)
+        {
+            query = query.Where(quiz => quiz.ClassId == classId.Value);
+        }
+
         if (courseId.HasValue)
         {
-            query = query.Where(quiz => quiz.CourseId == courseId.Value);
+            query = query.Where(quiz => quiz.Class != null && quiz.Class.CourseId == courseId.Value);
         }
 
         if (schoolId.HasValue)
         {
-            query = query.Where(quiz => quiz.Course != null && quiz.Course.SchoolId == schoolId.Value);
+            query = query.Where(quiz => quiz.Class != null && quiz.Class.SchoolId == schoolId.Value);
         }
 
         if (teacherId.HasValue)
         {
-            query = query.Where(quiz => quiz.Course != null && quiz.Course.TeacherId == teacherId.Value);
+            query = query.Where(quiz => quiz.Class != null && quiz.Class.TeacherId == teacherId.Value);
         }
 
         if (studentId.HasValue)
         {
             query = query.Where(quiz =>
-                quiz.Course != null &&
-                quiz.Course.Classes.Any(classEntity =>
-                    classEntity.Enrollments.Any(enrollment => enrollment.StudentId == studentId.Value)));
+                quiz.Class != null &&
+                quiz.Class.Enrollments.Any(enrollment => enrollment.StudentId == studentId.Value));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);

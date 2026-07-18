@@ -33,6 +33,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<Schedule> Schedules => Set<Schedule>();
+    public DbSet<Room> Rooms => Set<Room>();
 
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
@@ -125,21 +126,26 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(c => c.TeacherId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Course -> Teacher
-        modelBuilder.Entity<Course>()
-            .HasOne(c => c.Teacher)
-            .WithMany()
-            .HasForeignKey(c => c.TeacherId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         // Course -> School
         modelBuilder.Entity<Course>()
             .HasOne(c => c.School)
-            .WithMany()
+            .WithMany(s => s.Courses)
             .HasForeignKey(c => c.SchoolId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        // Course -> Modules
+        // Quiz -> Class (thay vì Course)
+        modelBuilder.Entity<Quiz>()
+            .HasOne(q => q.Class)
+            .WithMany(c => c.Quizzes)
+            .HasForeignKey(q => q.ClassId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // SimulationEntity -> Class (thay vì Lesson)
+        modelBuilder.Entity<SimulationEntity>()
+            .HasOne(s => s.Class)
+            .WithMany(c => c.VirtualLabs)
+            .HasForeignKey(s => s.ClassId)
+            .OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<Module>()
             .HasOne(m => m.Course)
             .WithMany(c => c.Modules)
@@ -224,6 +230,11 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany(c => c.Schedules)
             .HasForeignKey(s => s.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Room configuration
+        modelBuilder.Entity<Room>()
+            .HasIndex(r => r.RoomCode)
+            .IsUnique();
 
         // Project -> Class
         modelBuilder.Entity<Project>()
@@ -374,13 +385,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(m => m.AssignmentId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Quiz -> Course
-        modelBuilder.Entity<Quiz>()
-            .HasOne(q => q.Course)
-            .WithMany(c => c.Quizzes)
-            .HasForeignKey(q => q.CourseId)
-            .OnDelete(DeleteBehavior.Cascade);
-
         // QuizQuestion -> Quiz
         modelBuilder.Entity<QuizQuestion>()
             .HasOne(q => q.Quiz)
@@ -407,13 +411,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasOne(n => n.User)
             .WithMany()
             .HasForeignKey(n => n.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // SimulationEntity -> Lesson
-        modelBuilder.Entity<SimulationEntity>()
-            .HasOne(s => s.Lesson)
-            .WithMany()
-            .HasForeignKey(s => s.LessonId)
             .OnDelete(DeleteBehavior.Cascade);
 
         // SimulationTemplate -> SimulationEntity

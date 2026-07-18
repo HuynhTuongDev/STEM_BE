@@ -1,6 +1,8 @@
 using STEM.Application.Dtos.VirtualLabs;
 using STEM.Application.Interfaces;
 using STEM.Core.Entities.Simulations;
+using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.VirtualLabs;
@@ -8,15 +10,18 @@ namespace STEM.Application.UseCases.VirtualLabs;
 public class CreateVirtualLabHandler
 {
     private readonly ISimulationRepository _simulationRepository;
+    private readonly IClassRepository _classRepository;
     private readonly IUserRepository _userRepository;
     private readonly IWokwiService _wokwiService;
 
     public CreateVirtualLabHandler(
         ISimulationRepository simulationRepository,
+        IClassRepository classRepository,
         IUserRepository userRepository,
         IWokwiService wokwiService)
     {
         _simulationRepository = simulationRepository;
+        _classRepository = classRepository;
         _userRepository = userRepository;
         _wokwiService = wokwiService;
     }
@@ -26,7 +31,7 @@ public class CreateVirtualLabHandler
         int currentUserId,
         CancellationToken cancellationToken = default)
     {
-        ValidateRequest(request.LessonId, request.SimulationName, request.DiagramJson);
+        ValidateRequest(request.ClassId, request.SimulationName, request.DiagramJson);
         ValidateDiagram(request.DiagramJson);
 
         var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
@@ -35,15 +40,15 @@ public class CreateVirtualLabHandler
             throw new UnauthorizedAccessException("Current user not found.");
         }
 
-        var lesson = await _simulationRepository.GetLessonWithDetailsAsync(request.LessonId, cancellationToken);
-        if (lesson == null)
+        var classEntity = await _classRepository.GetByIdWithDetailsAsync(request.ClassId, cancellationToken);
+        if (classEntity == null)
         {
-            throw new KeyNotFoundException("Lesson not found.");
+            throw new KeyNotFoundException("Class not found.");
         }
 
-        if (!VirtualLabAuthorization.CanManageLesson(currentUser, lesson))
+        if (!VirtualLabAuthorization.CanManageClass(currentUser, classEntity))
         {
-            throw new UnauthorizedAccessException("You are not allowed to create virtual labs for this lesson.");
+            throw new UnauthorizedAccessException("You are not allowed to create virtual labs for this class.");
         }
 
         var now = DateTime.UtcNow;
@@ -56,8 +61,8 @@ public class CreateVirtualLabHandler
             UpdatedAt = now,
             Simulation = new SimulationEntity
             {
-                LessonId = request.LessonId,
-                Lesson = lesson,
+                ClassId = request.ClassId,
+                Class = classEntity,
                 CreatedAt = now,
                 UpdatedAt = now
             }
@@ -79,11 +84,11 @@ public class CreateVirtualLabHandler
         }
     }
 
-    internal static void ValidateRequest(int lessonId, string simulationName, string diagramJson)
+    internal static void ValidateRequest(int classId, string simulationName, string diagramJson)
     {
-        if (lessonId <= 0)
+        if (classId <= 0)
         {
-            throw new ArgumentException("LessonId is required.");
+            throw new ArgumentException("ClassId is required.");
         }
 
         if (string.IsNullOrWhiteSpace(simulationName))

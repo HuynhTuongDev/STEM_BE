@@ -57,7 +57,7 @@ public class GetVirtualLabsHandler
             pageNumber,
             pageSize,
             request.SearchTerm,
-            request.LessonId,
+            request.ClassId,
             request.CourseId,
             schoolId,
             teacherId,

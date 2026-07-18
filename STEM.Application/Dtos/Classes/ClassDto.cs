@@ -49,6 +49,7 @@ public class ClassDetailResponse
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
     public List<StudentResponse> Students { get; set; } = new();
+    public List<AvailableStudentResponse> AvailableStudents { get; set; } = new();
     public List<ScheduleResponse> Schedules { get; set; } = new();
     public List<AnnouncementResponse> Announcements { get; set; } = new();
 }
@@ -59,6 +60,15 @@ public class StudentResponse
     public string FullName { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public DateTime EnrolledAt { get; set; }
+}
+
+public class AvailableStudentResponse
+{
+    public int Id { get; set; }
+    public string FullName { get; set; } = string.Empty;
+    public string Email { get; set; } = string.Empty;
+    public string? Phone { get; set; }
+    public string? Gender { get; set; }
 }
 
 public class ScheduleResponse

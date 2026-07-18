@@ -111,6 +111,7 @@ public class LoginHandler
     private static LoginResponse BuildLoginResponse(User user, string accessToken, string refreshToken) =>
         new()
         {
+            Id = user.Id,
             Token = accessToken,
             RefreshToken = refreshToken,
             Email = user.Email,

@@ -23,8 +23,18 @@ public class GetStudentsHandler
         _enrollmentRepository = enrollmentRepository;
     }
 
-    public async Task<StudentsListResponse> Handle(GetStudentsRequest request, CancellationToken cancellationToken = default)
+    public async Task<StudentsListResponse> Handle(GetStudentsRequest request, int currentUserId, CancellationToken cancellationToken = default)
     {
+        var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
+        if (currentUser == null)
+        {
+            throw new UnauthorizedAccessException("Current user not found.");
+        }
+
+        if (currentUser.SchoolId == null)
+        {
+            throw new UnauthorizedAccessException("School administrator must belong to a school.");
+        }
         var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
         var pageSize = request.PageSize < 1 ? 20 : Math.Min(request.PageSize, 100);
 
@@ -40,7 +50,7 @@ public class GetStudentsHandler
             };
         }
 
-        var students = (await _userRepository.FindAsync(user => user.RoleId == studentRole.Id, cancellationToken))
+        var students = (await _userRepository.FindAsync(user => user.RoleId == studentRole.Id && user.SchoolId == currentUser.SchoolId, cancellationToken))
             .ToList();
 
         if (request.IsActive.HasValue)
@@ -54,8 +64,7 @@ public class GetStudentsHandler
             students = students
                 .Where(student =>
                     student.FullName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                    student.Email.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                    (student.Phone ?? string.Empty).Contains(search, StringComparison.OrdinalIgnoreCase))
+                    student.Email.Contains(search, StringComparison.OrdinalIgnoreCase))
                 .ToList();
         }
 
@@ -86,10 +95,15 @@ public class GetStudentsHandler
                 Id = student.Id,
                 FullName = student.FullName,
                 Email = student.Email,
-                Phone = student.Phone ?? string.Empty,
-                Avatar = student.Avatar ?? string.Empty,
+                Phone = student.Phone,
+                Avatar = student.Avatar,
+                Gender = student.Gender,
+                DateOfBirth = student.DateOfBirth,
+                Address = student.Address,
                 IsActive = student.IsActive,
                 IsEmailVerified = student.IsEmailVerified,
+                SchoolId = student.SchoolId,
+                SchoolName = student.School?.Name,
                 TotalEnrolledClasses = enrollmentCounts.GetValueOrDefault(student.Id),
                 CertificatesEarned = 0,
                 AverageScore = null,

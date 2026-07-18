@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Simulations;
+using STEM.Core.Entities.Classes;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 
@@ -24,22 +24,16 @@ public class SimulationRepository : Repository<SimulationTemplate>, ISimulationR
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<Lesson?> GetLessonWithDetailsAsync(
-        int lessonId,
+    public async Task<Class?> GetClassWithDetailsAsync(
+        int classId,
         CancellationToken cancellationToken = default)
     {
-        return await _context.Lessons
-            .Include(lesson => lesson.Module)
-                .ThenInclude(module => module!.Course)
-                    .ThenInclude(course => course!.Teacher)
-            .Include(lesson => lesson.Module)
-                .ThenInclude(module => module!.Course)
-                    .ThenInclude(course => course!.School)
-            .Include(lesson => lesson.Module)
-                .ThenInclude(module => module!.Course)
-                    .ThenInclude(course => course!.Classes)
-                        .ThenInclude(classEntity => classEntity.Enrollments)
-            .FirstOrDefaultAsync(lesson => lesson.Id == lessonId, cancellationToken);
+        return await _context.Classes
+            .Include(classEntity => classEntity.Course)
+                .ThenInclude(course => course!.School)
+            .Include(classEntity => classEntity.Teacher)
+            .Include(classEntity => classEntity.Enrollments)
+            .FirstOrDefaultAsync(classEntity => classEntity.Id == classId, cancellationToken);
     }
 
     public async Task<SimulationTemplate?> GetTemplateWithDetailsAsync(
@@ -54,7 +48,7 @@ public class SimulationRepository : Repository<SimulationTemplate>, ISimulationR
         int pageNumber,
         int pageSize,
         string? searchTerm,
-        int? lessonId,
+        int? classId,
         int? courseId,
         int? schoolId,
         int? teacherId,
@@ -71,50 +65,42 @@ public class SimulationRepository : Repository<SimulationTemplate>, ISimulationR
                 template.Description.ToLower().Contains(term));
         }
 
-        if (lessonId.HasValue)
+        if (classId.HasValue)
         {
             query = query.Where(template =>
-                template.Simulation != null && template.Simulation.LessonId == lessonId.Value);
+                template.Simulation != null && template.Simulation.ClassId == classId.Value);
         }
 
         if (courseId.HasValue)
         {
             query = query.Where(template =>
                 template.Simulation != null &&
-                template.Simulation.Lesson != null &&
-                template.Simulation.Lesson.Module != null &&
-                template.Simulation.Lesson.Module.CourseId == courseId.Value);
+                template.Simulation.Class != null &&
+                template.Simulation.Class.CourseId == courseId.Value);
         }
 
         if (schoolId.HasValue)
         {
             query = query.Where(template =>
                 template.Simulation != null &&
-                template.Simulation.Lesson != null &&
-                template.Simulation.Lesson.Module != null &&
-                template.Simulation.Lesson.Module.Course != null &&
-                template.Simulation.Lesson.Module.Course.SchoolId == schoolId.Value);
+                template.Simulation.Class != null &&
+                template.Simulation.Class.SchoolId == schoolId.Value);
         }
 
         if (teacherId.HasValue)
         {
             query = query.Where(template =>
                 template.Simulation != null &&
-                template.Simulation.Lesson != null &&
-                template.Simulation.Lesson.Module != null &&
-                template.Simulation.Lesson.Module.Course != null &&
-                template.Simulation.Lesson.Module.Course.TeacherId == teacherId.Value);
+                template.Simulation.Class != null &&
+                template.Simulation.Class.TeacherId == teacherId.Value);
         }
 
         if (studentId.HasValue)
         {
             query = query.Where(template =>
                 template.Simulation != null &&
-                template.Simulation.Lesson != null &&
-                template.Simulation.Lesson.Module != null &&
-                template.Simulation.Lesson.Module.Course != null &&
-                template.Simulation.Lesson.Module.Course.Classes.Any(classEntity =>
-                    classEntity.Enrollments.Any(enrollment => enrollment.StudentId == studentId.Value)));
+                template.Simulation.Class != null &&
+                template.Simulation.Class.Enrollments.Any(enrollment => enrollment.StudentId == studentId.Value));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -147,21 +133,15 @@ public class SimulationRepository : Repository<SimulationTemplate>, ISimulationR
             .Include(template => template.Simulation)
                 .ThenInclude(simulation => simulation!.SimulationTemplates)
             .Include(template => template.Simulation)
-                .ThenInclude(simulation => simulation!.Lesson)
-                    .ThenInclude(lesson => lesson!.Module)
-                        .ThenInclude(module => module!.Course)
-                            .ThenInclude(course => course!.Teacher)
+                .ThenInclude(simulation => simulation!.Class)
+                    .ThenInclude(classEntity => classEntity!.Course)
+                        .ThenInclude(course => course!.School)
             .Include(template => template.Simulation)
-                .ThenInclude(simulation => simulation!.Lesson)
-                    .ThenInclude(lesson => lesson!.Module)
-                        .ThenInclude(module => module!.Course)
-                            .ThenInclude(course => course!.School)
+                .ThenInclude(simulation => simulation!.Class)
+                    .ThenInclude(classEntity => classEntity!.Teacher)
             .Include(template => template.Simulation)
-                .ThenInclude(simulation => simulation!.Lesson)
-                    .ThenInclude(lesson => lesson!.Module)
-                        .ThenInclude(module => module!.Course)
-                            .ThenInclude(course => course!.Classes)
-                                .ThenInclude(classEntity => classEntity.Enrollments)
+                .ThenInclude(simulation => simulation!.Class)
+                    .ThenInclude(classEntity => classEntity!.Enrollments)
             .Include(template => template.SimulationSessions)
             .AsQueryable();
     }

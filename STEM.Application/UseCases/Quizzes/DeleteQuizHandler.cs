@@ -32,7 +32,7 @@ public class DeleteQuizHandler
             throw new KeyNotFoundException("Quiz not found.");
         }
 
-        if (quiz.Course == null || !QuizAuthorization.CanManageCourse(currentUser, quiz.Course))
+        if (quiz.Class == null || !QuizAuthorization.CanManageClass(currentUser, quiz.Class))
         {
             throw new UnauthorizedAccessException("You are not allowed to delete this quiz.");
         }

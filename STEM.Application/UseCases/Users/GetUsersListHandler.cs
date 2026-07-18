@@ -65,13 +65,17 @@ public class GetUsersListHandler
             FullName = u.FullName,
             Phone = u.Phone,
             Avatar = u.Avatar,
+            Gender = u.Gender,
+            DateOfBirth = u.DateOfBirth,
+            Address = u.Address,
             IsActive = u.IsActive,
             RoleId = u.RoleId,
             RoleName = u.Role?.Name ?? string.Empty,
             SchoolId = u.SchoolId,
             SchoolName = u.School?.Name,
             IsEmailVerified = u.IsEmailVerified,
-            CreatedAt = u.CreatedAt
+            CreatedAt = u.CreatedAt,
+            UpdatedAt = u.UpdatedAt
         }).ToList();
 
         return new PagedUserListResponse

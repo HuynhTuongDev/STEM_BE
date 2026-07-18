@@ -8,21 +8,21 @@ internal static class VirtualLabResponseMapper
     public static VirtualLabResponse Map(SimulationTemplate template)
     {
         var simulation = template.Simulation;
-        var lesson = simulation?.Lesson;
-        var course = lesson?.Module?.Course;
+        var classEntity = simulation?.Class;
+        var course = classEntity?.Course;
 
         return new VirtualLabResponse
         {
             Id = template.Id,
             SimulationId = template.SimulationId,
-            LessonId = simulation?.LessonId ?? 0,
-            LessonTitle = lesson?.Title ?? string.Empty,
+            ClassId = classEntity?.Id ?? 0,
+            ClassCode = classEntity?.ClassCode ?? string.Empty,
             CourseId = course?.Id ?? 0,
             CourseTitle = course?.Title ?? string.Empty,
-            TeacherId = course?.TeacherId ?? 0,
-            TeacherName = course?.Teacher?.FullName ?? string.Empty,
-            SchoolId = course?.SchoolId,
-            SchoolName = course?.School?.Name,
+            TeacherId = classEntity?.TeacherId ?? 0,
+            TeacherName = classEntity?.Teacher?.FullName ?? string.Empty,
+            SchoolId = classEntity?.SchoolId ?? 0,
+            SchoolName = classEntity?.School?.Name ?? string.Empty,
             SimulationName = template.SimulationName,
             Description = template.Description,
             DiagramJson = template.Config,

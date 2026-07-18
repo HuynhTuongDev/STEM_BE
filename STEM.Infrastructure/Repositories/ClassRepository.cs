@@ -26,6 +26,11 @@ public class ClassRepository : Repository<Class>, IClassRepository
 
     public async Task<IEnumerable<Class>> GetByTeacherIdAsync(int teacherId, CancellationToken cancellationToken = default)
     {
+        return await GetClassesByTeacherIdAsync(teacherId, cancellationToken);
+    }
+
+    public async Task<IEnumerable<Class>> GetClassesByTeacherIdAsync(int teacherId, CancellationToken cancellationToken = default)
+    {
         return await _context.Classes
             .AsNoTracking()
             .Where(c => c.TeacherId == teacherId)
@@ -156,5 +161,24 @@ public class ClassRepository : Repository<Class>, IClassRepository
             .Include(c => c.Schedules)
             .Include(c => c.Announcements)
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
+    }
+
+    public async Task<IEnumerable<Schedule>> GetSchedulesByTeacherAsync(int teacherId, DateTime? fromDate, DateTime? toDate, CancellationToken cancellationToken = default)
+    {
+        var query = _context.Schedules
+            .Include(s => s.Class)
+                .ThenInclude(c => c.Course)
+            .Where(s => s.Class.TeacherId == teacherId)
+            .AsQueryable();
+
+        if (fromDate.HasValue)
+            query = query.Where(s => s.StartTime >= fromDate.Value);
+
+        if (toDate.HasValue)
+            query = query.Where(s => s.EndTime <= toDate.Value);
+
+        return await query
+            .OrderBy(s => s.StartTime)
+            .ToListAsync(cancellationToken);
     }
 }

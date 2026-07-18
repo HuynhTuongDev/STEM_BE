@@ -17,11 +17,9 @@ public class CourseRepository : Repository<Course>, ICourseRepository
         int pageSize,
         string? searchTerm,
         int? schoolId,
-        int? teacherId,
         CancellationToken cancellationToken = default)
     {
         var query = _dbSet
-            .Include(c => c.Teacher)
             .Include(c => c.School)
             .AsQueryable();
 
@@ -35,9 +33,6 @@ public class CourseRepository : Repository<Course>, ICourseRepository
 
         if (schoolId.HasValue)
             query = query.Where(c => c.SchoolId == schoolId.Value);
-
-        if (teacherId.HasValue)
-            query = query.Where(c => c.TeacherId == teacherId.Value);
 
         var totalCount = await query.CountAsync(cancellationToken);
 
@@ -53,7 +48,6 @@ public class CourseRepository : Repository<Course>, ICourseRepository
     public async Task<Course?> GetCourseDetailAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _dbSet
-            .Include(c => c.Teacher)
             .Include(c => c.School)
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
     }

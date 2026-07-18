@@ -13,4 +13,5 @@ public interface IRepository<T> where T : BaseEntity
     void Delete(T entity);
     Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default);
     Task SaveChangesAsync(CancellationToken cancellationToken = default);
+    Task DeleteAsync(T entity, CancellationToken cancellationToken = default);
 }
