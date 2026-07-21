@@ -21,6 +21,7 @@ public class SimulationCompileService : ISimulationCompileService
             ["arduino:avr:uno"] = "arduino:avr:uno",
             ["arduino_uno"] = "arduino:avr:uno",
             ["uno"] = "arduino:avr:uno",
+            ["esp32_devkit_v1"] = "esp32:esp32:esp32",
             ["esp32"] = "esp32:esp32:esp32",
             ["esp32dev"] = "esp32:esp32:esp32",
             ["esp32:esp32:esp32"] = "esp32:esp32:esp32",
@@ -382,7 +383,7 @@ public class SimulationCompileService : ISimulationCompileService
             : request.Code;
     }
 
-    private static string NormalizeBoard(string board)
+    internal static string NormalizeBoard(string board)
     {
         return SupportedBoards.TryGetValue(board, out var normalized)
             ? normalized
