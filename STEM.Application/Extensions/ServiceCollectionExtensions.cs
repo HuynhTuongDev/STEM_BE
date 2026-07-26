@@ -14,6 +14,11 @@ using STEM.Application.UseCases.Grading;
 using STEM.Application.UseCases.VirtualLabs;
 using STEM.Application.UseCases.Students;
 using STEM.Application.UseCases.Schedules;
+using STEM.Application.UseCases.Simulation.Abstractions;
+using STEM.Application.UseCases.Simulation.Runners.Educational;
+using STEM.Application.UseCases.Simulation.Runners.Mock;
+using STEM.Application.UseCases.Simulation.Runners.Qemu;
+using STEM.Application.UseCases.Simulation.Runtime;
 using FluentValidation;
 using STEM.Application.Validators;
 
@@ -46,8 +51,15 @@ public static class ServiceCollectionExtensions
         // Simulation Handlers
         services.AddScoped<SimulationHandler>();
         services.AddScoped<AiSuggestHandler>();
-        services.AddScoped<VirtualLabDiagramService>();
-        services.AddScoped<VirtualLabMockRunner>();
+        services.AddSingleton<VirtualLabDiagramService>();
+        services.AddSingleton<EducationalProgramAnalyzer>();
+        services.AddSingleton<EducationalEventGenerator>();
+        services.AddSingleton<VirtualLabMockRunner>();
+        services.AddSingleton<EducationalSimulationRunner>();
+        services.AddSingleton<QemuEsp32Runner>();
+        services.AddScoped<ISimulationRunnerResolver, SimulationRunnerResolver>();
+        services.AddSingleton<IRunningSimulationRegistry, RunningSimulationRegistry>();
+        services.AddSingleton<ICompileCoordinator, CompileCoordinator>();
         services.AddHttpClient("Anthropic", client =>
         {
             client.BaseAddress = new Uri("https://api.anthropic.com");

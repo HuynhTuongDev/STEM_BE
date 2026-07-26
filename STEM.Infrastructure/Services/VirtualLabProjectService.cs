@@ -24,7 +24,7 @@ public class VirtualLabProjectService : IVirtualLabProjectService
     public async Task<VirtualLabProject> CreateProjectAsync(VirtualLabProjectRequest request, int userId)
     {
         var diagramJson = ToDiagramJson(request.Diagram);
-        var analysis = _diagramService.Analyze(diagramJson);
+        var analysis = _diagramService.Analyze(diagramJson, request.Board);
         if (!analysis.Validation.IsValid)
         {
             throw new ArgumentException(string.Join("; ", analysis.Validation.Errors));
@@ -34,6 +34,7 @@ public class VirtualLabProjectService : IVirtualLabProjectService
         {
             Id = Guid.NewGuid(),
             UserId = userId,
+            LabId = request.LabId,
             Name = request.Name,
             Board = request.Board,
             Language = request.Language,
@@ -66,7 +67,7 @@ public class VirtualLabProjectService : IVirtualLabProjectService
         EnsureOwnership(project, currentUserId);
 
         var diagramJson = ToDiagramJson(request.Diagram);
-        var analysis = _diagramService.Analyze(diagramJson);
+        var analysis = _diagramService.Analyze(diagramJson, request.Board);
         if (!analysis.Validation.IsValid)
         {
             throw new ArgumentException(string.Join("; ", analysis.Validation.Errors));

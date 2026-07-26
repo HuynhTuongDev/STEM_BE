@@ -1,10 +1,21 @@
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using STEM.Application.Dtos.Simulation;
 
 namespace STEM.Application.UseCases.Simulation;
 
 public class VirtualLabDiagramService
 {
+    // CircuitCanvas.tsx (FE) never puts the board into parts[] — it renders
+    // the board as a fixed, separately-tracked slot with this literal id and
+    // serializes it nowhere. Connections still reference "arduino:pin" though,
+    // so this service treats "arduino" as the reserved board part id and
+    // synthesizes a DiagramPart for it here (validation-only, never persisted
+    // back into parts[]) using whichever board type is known — either the
+    // diagram's own top-level "board" field or a caller-supplied fallback
+    // (VirtualLabProject.Board). See VIRTUAL_LAB_PLAN.md backlog note.
+    private const string BoardPartId = "arduino";
+
     private static readonly IReadOnlySet<string> Esp32Types = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
         "board-esp32-devkit-c-v4",
@@ -40,7 +51,7 @@ public class VirtualLabDiagramService
             ["wokwi-5v"] = PinSet("5V")
         };
 
-    public VirtualLabDiagramAnalysis Analyze(string diagramJson)
+    public VirtualLabDiagramAnalysis Analyze(string diagramJson, string? fallbackBoardType = null)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -57,9 +68,24 @@ public class VirtualLabDiagramService
         try
         {
             using var document = JsonDocument.Parse(diagramJson);
-            normalizedJson = document.RootElement.GetRawText();
-            ParseParts(document.RootElement, parts, errors, warnings);
-            ParseConnections(document.RootElement, parts, wires, errors);
+            var root = document.RootElement;
+            normalizedJson = root.GetRawText();
+            ParseParts(root, parts, errors, warnings);
+
+            var embeddedBoard = ReadOptionalString(root, "board");
+            var effectiveBoard = embeddedBoard ?? fallbackBoardType;
+            EnsureBoardPart(parts, effectiveBoard);
+            if (string.IsNullOrWhiteSpace(embeddedBoard) && !string.IsNullOrWhiteSpace(effectiveBoard))
+            {
+                // Client never sends "board" inside the diagram payload (only
+                // VirtualLabProject.Board carries it) — bake the resolved value
+                // back into the JSON we persist/thread downstream, so runners
+                // (VirtualLabMockRunner/EducationalSimulationRunner) that only
+                // see this JSON string later don't need their own fallback.
+                normalizedJson = TryEmbedBoardField(normalizedJson, effectiveBoard!) ?? normalizedJson;
+            }
+
+            ParseConnections(root, parts, wires, errors);
         }
         catch (JsonException ex)
         {
@@ -67,6 +93,91 @@ public class VirtualLabDiagramService
         }
 
         return BuildAnalysis(normalizedJson, parts, wires, errors, warnings);
+    }
+
+    public VirtualLabRuntimeDiagramSnapshot BuildRuntimeSnapshot(string diagramJson, string? fallbackBoardType = null)
+    {
+        var errors = new List<string>();
+        var warnings = new List<string>();
+        var parts = new List<DiagramPart>();
+        var wires = new List<Wire>();
+
+        if (string.IsNullOrWhiteSpace(diagramJson))
+        {
+            return new VirtualLabRuntimeDiagramSnapshot(Array.Empty<VirtualLabRuntimeComponent>());
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(diagramJson);
+            var root = document.RootElement;
+            ParseParts(root, parts, errors, warnings);
+            EnsureBoardPart(parts, ReadOptionalString(root, "board") ?? fallbackBoardType);
+            ParseConnections(root, parts, wires, errors);
+        }
+        catch (JsonException)
+        {
+            return new VirtualLabRuntimeDiagramSnapshot(Array.Empty<VirtualLabRuntimeComponent>());
+        }
+
+        var netlist = BuildValidationConnectivity(parts, wires);
+        var components = BuildRuntimeComponents(parts, netlist);
+        return new VirtualLabRuntimeDiagramSnapshot(components);
+    }
+
+    // Reserved board part id is never present in parts[] as sent by the FE
+    // (see BoardPartId comment above) — add a synthetic entry so connection
+    // validation (ValidatePinReference) and GPIO-reachability checks
+    // (IsBoardGpio) can resolve "arduino:pin" references. Never mutates an
+    // existing real part with that id, and does nothing when no board type
+    // is known at all (preserves prior behavior for callers with no context).
+    private static void EnsureBoardPart(ICollection<DiagramPart> parts, string? effectiveBoard)
+    {
+        if (string.IsNullOrWhiteSpace(effectiveBoard))
+        {
+            return;
+        }
+
+        if (parts.Any(part => part.Id.Equals(BoardPartId, StringComparison.OrdinalIgnoreCase)))
+        {
+            return;
+        }
+
+        parts.Add(new DiagramPart(BoardPartId, NormalizeBoardPartType(effectiveBoard)));
+    }
+
+    // Board vocabulary is inconsistent across the codebase (Lab.BoardType:
+    // "esp32_devkit_v1"/"arduino_uno"; VirtualLabProject.Board: "esp32" or
+    // compile FQBNs like "esp32:esp32:esp32"/"arduino:avr:uno"; diagram JSON
+    // "board": "esp32_devkit_v1"/"arduino_uno"). Match loosely on "esp32"
+    // rather than depend on any one convention. Non-ESP32 boards (Arduino
+    // Uno) map to a type outside both Esp32Types and SupportedPins, so pin
+    // validation is skipped for them (unmodeled board, same as other
+    // unmodeled component types) and "Diagram must include an ESP32 board."
+    // still fires — intentional for the 2 Arduino Uno labs kept failing.
+    private static string NormalizeBoardPartType(string board)
+    {
+        return board.Contains("esp32", StringComparison.OrdinalIgnoreCase)
+            ? "board-esp32-devkit-c-v4"
+            : "wokwi-arduino-uno";
+    }
+
+    private static string? ReadOptionalString(JsonElement root, string propertyName)
+    {
+        return root.TryGetProperty(propertyName, out var element) && element.ValueKind == JsonValueKind.String
+            ? element.GetString()
+            : null;
+    }
+
+    private static string? TryEmbedBoardField(string json, string board)
+    {
+        if (JsonNode.Parse(json) is not JsonObject node)
+        {
+            return null;
+        }
+
+        node["board"] = board;
+        return node.ToJsonString();
     }
 
     private static VirtualLabDiagramAnalysis BuildAnalysis(
@@ -319,6 +430,73 @@ public class VirtualLabDiagramService
         return BuildNetlist(graphEdges);
     }
 
+    private static IReadOnlyCollection<VirtualLabRuntimeComponent> BuildRuntimeComponents(
+        IReadOnlyCollection<DiagramPart> parts,
+        NetlistResponse netlist)
+    {
+        var components = new List<VirtualLabRuntimeComponent>();
+        var partsById = parts
+            .GroupBy(part => part.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var part in parts)
+        {
+            if (Esp32Types.Contains(part.Type) ||
+                part.Type.Equals("wokwi-resistor", StringComparison.OrdinalIgnoreCase) ||
+                part.Type.Equals("wokwi-gnd", StringComparison.OrdinalIgnoreCase) ||
+                part.Type.Equals("wokwi-5v", StringComparison.OrdinalIgnoreCase) ||
+                !SupportedPins.TryGetValue(part.Type, out var pins))
+            {
+                continue;
+            }
+
+            var pinToGpio = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pin in pins)
+            {
+                var token = ToPinToken(part.Id, pin);
+                if (!netlist.PinToNet.TryGetValue(token, out var netId))
+                {
+                    continue;
+                }
+
+                var gpio = FindBoardGpioOnNet(netId, netlist, partsById);
+                if (gpio != null)
+                {
+                    pinToGpio[pin] = gpio;
+                }
+            }
+
+            if (pinToGpio.Count > 0)
+            {
+                components.Add(new VirtualLabRuntimeComponent(part.Id, part.Type, pinToGpio));
+            }
+        }
+
+        return components;
+    }
+
+    private static string? FindBoardGpioOnNet(
+        string netId,
+        NetlistResponse netlist,
+        IReadOnlyDictionary<string, DiagramPart> partsById)
+    {
+        foreach (var candidate in netlist.PinToNet.Where(item => item.Value == netId).Select(item => item.Key))
+        {
+            if (!TryParsePinToken(candidate, out var candidatePartId, out var candidatePin) ||
+                !partsById.TryGetValue(candidatePartId, out var candidatePart))
+            {
+                continue;
+            }
+
+            if (IsBoardGpio(candidatePartId, candidatePin, candidatePart))
+            {
+                return NormalizeGpio(candidatePin);
+            }
+        }
+
+        return null;
+    }
+
     private static NetlistResponse BuildNetlist(IReadOnlyCollection<Wire> wires)
     {
         if (wires.Count == 0)
@@ -431,6 +609,14 @@ public class VirtualLabDiagramService
         return int.TryParse(pin, out _);
     }
 
+    private static string NormalizeGpio(string pin)
+    {
+        var trimmed = pin.Trim();
+        return trimmed.StartsWith("GPIO", StringComparison.OrdinalIgnoreCase)
+            ? trimmed[4..]
+            : trimmed;
+    }
+
     private static string ReadString(JsonElement element, string propertyName)
     {
         return element.TryGetProperty(propertyName, out var property) && property.ValueKind == JsonValueKind.String
@@ -477,3 +663,11 @@ public sealed record VirtualLabDiagramAnalysis(
     string DiagramJson,
     DiagramValidationResponse Validation,
     NetlistResponse Netlist);
+
+public sealed record VirtualLabRuntimeDiagramSnapshot(
+    IReadOnlyCollection<VirtualLabRuntimeComponent> Components);
+
+public sealed record VirtualLabRuntimeComponent(
+    string Id,
+    string Type,
+    IReadOnlyDictionary<string, string> PinToGpio);

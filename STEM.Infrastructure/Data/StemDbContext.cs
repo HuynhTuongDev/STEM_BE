@@ -455,6 +455,23 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(l => l.TeacherId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<VirtualLabProject>()
+            .Property(project => project.Status)
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<VirtualLabProject>()
+            .Property(project => project.SimulationEventsJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<VirtualLabProject>()
+            .HasIndex(project => project.LabId);
+
+        modelBuilder.Entity<VirtualLabProject>()
+            .HasOne<Lab>()
+            .WithMany()
+            .HasForeignKey(project => project.LabId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         modelBuilder.Entity<Lab>()
             .HasOne(l => l.CreatedBy)
             .WithMany()

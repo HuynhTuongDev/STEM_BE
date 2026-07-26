@@ -2,8 +2,10 @@ using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using STEM.Application.Dtos.Labs;
 using STEM.Application.Interfaces;
+using STEM.Application.UseCases.Simulation.Abstractions;
 using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Simulations;
@@ -24,11 +26,19 @@ public class LabService : ILabService
 
     private readonly StemDbContext _context;
     private readonly HttpClient _httpClient;
+    private readonly ILogger<LabService> _logger;
+    private readonly IPrecompileTriggerService _precompileTrigger;
 
-    public LabService(StemDbContext context, HttpClient httpClient)
+    public LabService(
+        StemDbContext context,
+        HttpClient httpClient,
+        ILogger<LabService> logger,
+        IPrecompileTriggerService precompileTrigger)
     {
         _context = context;
         _httpClient = httpClient;
+        _logger = logger;
+        _precompileTrigger = precompileTrigger;
     }
 
     public async Task<PagedLabResponse> GetLabsAsync(
@@ -161,6 +171,8 @@ public class LabService : ILabService
         _context.Labs.Add(lab);
         await _context.SaveChangesAsync(cancellationToken);
 
+        TriggerStarterCodePrecompile(lab.Id, lab.BoardType, lab.StarterCode);
+
         var savedLab = await BuildLabQuery(asNoTracking: true)
             .FirstAsync(item => item.Id == lab.Id, cancellationToken);
         return MapLab(savedLab);
@@ -210,9 +222,31 @@ public class LabService : ILabService
         SyncClassAssignments(lab, payload.ClassIds);
         await _context.SaveChangesAsync(cancellationToken);
 
+        TriggerStarterCodePrecompile(lab.Id, lab.BoardType, lab.StarterCode);
+
         var savedLab = await BuildLabQuery(asNoTracking: true)
             .FirstAsync(item => item.Id == id, cancellationToken);
         return MapLab(savedLab);
+    }
+
+    // Precompile firmware cho starterCode NGAY khi giáo viên lưu bài — để lần
+    // Run đầu tiên của BẤT KỲ học sinh nào (chưa sửa gì code) rơi đúng vào cache
+    // hit của IFirmwareCacheService (khoá theo nội dung, không theo project) và
+    // chạy nhanh như Wokwi, không phải chờ compile ~40-90s. Chỉ ESP32 (QEMU
+    // runner không hỗ trợ AVR/Arduino Uno — xem QemuEsp32Runner.IsAvrBoard).
+    // Logic chạy nền thật (scope riêng, không throw, tự check cache trước khi
+    // compile) nằm ở IPrecompileTriggerService — dùng chung với endpoint
+    // precompile lúc học sinh đang gõ code (VirtualLabProjectController).
+    private void TriggerStarterCodePrecompile(Guid labId, string boardType, string? starterCode)
+    {
+        if (string.IsNullOrWhiteSpace(starterCode) ||
+            !string.Equals(boardType, LabBoardTypes.Esp32DevkitV1, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var board = SimulationCompileService.NormalizeBoard(boardType);
+        _precompileTrigger.TriggerBackgroundCompile(starterCode, board, "arduino", buildCacheScopeId: labId);
     }
 
     public async Task DeleteLabAsync(

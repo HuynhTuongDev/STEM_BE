@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Dtos.Simulation;
 using STEM.Application.Dtos.VirtualLab;
 using STEM.Application.Interfaces;
+using STEM.Core.Entities.Simulations;
 
 namespace STEM.Api.Controllers;
 
@@ -87,9 +88,9 @@ public class VirtualLabProjectController : ControllerBase
             var response = await _runtimeService.RunEsp32Async(new RunEsp32SimulationRequest
             {
                 SessionId = id.ToString("N"),
+                LabId = request.LabId,
                 DiagramJson = ToDiagramJson(request.Diagram),
-                SourceCode = request.Code,
-                Mode = "mock"
+                SourceCode = request.Code
             }, GetCurrentUserId(), cancellationToken);
 
             return Ok(response);
@@ -108,20 +109,43 @@ public class VirtualLabProjectController : ControllerBase
         }
     }
 
-    [HttpPost("{id}/stop")]
-    public async Task<IActionResult> StopSimulation(Guid id)
+    // Học sinh đang gõ code (FE debounce 2-3s sau khi ngừng gõ) — kích hoạt
+    // compile nền để làm ấm firmware cache TRƯỚC khi bấm Run, không phải lúc
+    // Run mới bắt đầu compile. Trả về ngay (202), không đợi compile ~40-90s
+    // thật xong — xem TriggerPrecompileAsync/IPrecompileTriggerService.
+    [HttpPost("{id}/precompile")]
+    public async Task<IActionResult> Precompile(
+        Guid id,
+        [FromBody] PrecompileRequest request,
+        CancellationToken cancellationToken = default)
     {
         try
         {
-            // stop is still a stub (no real state change yet — see Giai đoạn 4), but it must
-            // still confirm the caller owns this project before confirming it "exists" at all.
-            var project = await _service.GetProjectAsync(id, GetCurrentUserId());
-            if (project == null) return NotFound();
+            await _runtimeService.TriggerPrecompileAsync(id.ToString("N"), request.Code, GetCurrentUserId(), cancellationToken);
+            return Accepted();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { message = ex.Message });
+        }
+    }
+
+    [HttpPost("{id}/stop")]
+    public async Task<IActionResult> StopSimulation(Guid id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var stopped = await _runtimeService.StopSimulationAsync(id, GetCurrentUserId(), cancellationToken);
+            if (!stopped) return NotFound();
 
             return Ok(new
             {
                 sessionId = id.ToString("N"),
-                status = "stopped",
+                status = VirtualLabProjectStatuses.Stopped,
                 events = Array.Empty<SimulationEventResponse>()
             });
         }

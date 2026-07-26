@@ -1,3 +1,5 @@
+using STEM.Core.Entities.Simulations;
+
 namespace STEM.Application.Dtos.Simulation;
 
 // ─────────────────────────────────────────────
@@ -109,6 +111,20 @@ public class CompileSimulationRequest
     public string SourceCode { get; set; } = string.Empty;
     public string Board { get; set; } = "arduino:avr:uno";
     public string Framework { get; set; } = "arduino";
+
+    // Optional — chỉ dùng để khoá cache incremental build theo từng project
+    // (xem SimulationCompileService: core framework ESP32 chiếm ~86% thời
+    // gian compile, gần như không đổi giữa các lần compile CÙNG 1 project).
+    // Để trống (mặc định) = giữ nguyên hành vi cũ, không cache — AN TOÀN cho
+    // mọi caller hiện có (BuildCompileCheckAsync lúc submit, endpoint
+    // POST api/simulation/compile trực tiếp). CHỈ set field này ở caller nào
+    // đã tự đảm bảo không có 2 compile đồng thời cho CÙNG projectId (đã xác
+    // nhận thật: chia sẻ build-path giữa 2 compile ĐỒNG THỜI gây lẫn dữ liệu
+    // — file .elf ra giống hệt nhau, sai với CẢ HAI sketch gốc). Hiện chỉ
+    // QemuEsp32Runner set field này, vì IRunningSimulationRegistry đã đảm bảo
+    // tại 1 thời điểm chỉ có tối đa 1 lần chạy nền (và do đó 1 lần compile)
+    // cho mỗi projectId.
+    public string? ProjectId { get; set; }
 }
 
 public class CompileSimulationError
@@ -140,6 +156,7 @@ public class CompileJobResponse
 
 public class SaveDiagramRequest
 {
+    public Guid? LabId { get; set; }
     public string DiagramJson { get; set; } = string.Empty;
     public string? SourceCode { get; set; }
 }
@@ -175,6 +192,7 @@ public class NetResponse
 public class RunEsp32SimulationRequest
 {
     public string? SessionId { get; set; }
+    public Guid? LabId { get; set; }
     public int? AssignmentId { get; set; }
     public int? StudentId { get; set; }
     public int? ClassId { get; set; }
@@ -186,7 +204,7 @@ public class RunEsp32SimulationRequest
 public class RunEsp32SimulationResponse
 {
     public string SessionId { get; set; } = string.Empty;
-    public string Status { get; set; } = "running";
+    public string Status { get; set; } = VirtualLabProjectStatuses.Running;
     public DiagramValidationResponse Validation { get; set; } = new();
     public NetlistResponse Netlist { get; set; } = new();
     public IReadOnlyCollection<SimulationEventResponse> Events { get; set; } = Array.Empty<SimulationEventResponse>();

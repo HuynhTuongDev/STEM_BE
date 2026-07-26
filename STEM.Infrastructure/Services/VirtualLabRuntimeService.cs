@@ -1,9 +1,12 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Npgsql;
+using NpgsqlTypes;
 using STEM.Application.Dtos.Simulation;
 using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Simulation;
+using STEM.Application.UseCases.Simulation.Abstractions;
 using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Simulations;
 using STEM.Infrastructure.Data;
@@ -12,6 +15,9 @@ namespace STEM.Infrastructure.Services;
 
 public class VirtualLabRuntimeService : IVirtualLabRuntimeService
 {
+    private const string DefaultBoard = "esp32";
+    private const string DefaultLanguage = "arduino";
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
@@ -20,19 +26,28 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
 
     private readonly StemDbContext _context;
     private readonly VirtualLabDiagramService _diagramService;
-    private readonly VirtualLabMockRunner _mockRunner;
+    private readonly ISimulationRunnerResolver _runnerResolver;
     private readonly ISimulationCompileService _compileService;
+    private readonly IConfiguration _configuration;
+    private readonly IRunningSimulationRegistry _runningSimulationRegistry;
+    private readonly IPrecompileTriggerService _precompileTrigger;
 
     public VirtualLabRuntimeService(
         StemDbContext context,
         VirtualLabDiagramService diagramService,
-        VirtualLabMockRunner mockRunner,
-        ISimulationCompileService compileService)
+        ISimulationRunnerResolver runnerResolver,
+        ISimulationCompileService compileService,
+        IConfiguration configuration,
+        IRunningSimulationRegistry runningSimulationRegistry,
+        IPrecompileTriggerService precompileTrigger)
     {
         _context = context;
         _diagramService = diagramService;
-        _mockRunner = mockRunner;
+        _runnerResolver = runnerResolver;
         _compileService = compileService;
+        _configuration = configuration;
+        _runningSimulationRegistry = runningSimulationRegistry;
+        _precompileTrigger = precompileTrigger;
     }
 
     public async Task<DiagramSessionResponse?> GetDiagramAsync(
@@ -51,7 +66,7 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             return null;
         }
 
-        var analysis = _diagramService.Analyze(project.DiagramJson);
+        var analysis = _diagramService.Analyze(project.DiagramJson, project.Board);
         return BuildDiagramResponse(sessionId, analysis, project.UpdatedAt);
     }
 
@@ -61,8 +76,6 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         int currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var analysis = _diagramService.Analyze(request.DiagramJson);
-
         if (!Guid.TryParse(sessionId, out var projectId))
         {
             throw new ArgumentException("sessionId must be a GUID virtual-lab project id.");
@@ -72,14 +85,17 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
 
         if (project == null)
         {
+            var platform = await ResolveProjectPlatformAsync(request.LabId, cancellationToken);
+            var createAnalysis = _diagramService.Analyze(request.DiagramJson, platform.Board);
             project = new VirtualLabProject
             {
                 Id = projectId,
                 UserId = currentUserId,
+                LabId = request.LabId,
                 Name = $"session-{projectId:N}"[..20],
-                Board = "esp32",
-                Language = "arduino",
-                DiagramJson = analysis.DiagramJson,
+                Board = platform.Board,
+                Language = platform.Language,
+                DiagramJson = createAnalysis.DiagramJson,
                 CodeContent = request.SourceCode ?? string.Empty,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -89,7 +105,7 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             try
             {
                 await _context.SaveChangesAsync(cancellationToken);
-                return BuildDiagramResponse(sessionId, analysis, project.UpdatedAt);
+                return BuildDiagramResponse(sessionId, createAnalysis, project.UpdatedAt);
             }
             catch (DbUpdateException ex) when (IsDuplicateKey(ex))
             {
@@ -105,6 +121,7 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             }
         }
 
+        var analysis = _diagramService.Analyze(request.DiagramJson, project.Board);
         project.DiagramJson = analysis.DiagramJson;
         if (request.SourceCode != null)
         {
@@ -124,14 +141,10 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         int? currentUserId,
         CancellationToken cancellationToken = default)
     {
-        if (!request.Mode.Equals("mock", StringComparison.OrdinalIgnoreCase))
-        {
-            throw new InvalidOperationException("Only mock mode is supported by the current MVP runner.");
-        }
-
         var sessionId = string.IsNullOrWhiteSpace(request.SessionId)
             ? Guid.NewGuid().ToString("N")
             : request.SessionId.Trim();
+        var mode = ResolveSimulationMode();
 
         var diagramJson = !string.IsNullOrWhiteSpace(request.DiagramJson)
             ? request.DiagramJson
@@ -141,20 +154,246 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             ? request.SourceCode
             : await ResolveSourceCodeAsync(sessionId, currentUserId, cancellationToken) ?? string.Empty;
 
-        var analysis = _diagramService.Analyze(diagramJson);
-        var events = _mockRunner.Run(sourceCode, analysis.DiagramJson, analysis);
-        var hasErrors = !analysis.Validation.IsValid || events.Any(item => item.Type.Equals("error", StringComparison.OrdinalIgnoreCase));
+        var boardType = await ResolveBoardTypeAsync(sessionId, currentUserId, cancellationToken) ?? DefaultBoard;
+        var analysis = _diagramService.Analyze(diagramJson, boardType);
 
-        await PersistRunAsync(sessionId, analysis.DiagramJson, sourceCode, currentUserId, cancellationToken);
+        // "educational" (EducationalSimulationRunner) và "qemu" (QemuEsp32Runner)
+        // không còn tính hết rồi trả về đầy đủ trong 1 request nữa — cả 2 chỉ
+        // validate đồng bộ rồi kick off 1 background task (RunAsync trả về gần
+        // như ngay lập tức), event thật chảy qua
+        // ISimulationEventStore/ISimulationEventBroadcaster TỪ TRONG background
+        // task đó, độc lập với request HTTP này. Phải reset SimulationEventsJson="[]"
+        // TRƯỚC khi gọi RunAsync (không phải sau) — nếu làm sau, background task
+        // có thể đã ghi event đầu tiên trước khi dòng reset chạy tới, và reset sẽ
+        // xoá mất nó. Thiếu "qemu" ở đây từng gây race thật: PersistRunAsync (nhánh
+        // không-streaming, bên dưới) ghi đè SimulationEventsJson='[]' NGAY SAU KHI
+        // RunAsync trả về — chạy sau khi background task đã kịp append vài event
+        // đầu sẽ xoá mất chúng. VirtualLabMockRunner (mode "mock") không đổi gì —
+        // vẫn đồng bộ, đi qua nhánh PersistRunAsync như cũ 100%.
+        var isStreamingMode = mode.Equals("educational", StringComparison.OrdinalIgnoreCase) ||
+            mode.Equals("qemu", StringComparison.OrdinalIgnoreCase);
+        if (isStreamingMode)
+        {
+            await PrepareStreamingRunAsync(sessionId, analysis.DiagramJson, sourceCode, request.LabId, currentUserId, cancellationToken);
+        }
+
+        var runner = _runnerResolver.Resolve(mode);
+        var runResult = await runner.RunAsync(new SimulationRunContext
+        {
+            ProjectId = sessionId,
+            SourceCode = sourceCode,
+            DiagramJson = analysis.DiagramJson,
+            Mode = mode,
+            MaxDurationMs = ReadSimulationRunnerInt("MaxDurationMs", 5000),
+            MaxInstructionCount = ReadSimulationRunnerInt("MaxInstructionCount", 10000)
+        }, cancellationToken);
+
+        if (isStreamingMode && runResult.Success)
+        {
+            // Kick-off thành công — KHÔNG gọi PersistRunAsync (nó sẽ ghi đè
+            // SimulationEventsJson bằng events=[] của response "started" này,
+            // xoá mất bất kỳ event nào background task đã kịp ghi). Status/
+            // SimulationEventsJson từ đây do chính background task tự quản.
+            return new RunEsp32SimulationResponse
+            {
+                SessionId = sessionId,
+                Status = VirtualLabProjectStatuses.Running,
+                Validation = analysis.Validation,
+                Netlist = analysis.Netlist,
+                Events = Array.Empty<SimulationEventResponse>()
+            };
+        }
+
+        // Mock runner (luôn đồng bộ) HOẶC streaming mode nhưng validate lỗi
+        // ngay từ đầu (diagram/program sai — không có background task nào
+        // được kick off, runResult đã là kết quả lỗi đầy đủ) — giữ nguyên
+        // hành vi cũ 100%.
+        var events = runResult.Events;
+        var hasErrors = !analysis.Validation.IsValid ||
+            !runResult.Success ||
+            events.Any(item => item.Type.Equals("error", StringComparison.OrdinalIgnoreCase));
+        var status = hasErrors
+            ? VirtualLabProjectStatuses.Error
+            : VirtualLabProjectStatuses.Running;
+
+        await PersistRunAsync(
+            sessionId,
+            analysis.DiagramJson,
+            sourceCode,
+            status,
+            events,
+            request.LabId,
+            currentUserId,
+            cancellationToken);
 
         return new RunEsp32SimulationResponse
         {
             SessionId = sessionId,
-            Status = hasErrors ? "error" : "running",
+            Status = status,
             Validation = analysis.Validation,
             Netlist = analysis.Netlist,
             Events = events
         };
+    }
+
+    // Reset SimulationEventsJson="[]" + Status="running" TRƯỚC khi kick off
+    // 1 lần chạy streaming — tạo project mới nếu sessionId chưa từng tồn
+    // tại (mirror nhánh "create" của PersistRunAsync, nhưng đơn giản hơn vì
+    // không cần atomic-append ở bước này, chỉ 1 lần ghi EF Core bình thường
+    // ngay trước khi background task bắt đầu).
+    private async Task PrepareStreamingRunAsync(
+        string sessionId,
+        string diagramJson,
+        string sourceCode,
+        Guid? labId,
+        int? currentUserId,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(sessionId, out var projectId))
+        {
+            throw new ArgumentException("sessionId must be a GUID virtual-lab project id.");
+        }
+
+        var project = await LoadOwnedProjectAsync(projectId, currentUserId, asNoTracking: false, cancellationToken);
+        var now = DateTime.UtcNow;
+
+        if (project == null)
+        {
+            var platform = await ResolveProjectPlatformAsync(labId, cancellationToken);
+            project = new VirtualLabProject
+            {
+                Id = projectId,
+                UserId = currentUserId,
+                LabId = labId,
+                Name = $"session-{projectId:N}"[..20],
+                Board = platform.Board,
+                Language = platform.Language,
+                DiagramJson = diagramJson,
+                CodeContent = sourceCode,
+                Status = VirtualLabProjectStatuses.Running,
+                SimulationEventsJson = "[]",
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            _context.VirtualLabProjects.Add(project);
+        }
+        else
+        {
+            project.DiagramJson = diagramJson;
+            project.CodeContent = sourceCode;
+            project.Status = VirtualLabProjectStatuses.Running;
+            project.SimulationEventsJson = "[]";
+            project.UpdatedAt = now;
+        }
+
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<bool> StopSimulationAsync(
+        Guid projectId,
+        int currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var project = await LoadOwnedProjectAsync(projectId, currentUserId, asNoTracking: false, cancellationToken);
+        if (project == null)
+        {
+            return false;
+        }
+
+        // Hủy THẬT lần chạy nền đang diễn ra (nếu có) — trước bản vá này,
+        // Stop chỉ đổi Status trong DB, background task (nếu là streaming
+        // mode) vẫn tiếp tục chạy vô thời hạn phía sau, không ai biết. Nếu
+        // không có gì đang chạy (vd mode "mock", đã hoàn tất từ lâu),
+        // TryCancel trả false — vô hại, Status vẫn được set đúng bên dưới.
+        _runningSimulationRegistry.TryCancel(projectId.ToString("N"));
+
+        project.Status = VirtualLabProjectStatuses.Stopped;
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+        return true;
+    }
+
+    // Precompile nền lúc học sinh đang gõ code (FE debounce 2-3s) — mục tiêu:
+    // khi học sinh THẬT SỰ bấm Run, firmware cho đúng nội dung mới nhất (nếu
+    // họ đã ngừng gõ đủ lâu để debounce bắn ra trước đó) đã sẵn sàng trong
+    // IFirmwareCacheService, QemuEsp32Runner rơi vào cache hit thay vì phải
+    // compile ~40-90s ngay trong lúc Run. asNoTracking=true — chỉ cần đọc
+    // Board/Language để xác định cacheKey, không sửa gì trên project.
+    public async Task TriggerPrecompileAsync(
+        string sessionId,
+        string sourceCode,
+        int currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(sessionId, out var projectId))
+        {
+            throw new ArgumentException("sessionId must be a GUID virtual-lab project id.");
+        }
+
+        var project = await LoadOwnedProjectAsync(projectId, currentUserId, asNoTracking: true, cancellationToken)
+            ?? throw new KeyNotFoundException("VirtualLabProject not found.");
+
+        if (string.IsNullOrWhiteSpace(sourceCode))
+        {
+            return;
+        }
+
+        _precompileTrigger.TriggerBackgroundCompile(sourceCode, project.Board, project.Language, buildCacheScopeId: projectId);
+    }
+
+    public async Task MarkRunStartedAsync(
+        string projectId,
+        int currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(projectId, out var id))
+        {
+            throw new ArgumentException("projectId must be a GUID virtual-lab project id.");
+        }
+
+        var project = await LoadOwnedProjectAsync(id, currentUserId, asNoTracking: false, cancellationToken)
+            ?? throw new KeyNotFoundException("VirtualLabProject not found.");
+
+        project.Status = VirtualLabProjectStatuses.Running;
+        project.SimulationEventsJson = "[]";
+        project.UpdatedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task AppendSimulationEventAsync(
+        string projectId,
+        object eventPayload,
+        int currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(projectId, out var id))
+        {
+            throw new ArgumentException("projectId must be a GUID virtual-lab project id.");
+        }
+
+        _ = await LoadOwnedProjectAsync(id, currentUserId, asNoTracking: true, cancellationToken)
+            ?? throw new KeyNotFoundException("VirtualLabProject not found.");
+
+        var eventBatchJson = JsonSerializer.Serialize(new[] { eventPayload }, JsonOptions);
+        var affectedRows = await _context.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE "VirtualLabProjects"
+            SET
+                "SimulationEventsJson" = "SimulationEventsJson" || @eventBatch,
+                "UpdatedAt" = @updatedAt
+            WHERE "Id" = @projectId
+            """,
+            [
+                new NpgsqlParameter("eventBatch", NpgsqlDbType.Jsonb) { Value = eventBatchJson },
+                new NpgsqlParameter("updatedAt", NpgsqlDbType.TimestampTz) { Value = DateTime.UtcNow },
+                new NpgsqlParameter("projectId", NpgsqlDbType.Uuid) { Value = id }
+            ],
+            cancellationToken);
+
+        if (affectedRows == 0)
+        {
+            throw new KeyNotFoundException("VirtualLabProject not found.");
+        }
     }
 
     public async Task<VirtualLabSubmissionResponse> SubmitVirtualLabAsync(
@@ -187,8 +426,29 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             throw new InvalidOperationException($"Đã đạt giới hạn số lần nộp lại ({assignment.ResubmitLimit.Value}).");
         }
 
-        var analysis = _diagramService.Analyze(request.DiagramJson);
-        var autoCheck = await BuildAutoGradeResultAsync(analysis, request, studentId, cancellationToken);
+        // Chặn Submit trong lúc simulation vẫn đang chạy nền — SimulationEventsJson
+        // đọc được lúc này chỉ là snapshot dở dang (thiếu event chưa kịp ghi),
+        // AutoGrade tầng "behavior" sẽ đánh giá sai. Dùng IRunningSimulationRegistry
+        // (không phải VirtualLabProject.Status — "Running" trong DB cũng là giá
+        // trị của 1 lần chạy đã HOÀN TẤT không lỗi, không chỉ "đang chạy").
+        if (!string.IsNullOrWhiteSpace(request.SessionId) && _runningSimulationRegistry.IsRunning(request.SessionId))
+        {
+            throw new InvalidOperationException(
+                "Mô phỏng đang chạy — vui lòng bấm Dừng trước khi nộp bài.");
+        }
+
+        var submissionBoardType = await ResolveBoardTypeAsync(request.SessionId, studentId, cancellationToken) ?? DefaultBoard;
+        var analysis = _diagramService.Analyze(request.DiagramJson, submissionBoardType);
+        var persistedSimulationEvents = await LoadPersistedSimulationEventsAsync(
+            request.SessionId,
+            studentId,
+            cancellationToken);
+        var autoCheck = await BuildAutoGradeResultAsync(
+            analysis,
+            request,
+            studentId,
+            persistedSimulationEvents,
+            cancellationToken);
         var autoScore = assignment.MaxScore * autoCheck.PassedChecks / Math.Max(autoCheck.TotalChecks, 1);
 
         var contentJson = JsonSerializer.Serialize(new
@@ -201,8 +461,8 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
                 compileResult = request.CompileResult,
                 simulationSummary = new
                 {
-                    eventCount = request.SimulationEvents.Count,
-                    events = request.SimulationEvents
+                    eventCount = persistedSimulationEvents.Events.Count,
+                    events = persistedSimulationEvents.Events
                 }
             }
         }, JsonOptions);
@@ -252,6 +512,9 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         string sessionId,
         string diagramJson,
         string sourceCode,
+        string status,
+        IReadOnlyCollection<SimulationEventResponse> events,
+        Guid? labId,
         int? currentUserId,
         CancellationToken cancellationToken)
     {
@@ -260,21 +523,29 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             throw new ArgumentException("sessionId must be a GUID virtual-lab project id.");
         }
 
+        var eventBatchJson = JsonSerializer.Serialize(events, JsonOptions);
+        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
         var project = await LoadOwnedProjectAsync(projectId, currentUserId, asNoTracking: false, cancellationToken);
+        var now = DateTime.UtcNow;
+        var appendEventBatch = false;
 
         if (project == null)
         {
+            var platform = await ResolveProjectPlatformAsync(labId, cancellationToken);
             project = new VirtualLabProject
             {
                 Id = projectId,
                 UserId = currentUserId,
+                LabId = labId,
                 Name = $"session-{projectId:N}"[..20],
-                Board = "esp32",
-                Language = "arduino",
+                Board = platform.Board,
+                Language = platform.Language,
                 DiagramJson = diagramJson,
+                Status = status,
+                SimulationEventsJson = eventBatchJson,
                 CodeContent = sourceCode,
-                CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                CreatedAt = now,
+                UpdatedAt = now
             };
             _context.VirtualLabProjects.Add(project);
         }
@@ -282,10 +553,37 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         {
             project.DiagramJson = diagramJson;
             project.CodeContent = sourceCode;
-            project.UpdatedAt = DateTime.UtcNow;
+            project.Status = status;
+            project.UpdatedAt = now;
+            appendEventBatch = true;
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+
+        if (appendEventBatch)
+        {
+            var affectedRows = await _context.Database.ExecuteSqlRawAsync(
+                """
+                UPDATE "VirtualLabProjects"
+                SET
+                    "SimulationEventsJson" = '[]'::jsonb || @eventBatch,
+                    "UpdatedAt" = @updatedAt
+                WHERE "Id" = @projectId
+                """,
+                [
+                    new NpgsqlParameter("eventBatch", NpgsqlDbType.Jsonb) { Value = eventBatchJson },
+                    new NpgsqlParameter("updatedAt", NpgsqlDbType.TimestampTz) { Value = now },
+                    new NpgsqlParameter("projectId", NpgsqlDbType.Uuid) { Value = projectId }
+                ],
+                cancellationToken);
+
+            if (affectedRows == 0)
+            {
+                throw new KeyNotFoundException("VirtualLabProject not found.");
+            }
+        }
+
+        await transaction.CommitAsync(cancellationToken);
     }
 
     private async Task<string?> ResolveDiagramJsonAsync(
@@ -314,6 +612,41 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
 
         var project = await LoadOwnedProjectAsync(projectId, currentUserId, asNoTracking: true, cancellationToken);
         return project?.CodeContent;
+    }
+
+    private async Task<string?> ResolveBoardTypeAsync(
+        string? sessionId,
+        int? currentUserId,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(sessionId, out var projectId))
+        {
+            return null;
+        }
+
+        var project = await LoadOwnedProjectAsync(projectId, currentUserId, asNoTracking: true, cancellationToken);
+        return project?.Board;
+    }
+
+    private async Task<ProjectPlatform> ResolveProjectPlatformAsync(
+        Guid? labId,
+        CancellationToken cancellationToken)
+    {
+        if (!labId.HasValue)
+        {
+            return new ProjectPlatform(DefaultBoard, DefaultLanguage);
+        }
+
+        var lab = await _context.Labs
+            .AsNoTracking()
+            .Where(item => item.Id == labId.Value)
+            .Select(item => new { item.BoardType })
+            .FirstOrDefaultAsync(cancellationToken)
+            ?? throw new KeyNotFoundException("Lab not found.");
+
+        return new ProjectPlatform(
+            SimulationCompileService.NormalizeBoard(lab.BoardType),
+            DefaultLanguage);
     }
 
     /// <summary>
@@ -351,6 +684,7 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         VirtualLabDiagramAnalysis analysis,
         VirtualLabSubmissionRequest request,
         int studentId,
+        PersistedSimulationEventsResult persistedSimulationEvents,
         CancellationToken cancellationToken)
     {
         var checks = new List<AutoGradeCheckResponse>
@@ -364,15 +698,7 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
                     : string.Join("; ", analysis.Validation.Errors)
             },
             await BuildCompileCheckAsync(request, studentId, cancellationToken),
-            new()
-            {
-                Name = "behavior",
-                Passed = request.SimulationEvents.Count > 0 &&
-                         request.SimulationEvents.All(item => !item.Type.Equals("error", StringComparison.OrdinalIgnoreCase)),
-                Message = request.SimulationEvents.Count > 0
-                    ? "Simulation events were captured."
-                    : "No simulation events were submitted."
-            }
+            BuildBehaviorCheck(persistedSimulationEvents)
         };
 
         var passedChecks = checks.Count(item => item.Passed);
@@ -383,6 +709,69 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             TotalChecks = checks.Count,
             Checks = checks
         };
+    }
+
+    private static AutoGradeCheckResponse BuildBehaviorCheck(
+        PersistedSimulationEventsResult persistedSimulationEvents)
+    {
+        if (!string.IsNullOrWhiteSpace(persistedSimulationEvents.FailureMessage))
+        {
+            return new AutoGradeCheckResponse
+            {
+                Name = "behavior",
+                Passed = false,
+                Message = persistedSimulationEvents.FailureMessage
+            };
+        }
+
+        var hasErrors = persistedSimulationEvents.Events
+            .Any(item => item.Type.Equals("error", StringComparison.OrdinalIgnoreCase));
+
+        return new AutoGradeCheckResponse
+        {
+            Name = "behavior",
+            Passed = !hasErrors,
+            Message = hasErrors
+                ? "Persisted simulation events contain runner errors."
+                : "Persisted simulation events were captured."
+        };
+    }
+
+    private async Task<PersistedSimulationEventsResult> LoadPersistedSimulationEventsAsync(
+        string? sessionId,
+        int studentId,
+        CancellationToken cancellationToken)
+    {
+        const string missingMessage =
+            "No persisted simulation events were found. Run the simulation before submitting.";
+
+        if (!Guid.TryParse(sessionId, out var projectId))
+        {
+            return new PersistedSimulationEventsResult(Array.Empty<SimulationEventResponse>(), missingMessage);
+        }
+
+        var project = await LoadOwnedProjectAsync(projectId, studentId, asNoTracking: true, cancellationToken);
+        if (project == null || string.IsNullOrWhiteSpace(project.SimulationEventsJson))
+        {
+            return new PersistedSimulationEventsResult(Array.Empty<SimulationEventResponse>(), missingMessage);
+        }
+
+        try
+        {
+            var events = JsonSerializer.Deserialize<List<SimulationEventResponse>>(
+                project.SimulationEventsJson,
+                JsonOptions) ?? new List<SimulationEventResponse>();
+
+            return events.Count == 0
+                ? new PersistedSimulationEventsResult(events, missingMessage)
+                : new PersistedSimulationEventsResult(events, null);
+        }
+        catch (JsonException)
+        {
+            return new PersistedSimulationEventsResult(
+                Array.Empty<SimulationEventResponse>(),
+                "Persisted simulation events are invalid. Run the simulation again before submitting.");
+        }
     }
 
     /// <summary>
@@ -406,9 +795,7 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             return new AutoGradeCheckResponse { Name = "compile", Passed = false, Message = missingSessionMessage };
         }
 
-        var project = await _context.VirtualLabProjects
-            .AsNoTracking()
-            .FirstOrDefaultAsync(item => item.Id == projectId, cancellationToken);
+        var project = await LoadOwnedProjectAsync(projectId, studentId, asNoTracking: true, cancellationToken);
 
         if (project == null)
         {
@@ -462,4 +849,25 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             UpdatedAt = updatedAt
         };
     }
+
+    private string ResolveSimulationMode()
+    {
+        var configuredMode = _configuration["SimulationRunner:DefaultMode"];
+        return string.IsNullOrWhiteSpace(configuredMode)
+            ? "mock"
+            : configuredMode.Trim().ToLowerInvariant();
+    }
+
+    private int ReadSimulationRunnerInt(string key, int fallback)
+    {
+        return int.TryParse(_configuration[$"SimulationRunner:{key}"], out var value) && value > 0
+            ? value
+            : fallback;
+    }
+
+    private sealed record PersistedSimulationEventsResult(
+        IReadOnlyCollection<SimulationEventResponse> Events,
+        string? FailureMessage);
+
+    private sealed record ProjectPlatform(string Board, string Language);
 }

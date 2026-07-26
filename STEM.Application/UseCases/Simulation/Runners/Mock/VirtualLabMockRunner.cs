@@ -1,10 +1,13 @@
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using STEM.Application.Dtos.Simulation;
+using STEM.Application.UseCases.Simulation;
+using STEM.Application.UseCases.Simulation.Abstractions;
+using STEM.Application.UseCases.Simulation.Runtime;
 
-namespace STEM.Application.UseCases.Simulation;
+namespace STEM.Application.UseCases.Simulation.Runners.Mock;
 
-public class VirtualLabMockRunner
+public class VirtualLabMockRunner : ISimulationRunner
 {
     private static readonly Regex DefineRegex = new(@"^\s*#define\s+(?<name>[A-Za-z_]\w*)\s+(?<value>[A-Za-z0-9_]+)", RegexOptions.Compiled);
     private static readonly Regex IntConstRegex = new(@"\b(?:const\s+)?int\s+(?<name>[A-Za-z_]\w*)\s*=\s*(?<value>\d+)\s*;", RegexOptions.Compiled);
@@ -14,7 +17,38 @@ public class VirtualLabMockRunner
     private static readonly Regex DelayRegex = new(@"\bdelay\s*\(\s*(?<ms>\d+)\s*\)", RegexOptions.Compiled);
     private static readonly Regex SerialRegex = new(@"\bSerial\.(?<method>begin|print|println)\s*\((?<arg>[^\)]*)\)", RegexOptions.Compiled);
 
-    public IReadOnlyCollection<SimulationEventResponse> Run(
+    private readonly VirtualLabDiagramService _diagramService;
+
+    public VirtualLabMockRunner(VirtualLabDiagramService diagramService)
+    {
+        _diagramService = diagramService;
+    }
+
+    public Task<SimulationRunResult> RunAsync(
+        SimulationRunContext context,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var analysis = _diagramService.Analyze(context.DiagramJson);
+        var events = Run(context.SourceCode, analysis.DiagramJson, analysis);
+        var errors = events
+            .Where(item => item.Type.Equals("error", StringComparison.OrdinalIgnoreCase))
+            .Select(item => item.Payload.TryGetValue("message", out var message) ? message?.ToString() : null)
+            .Where(message => !string.IsNullOrWhiteSpace(message))
+            .Select(message => message!)
+            .ToList();
+
+        return Task.FromResult(new SimulationRunResult
+        {
+            Success = analysis.Validation.IsValid && errors.Count == 0,
+            Events = events,
+            Errors = errors,
+            Warnings = analysis.Validation.Warnings
+        });
+    }
+
+    private static IReadOnlyCollection<SimulationEventResponse> Run(
         string sourceCode,
         string diagramJson,
         VirtualLabDiagramAnalysis analysis)

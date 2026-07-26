@@ -18,4 +18,5 @@ public interface IClassRepository : IRepository<Class>
         CancellationToken cancellationToken = default);
     Task<Class?> GetByIdWithDetailsAsync(int id, CancellationToken cancellationToken = default);
     Task<IEnumerable<Schedule>> GetSchedulesByTeacherAsync(int teacherId, DateTime? fromDate, DateTime? toDate, CancellationToken cancellationToken = default);
+    Task<Class?> GetByIdSummaryAsync(int id, CancellationToken cancellationToken = default);
 }
