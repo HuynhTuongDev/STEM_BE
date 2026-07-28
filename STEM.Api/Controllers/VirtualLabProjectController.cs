@@ -8,6 +8,7 @@ using STEM.Application.Dtos.Simulation;
 using STEM.Application.Dtos.VirtualLab;
 using STEM.Application.Interfaces;
 using STEM.Core.Entities.Simulations;
+using STEM.Core.Entities.Users;
 
 namespace STEM.Api.Controllers;
 
@@ -131,6 +132,29 @@ public class VirtualLabProjectController : ControllerBase
         catch (KeyNotFoundException ex)
         {
             return NotFound(new { message = ex.Message });
+        }
+    }
+
+    // Snapshot 1 lần (không realtime) cho Teacher "Xem live" — bổ sung phần
+    // SignalR-only còn thiếu: học sinh đã join TRƯỚC khi giáo viên mở màn
+    // hình thì code/diagram/status hiện tại không tới qua event nào (Hub chỉ
+    // phát cho THAY ĐỔI, không phải state hiện tại lúc join) — StudentSandboxViewer.tsx
+    // gọi 1 lần lúc mount, sau đó vẫn nhận tiếp qua SignalR như bình thường.
+    [HttpGet("{id}/teacher-view")]
+    [Authorize(Roles = RoleNames.Teacher)]
+    public async Task<IActionResult> GetTeacherView(Guid id, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var snapshot = await _runtimeService.GetProjectSnapshotForTeacherAsync(
+                id.ToString("N"), GetCurrentUserId(), cancellationToken);
+            if (snapshot == null) return NotFound();
+
+            return Ok(snapshot);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
         }
     }
 

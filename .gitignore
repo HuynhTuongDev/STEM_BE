@@ -51,6 +51,9 @@ node_modules/
 # ASP.NET Core appsettings secrets
 appsettings.json
 appsettings.*.json
+# Ngoai le: file MAU khong chua secret that (chi placeholder), can duoc
+# commit de team co san khi setup lan dau -- xem STEM_BE/README_DOCKER.md.
+!appsettings.Example.json
 
 # Environment variables and local secrets
 .env
@@ -62,3 +65,18 @@ appsettings.*.json
 
 # Prisma local configs if applicable
 /prisma/migrations/
+
+# =========================================================================
+# Virtual Lab simulation cache/artifacts (Docker compile/QEMU sandbox)
+# =========================================================================
+# Mac dinh cac thu muc nay nam ngoai repo (duoi OS temp dir), nhung neu
+# SimulationCompile:WorkingDirectory / SimulationRunner:Qemu:WorkingDirectory
+# tro vao trong repo thi khong duoc commit nham cache/firmware bien dich.
+firmware-cache/
+build-cache/
+golden-build-cache/
+stem-simulation-compile/
+stem-qemu-run/
+*.merged.bin
+*.bootloader.bin
+*.partitions.bin

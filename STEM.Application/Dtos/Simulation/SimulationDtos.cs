@@ -177,6 +177,24 @@ public class DiagramValidationResponse
     public IReadOnlyCollection<string> Warnings { get; set; } = Array.Empty<string>();
 }
 
+// Snapshot 1 lần (không realtime) cho Teacher "Xem live" — bổ sung phần
+// SignalR-only còn thiếu: học sinh đã joined TRƯỚC khi giáo viên mở màn
+// hình thì code/diagram/status hiện tại không tới qua event nào cả (chỉ có
+// event cho THAY ĐỔI, không phải state hiện tại) — StudentSandboxViewer.tsx
+// gọi API này 1 lần lúc mount để không bắt đầu từ rỗng, rồi vẫn nhận tiếp
+// StudentCodeUpdated/StudentDiagramUpdated/... qua SignalR như bình thường.
+public class TeacherProjectSnapshotResponse
+{
+    public string ProjectId { get; set; } = string.Empty;
+    public int? StudentId { get; set; }
+    public string Board { get; set; } = string.Empty;
+    public string Language { get; set; } = string.Empty;
+    public string CodeContent { get; set; } = string.Empty;
+    public string DiagramJson { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public DateTime UpdatedAt { get; set; }
+}
+
 public class NetlistResponse
 {
     public IReadOnlyCollection<NetResponse> Nets { get; set; } = Array.Empty<NetResponse>();

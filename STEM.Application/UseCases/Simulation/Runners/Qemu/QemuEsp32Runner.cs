@@ -459,6 +459,29 @@ public sealed class QemuEsp32Runner : ISimulationRunner
 
             if (!TryParseSfEvent(line, out var pin, out var value))
             {
+                // BUG THẬT vừa vá (2026-07-27): trước đây MỌI dòng không phải
+                // SF_EVENT bị `continue` bỏ qua im lặng — nghĩa là boot log ROM
+                // ESP32 thật ("ets Jul 29 2019...", "rst:0x1...") và
+                // Serial.println() thật từ firmware người dùng ĐỀU bị đọc từ
+                // serial.log rồi vứt đi, không bao giờ tới FE, dù
+                // SerialMonitorPanel.tsx/applySimulationEvent đã hỗ trợ sẵn
+                // type="serial" từ lâu (dùng cho EducationalSimulationRunner)
+                // — QemuEsp32Runner (mode chạy firmware thật) chưa từng emit
+                // loại event này. `-serial file:...` chỉ redirect đúng I/O của
+                // UART0 giả lập (ROM bootloader + Serial người dùng nếu cùng
+                // UART0) vào file này — không lẫn log nội bộ của QEMU/Docker
+                // (đi stdout/stderr riêng, đã đọc ở nhánh STEM_QEMU_DEBUG bên
+                // trên) nên an toàn stream nguyên văn, không cần lọc thêm.
+                await EmitAsync(eventStore, broadcaster, context.ProjectId, new SimulationEventResponse
+                {
+                    Type = "serial",
+                    Time = stopwatch.ElapsedMilliseconds,
+                    Payload = new Dictionary<string, object?>
+                    {
+                        ["message"] = line,
+                        ["newline"] = true
+                    }
+                }, cancellationToken);
                 continue;
             }
 
@@ -484,6 +507,43 @@ public sealed class QemuEsp32Runner : ISimulationRunner
             foreach (var buzzer in componentIndex.FindBuzzers(pin))
             {
                 await EmitAsync(eventStore, broadcaster, context.ProjectId, buzzer.ToDigitalEvent(time, value), cancellationToken);
+            }
+
+            // L298N: state động cơ phụ thuộc CẶP chân IN (không phải 1 chân
+            // riêng lẻ như LED/Buzzer) — phải tính lại state TRƯỚC và SAU khi
+            // cập nhật giá trị chân vừa nhận, chỉ emit khi thật sự đổi (tránh
+            // spam event trùng mỗi lần digitalWrite dù kết quả logic không đổi,
+            // vd ghi lại đúng giá trị cũ).
+            if (componentIndex.TryFindL298nInPin(pin, out var l298n, out var inIndex))
+            {
+                var boolValue = value.Equals("HIGH", StringComparison.OrdinalIgnoreCase);
+                var isMotorA = inIndex is 1 or 2;
+                var prevState = isMotorA
+                    ? L298nModel.ComputeState(l298n.In1Value, l298n.In2Value)
+                    : L298nModel.ComputeState(l298n.In3Value, l298n.In4Value);
+
+                switch (inIndex)
+                {
+                    case 1: l298n.In1Value = boolValue; break;
+                    case 2: l298n.In2Value = boolValue; break;
+                    case 3: l298n.In3Value = boolValue; break;
+                    case 4: l298n.In4Value = boolValue; break;
+                }
+
+                var newState = isMotorA
+                    ? L298nModel.ComputeState(l298n.In1Value, l298n.In2Value)
+                    : L298nModel.ComputeState(l298n.In3Value, l298n.In4Value);
+
+                if (newState != prevState)
+                {
+                    var motorLabel = isMotorA ? "A" : "B";
+                    await EmitAsync(eventStore, broadcaster, context.ProjectId, l298n.ToMotorStateEvent(time, motorLabel, newState), cancellationToken);
+                }
+            }
+
+            if (componentIndex.TryFindRgbLedPin(pin, out var rgbLed, out var channel))
+            {
+                await EmitAsync(eventStore, broadcaster, context.ProjectId, rgbLed.ToChannelEvent(time, channel, value), cancellationToken);
             }
         }
 
@@ -684,6 +744,8 @@ public sealed class QemuEsp32Runner : ISimulationRunner
     {
         private readonly Dictionary<string, List<LedModel>> _ledsByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<BuzzerModel>> _buzzersByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, (L298nModel Model, int InIndex)> _l298nByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, (RgbLedModel Model, string Channel)> _rgbLedByPin = new(StringComparer.OrdinalIgnoreCase);
 
         public ComponentIndex(VirtualLabRuntimeDiagramSnapshot snapshot)
         {
@@ -699,11 +761,61 @@ public sealed class QemuEsp32Runner : ISimulationRunner
                 {
                     Add(_buzzersByPin, buzzerPin, new BuzzerModel(component.Id, buzzerPin));
                 }
+                else if (component.Type.Equals("wokwi-l298n", StringComparison.OrdinalIgnoreCase))
+                {
+                    component.PinToGpio.TryGetValue("IN1", out var in1);
+                    component.PinToGpio.TryGetValue("IN2", out var in2);
+                    component.PinToGpio.TryGetValue("IN3", out var in3);
+                    component.PinToGpio.TryGetValue("IN4", out var in4);
+                    var model = new L298nModel(component.Id, in1, in2, in3, in4);
+                    if (!string.IsNullOrEmpty(in1)) _l298nByPin[in1] = (model, 1);
+                    if (!string.IsNullOrEmpty(in2)) _l298nByPin[in2] = (model, 2);
+                    if (!string.IsNullOrEmpty(in3)) _l298nByPin[in3] = (model, 3);
+                    if (!string.IsNullOrEmpty(in4)) _l298nByPin[in4] = (model, 4);
+                }
+                else if (component.Type.Equals("wokwi-rgb-led", StringComparison.OrdinalIgnoreCase))
+                {
+                    component.PinToGpio.TryGetValue("R", out var r);
+                    component.PinToGpio.TryGetValue("G", out var g);
+                    component.PinToGpio.TryGetValue("B", out var b);
+                    var model = new RgbLedModel(component.Id, r, g, b);
+                    if (!string.IsNullOrEmpty(r)) _rgbLedByPin[r] = (model, "R");
+                    if (!string.IsNullOrEmpty(g)) _rgbLedByPin[g] = (model, "G");
+                    if (!string.IsNullOrEmpty(b)) _rgbLedByPin[b] = (model, "B");
+                }
             }
         }
 
         public IReadOnlyCollection<LedModel> FindLeds(string pin) => Find(_ledsByPin, pin);
         public IReadOnlyCollection<BuzzerModel> FindBuzzers(string pin) => Find(_buzzersByPin, pin);
+
+        public bool TryFindL298nInPin(string pin, out L298nModel model, out int inIndex)
+        {
+            if (_l298nByPin.TryGetValue(pin, out var entry))
+            {
+                model = entry.Model;
+                inIndex = entry.InIndex;
+                return true;
+            }
+
+            model = null!;
+            inIndex = 0;
+            return false;
+        }
+
+        public bool TryFindRgbLedPin(string pin, out RgbLedModel model, out string channel)
+        {
+            if (_rgbLedByPin.TryGetValue(pin, out var entry))
+            {
+                model = entry.Model;
+                channel = entry.Channel;
+                return true;
+            }
+
+            model = null!;
+            channel = string.Empty;
+            return false;
+        }
 
         private static bool TryFindPin(
             VirtualLabRuntimeComponent component,

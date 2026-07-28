@@ -46,9 +46,83 @@ public class VirtualLabDiagramService
             ["wokwi-dht11"] = PinSet("VCC", "SDA", "NC", "GND"),
             ["wokwi-hc-sr04"] = PinSet("VCC", "TRIG", "ECHO", "GND"),
             ["wokwi-lcd1602"] = PinSet("VSS", "VDD", "V0", "RS", "RW", "E", "D0", "D1", "D2", "D3", "D4", "D5", "D6", "D7", "A", "K"),
-            ["wokwi-lcd2004"] = PinSet("VCC", "GND", "SDA", "SCL", "A", "K"),
+            // Dọn orphan (2026-07-28): entry cũ PinSet("VCC","GND","SDA","SCL","A","K")
+            // sai — A/K là chân backlight chỉ tồn tại ở pins="full" (16 chân
+            // song song), không có trong pins="i2c" (4 chân) mà FE thực tế
+            // dùng cho LCD 20x4 (xem lcd1602-element.js get pinInfo(), case
+            // 'i2c'). Sửa lại đúng 4 chân thật, đồng bộ với FE LCD2004_PINS.
+            ["wokwi-lcd2004"] = PinSet("GND", "VCC", "SDA", "SCL"),
             ["wokwi-gnd"] = PinSet("GND"),
-            ["wokwi-5v"] = PinSet("5V")
+            ["wokwi-5v"] = PinSet("5V"),
+
+            // Robot giao hàng mini — chỉ các linh kiện CÓ ĐIỆN mới vào đây.
+            // Linh kiện cơ khí/hiển thị thuần (wokwi-robot-wheel, wokwi-caster-wheel,
+            // wokwi-robot-chassis, wokwi-breadboard, wokwi-delivery-box) CỐ TÌNH
+            // không có entry — ParseParts() hạ chúng xuống warning ("not modeled by
+            // the MVP validator") thay vì error, và BuildRuntimeComponents() tự bỏ
+            // qua (dòng !SupportedPins.TryGetValue(...) => continue) — im lặng,
+            // không tham gia netlist/wiring, không làm Analyze() fail.
+            ["wokwi-l298n"] = PinSet(
+                "IN1", "IN2", "IN3", "IN4", "ENA", "ENB",
+                "OUT1", "OUT2", "OUT3", "OUT4", "VIN", "GND", "5V"),
+            ["wokwi-dc-motor"] = PinSet("terminal1", "terminal2"),
+            ["wokwi-battery-pack"] = PinSet("+", "-"),
+            ["wokwi-power-switch"] = PinSet("IN", "OUT"),
+
+            // Không thuộc Robot giao hàng mini — thêm để chứng minh nhóm
+            // "output-easy" (chỉ cần digitalWrite, giống LED/Buzzer/L298N,
+            // không cần khả năng mới) có thể mở rộng an toàn theo cùng
+            // pattern. Element @wokwi/elements thật (wokwi-rgb-led).
+            ["wokwi-rgb-led"] = PinSet("R", "G", "B", "COM"),
+
+            // ===== Thư viện linh kiện mở rộng (Component Library, 2026-07-27)
+            // ===== Chỉ các item wiring-validation mới vào đây — dùng chung
+            // path "structural only" mặc định trong ValidateComponentWiring()
+            // (không có branch riêng, giống wokwi-power-switch). Item
+            // visual-only (stepper-motor, ili9341, solenoid-valve, esp32-cam,
+            // wifi-cloud-node, dashboard-cloud, và toàn bộ nhóm robot/cơ khí
+            // trang trí) CỐ TÌNH KHÔNG có entry — giữ đúng nguyên tắc
+            // "visual-only không vào netlist", giống Robot Wheel/Chassis/...
+            ["wokwi-flame-sensor"] = PinSet("VCC", "GND", "DOUT", "AOUT"),
+            ["wokwi-gas-sensor"] = PinSet("AOUT", "DOUT", "GND", "VCC"),
+            ["wokwi-pir-motion-sensor"] = PinSet("VCC", "OUT", "GND"),
+            ["wokwi-photoresistor-sensor"] = PinSet("VCC", "GND", "DO", "AO"),
+            ["wokwi-ntc-temperature-sensor"] = PinSet("GND", "VCC", "OUT"),
+            ["wokwi-hx711"] = PinSet("VCC", "DT", "SCK", "GND"),
+            ["wokwi-ir-receiver"] = PinSet("GND", "VCC", "DAT"),
+            ["wokwi-membrane-keypad"] = PinSet("R1", "R2", "R3", "R4", "C1", "C2", "C3", "C4"),
+            ["wokwi-ssd1306"] = PinSet("DATA", "CLK", "DC", "RST", "CS", "3V3", "VIN", "GND"),
+            ["wokwi-lcd1602-i2c"] = PinSet("GND", "VCC", "SDA", "SCL"),
+            ["wokwi-neopixel"] = PinSet("VDD", "DOUT", "VSS", "DIN"),
+            ["wokwi-led-bar-graph"] = PinSet(
+                "A1", "A2", "A3", "A4", "A5", "A6", "A7", "A8", "A9", "A10",
+                "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10"),
+            ["wokwi-7segment"] = PinSet("COM.1", "COM.2", "A", "B", "C", "D", "E", "F", "G", "DP"),
+            ["wokwi-relay-module"] = PinSet("VCC", "IN", "GND", "NO", "COM", "NC"),
+            ["wokwi-fan"] = PinSet("+", "-"),
+            ["wokwi-water-pump"] = PinSet("+", "-"),
+            ["wokwi-water-leak-sensor"] = PinSet("VCC", "GND", "S"),
+            ["wokwi-rain-sensor"] = PinSet("VCC", "GND", "DO", "AO"),
+            ["wokwi-soil-moisture-sensor"] = PinSet("VCC", "GND", "DO", "AO"),
+            ["wokwi-ir-obstacle-sensor"] = PinSet("VCC", "GND", "OUT"),
+            ["wokwi-line-tracking-sensor"] = PinSet("VCC", "GND", "OUT"),
+            ["wokwi-color-sensor"] = PinSet("VCC", "GND", "SDA", "SCL"),
+            ["wokwi-vibration-sensor"] = PinSet("VCC", "GND", "OUT"),
+
+            // ===== Component mới (2026-07-28, task "pin/visual chuẩn theo thực
+            // tế") ===== wokwi-mpu6050: element thật @wokwi/elements, 8 chân lấy
+            // trực tiếp từ pinInfo. wokwi-esc/wokwi-heating-element/wokwi-ph-sensor:
+            // không có trong Wokwi, tự định nghĩa theo module thực tế phổ biến —
+            // xem robotKitComponents.ts (FE) để biết nguồn tham khảo.
+            ["wokwi-mpu6050"] = PinSet("VCC", "GND", "SCL", "SDA", "XDA", "XCL", "AD0", "INT"),
+            ["wokwi-esc"] = PinSet("SIG", "GND", "BATT+", "BATT-", "OUT+", "OUT-"),
+            ["wokwi-heating-element"] = PinSet("+", "-"),
+            ["wokwi-ph-sensor"] = PinSet("VCC", "GND", "PO"),
+
+            // Line Tracking đa kênh (module TCRT5000 3/5 mắt) — BỔ SUNG bên
+            // cạnh wokwi-line-tracking-sensor (1 kênh) cũ, không thay thế.
+            ["wokwi-line-tracking-3ch"] = PinSet("VCC", "GND", "OUT1", "OUT2", "OUT3"),
+            ["wokwi-line-tracking-5ch"] = PinSet("VCC", "GND", "OUT1", "OUT2", "OUT3", "OUT4", "OUT5")
         };
 
     public VirtualLabDiagramAnalysis Analyze(string diagramJson, string? fallbackBoardType = null)
@@ -375,6 +449,44 @@ public class VirtualLabDiagramService
                 Require(part, "Ultrasonic VCC must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
                 Require(part, "Ultrasonic GND must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
             }
+            else if (part.Type.Equals("wokwi-l298n", StringComparison.OrdinalIgnoreCase))
+            {
+                Require(part, "L298N IN1 must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "IN1" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "L298N IN2 must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "IN2" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "L298N IN3 must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "IN3" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "L298N IN4 must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "IN4" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "L298N VIN/VCC must connect to Battery Pack (+) or another power source.", HasReachable(part.Id, new[] { "VIN" }, connectedPinToNet, partsById, IsPowerOrBatteryPositive), errors);
+                Require(part, "L298N GND must connect to common ground.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGroundOrBatteryNegative), errors);
+
+                // ENA/ENB thường được nối tắt bằng jumper có sẵn trên module thật
+                // (full-speed mặc định) thay vì nối dây ra GPIO/PWM — không đủ căn
+                // cứ để coi là lỗi, chỉ nhắc để giáo viên/học sinh biết mà kiểm tra.
+                if (!connectedPinToNet.ContainsKey(ToPinToken(part.Id, "ENA")))
+                {
+                    warnings.Add($"{part.Id}: ENA chưa được nối — nếu module dùng jumper mặc định thì bỏ qua, nếu không hãy nối ENA tới GPIO/PWM.");
+                }
+
+                if (!connectedPinToNet.ContainsKey(ToPinToken(part.Id, "ENB")))
+                {
+                    warnings.Add($"{part.Id}: ENB chưa được nối — nếu module dùng jumper mặc định thì bỏ qua, nếu không hãy nối ENB tới GPIO/PWM.");
+                }
+            }
+            else if (part.Type.Equals("wokwi-dc-motor", StringComparison.OrdinalIgnoreCase))
+            {
+                // Động cơ DC hút dòng vượt xa khả năng chịu tải của 1 chân GPIO
+                // ESP32 — bắt buộc phải đi qua OUT của L298N, không được cấp trực
+                // tiếp từ GPIO. HasReachable trả true nghĩa là ĐANG nối sai (nối
+                // thẳng vào GPIO), nên passed = phủ định của nó.
+                var wiredDirectlyToGpio = HasReachable(part.Id, new[] { "terminal1", "terminal2" }, connectedPinToNet, partsById, IsBoardGpio);
+                Require(part, "Không được nối động cơ DC trực tiếp vào GPIO ESP32 — phải qua OUT của L298N Motor Driver.", !wiredDirectlyToGpio, errors);
+            }
+            else if (part.Type.Equals("wokwi-rgb-led", StringComparison.OrdinalIgnoreCase))
+            {
+                Require(part, "RGB LED chân R phải reach 1 GPIO ESP32.", HasReachable(part.Id, new[] { "R" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "RGB LED chân G phải reach 1 GPIO ESP32.", HasReachable(part.Id, new[] { "G" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "RGB LED chân B phải reach 1 GPIO ESP32.", HasReachable(part.Id, new[] { "B" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "RGB LED chân COM phải reach GND hoặc nguồn (tuỳ common-anode/cathode).", HasReachable(part.Id, new[] { "COM" }, connectedPinToNet, partsById, IsPowerOrGround), errors);
+            }
             else if (!Esp32Types.Contains(part.Type) &&
                      !part.Type.Equals("wokwi-resistor", StringComparison.OrdinalIgnoreCase) &&
                      SupportedPins.ContainsKey(part.Type))
@@ -597,6 +709,29 @@ public class VirtualLabDiagramService
     private static bool IsPowerOrGround(string partId, string pin, DiagramPart part)
     {
         return IsPower(partId, pin, part) || IsGround(partId, pin, part);
+    }
+
+    // Battery Pack không có nhãn pin chuẩn (không phải "VCC"/"GND" như các
+    // linh kiện khác) — cực "+"/"-" của nó cần được công nhận là nguồn điện/
+    // ground hợp lệ khi L298N tham chiếu tới, dù pin name không khớp IsPower/
+    // IsGround thông thường. Không mô phỏng điện áp 7.4V thật (theo đúng
+    // phạm vi phase này) — chỉ công nhận đúng cực tính cho mục đích wiring.
+    private static bool IsBatteryPositiveTerminal(string partId, string pin, DiagramPart part)
+    {
+        return part.Type.Equals("wokwi-battery-pack", StringComparison.OrdinalIgnoreCase) &&
+               pin.Equals("+", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsPowerOrBatteryPositive(string partId, string pin, DiagramPart part)
+    {
+        return IsPower(partId, pin, part) || IsBatteryPositiveTerminal(partId, pin, part);
+    }
+
+    private static bool IsGroundOrBatteryNegative(string partId, string pin, DiagramPart part)
+    {
+        return IsGround(partId, pin, part) ||
+               (part.Type.Equals("wokwi-battery-pack", StringComparison.OrdinalIgnoreCase) &&
+                pin.Equals("-", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsGpioPin(string pin)

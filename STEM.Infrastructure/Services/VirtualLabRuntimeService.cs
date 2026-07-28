@@ -341,6 +341,59 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         _precompileTrigger.TriggerBackgroundCompile(sourceCode, project.Board, project.Language, buildCacheScopeId: projectId);
     }
 
+    public async Task<TeacherProjectSnapshotResponse?> GetProjectSnapshotForTeacherAsync(
+        string projectId,
+        int teacherId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!Guid.TryParse(projectId, out var id))
+        {
+            return null;
+        }
+
+        var project = await _context.VirtualLabProjects
+            .AsNoTracking()
+            .Where(item => item.Id == id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (project == null)
+        {
+            return null;
+        }
+
+        if (!project.LabId.HasValue)
+        {
+            return null;
+        }
+
+        // Cùng điều kiện quyền với VirtualLabHub.EnsureTeacherCanWatchProjectAsync
+        // ("Xem live" qua SignalR) — lab phải được gán cho ít nhất 1 lớp giáo
+        // viên này dạy. 2 nơi định nghĩa độc lập (khác project/layer, không
+        // share code được) — đổi 1 chỗ phải nhớ đổi chỗ kia.
+        var canView = await _context.LabClassAssignments
+            .AsNoTracking()
+            .AnyAsync(
+                a => a.LabId == project.LabId.Value && a.Class!.TeacherId == teacherId,
+                cancellationToken);
+
+        if (!canView)
+        {
+            throw new UnauthorizedAccessException("Bạn không có quyền xem project này.");
+        }
+
+        return new TeacherProjectSnapshotResponse
+        {
+            ProjectId = project.Id.ToString("N"),
+            StudentId = project.UserId,
+            Board = project.Board,
+            Language = project.Language,
+            CodeContent = project.CodeContent,
+            DiagramJson = project.DiagramJson,
+            Status = project.Status,
+            UpdatedAt = project.UpdatedAt
+        };
+    }
+
     public async Task MarkRunStartedAsync(
         string projectId,
         int currentUserId,

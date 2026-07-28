@@ -35,13 +35,13 @@ public sealed class SignalRSimulationEventBroadcaster : ISimulationEventBroadcas
             cancellationToken);
     }
 
-    public Task BroadcastRunCompletedAsync(string projectId, string status, string? reason, CancellationToken cancellationToken)
+    public async Task BroadcastRunCompletedAsync(string projectId, string status, string? reason, CancellationToken cancellationToken)
     {
-        return _hubContext.Clients.Group(ProjectGroup(projectId)).SendAsync(
+        var normalizedProjectId = NormalizeProjectId(projectId);
+        await SendToProjectAndClassAsync(
+            normalizedProjectId,
             "StudentRunCompleted",
-            NormalizeProjectId(projectId),
-            status,
-            reason,
+            [normalizedProjectId, status, reason],
             cancellationToken);
     }
 
@@ -65,20 +65,26 @@ public sealed class SignalRSimulationEventBroadcaster : ISimulationEventBroadcas
             cancellationToken);
     }
 
-    public Task BroadcastRunBootingAsync(string projectId, CancellationToken cancellationToken)
+    public async Task BroadcastRunBootingAsync(string projectId, CancellationToken cancellationToken)
     {
-        return _hubContext.Clients.Group(ProjectGroup(projectId)).SendAsync(
+        var normalizedProjectId = NormalizeProjectId(projectId);
+        await SendToProjectAndClassAsync(
+            normalizedProjectId,
             "StudentRunBooting",
-            NormalizeProjectId(projectId),
+            [normalizedProjectId],
             cancellationToken);
     }
 
-    // Compile-started/finished phải tới CẢ project group lẫn class group —
-    // đúng hành vi cũ của VirtualLabHub.CompileStarted/CompileFinished (hub
-    // method, ClassMonitorPage.tsx đã lắng nghe sẵn để hiện trạng thái "Đang
-    // biên dịch" cho giáo viên theo dõi cả lớp). BroadcastEventAsync/
-    // BroadcastRunCompletedAsync KHÔNG cần class group (chỉ học sinh sở hữu
-    // project mới cần thấy từng sự kiện GPIO chi tiết).
+    // Compile-started/finished/RunBooting/RunCompleted phải tới CẢ project
+    // group lẫn class group — Teacher ClassMonitorPage.tsx theo dõi cả lớp
+    // qua WatchClass (chỉ join "class-{id}"), KHÔNG join riêng từng
+    // "project-{id}" trừ khi bấm "Xem live" (WatchStudent). Thiếu class
+    // group ở đây thì dashboard lớp học không bao giờ thấy trạng thái
+    // "đang chạy"/"đã dừng" của học sinh — chỉ thấy compiling (bug thật,
+    // phát hiện lúc làm 4.5, xem VIRTUAL_LAB_PLAN.md). BroadcastEventAsync
+    // (StudentSimulationEvent, từng tick GPIO) CỐ Ý vẫn chỉ project group —
+    // tần suất quá cao để phát cho cả lớp, chỉ ai đang "Xem live" 1 học sinh
+    // cụ thể mới cần chi tiết đó.
     private async Task SendToProjectAndClassAsync(
         string normalizedProjectId,
         string method,

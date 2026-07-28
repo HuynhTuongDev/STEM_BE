@@ -59,4 +59,18 @@ public interface IVirtualLabRuntimeService
         string sourceCode,
         int currentUserId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Giáo viên xem snapshot hiện tại (code/diagram/status) của 1 project
+    /// học sinh — KHÔNG dùng GetDiagramAsync (chỉ owner mới gọi được) vì
+    /// quyền ở đây khác hẳn: dựa trên "lab được gán cho 1 lớp giáo viên này
+    /// dạy" (giống hệt VirtualLabHub.WatchStudent), không phải sở hữu
+    /// project. Trả về null nếu project không tồn tại hoặc chưa gắn LabId.
+    /// Throws UnauthorizedAccessException nếu giáo viên không dạy lớp nào
+    /// được gán lab này.
+    /// </summary>
+    Task<TeacherProjectSnapshotResponse?> GetProjectSnapshotForTeacherAsync(
+        string projectId,
+        int teacherId,
+        CancellationToken cancellationToken = default);
 }
