@@ -9,11 +9,16 @@ public class CreateCourseHandler
 {
     private readonly ICourseRepository _courseRepository;
     private readonly IUserRepository _userRepository;
+    private readonly ISchoolRepository _schoolRepository;
 
-    public CreateCourseHandler(ICourseRepository courseRepository, IUserRepository userRepository)
+    public CreateCourseHandler(
+        ICourseRepository courseRepository,
+        IUserRepository userRepository,
+        ISchoolRepository schoolRepository)
     {
         _courseRepository = courseRepository;
         _userRepository = userRepository;
+        _schoolRepository = schoolRepository;
     }
 
     public async Task<int> Handle(
@@ -21,7 +26,9 @@ public class CreateCourseHandler
         int currentUserId,
         CancellationToken cancellationToken = default)
     {
-        // Enforce data isolation and permissions
+        if (string.IsNullOrWhiteSpace(request.Title))
+            throw new ArgumentException("Title is required.");
+
         var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
         if (currentUser == null)
             throw new UnauthorizedAccessException("Current user not found.");
@@ -34,22 +41,14 @@ public class CreateCourseHandler
         if (!currentUser.SchoolId.HasValue)
             throw new InvalidOperationException("School Administrator is not associated with any school.");
 
-        // Validate teacher
-        var teacher = await _userRepository.GetByIdAsync(request.TeacherId, cancellationToken);
-        if (teacher == null)
-            throw new ArgumentException("Teacher not found.");
-
-        if (teacher.Role?.Name != RoleNames.Teacher)
-            throw new ArgumentException("The specified user is not a teacher.");
-
-        if (teacher.SchoolId != currentUser.SchoolId)
-            throw new ArgumentException("The teacher does not belong to your school.");
+        var schoolExists = await _schoolRepository.ExistsAsync(currentUser.SchoolId.Value, cancellationToken);
+        if (!schoolExists)
+            throw new InvalidOperationException($"School with ID {currentUser.SchoolId.Value} does not exist. Please contact your administrator.");
 
         var course = new Course
         {
-            Title = request.Title,
-            Description = request.Description,
-            TeacherId = request.TeacherId,
+            Title = request.Title.Trim(),
+            Description = request.Description?.Trim() ?? string.Empty,
             SchoolId = currentUser.SchoolId.Value,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow

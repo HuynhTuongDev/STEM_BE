@@ -7,16 +7,16 @@ namespace STEM.Application.UseCases.Quizzes;
 public class UpdateQuizHandler
 {
     private readonly IQuizRepository _quizRepository;
-    private readonly ICourseRepository _courseRepository;
+    private readonly IClassRepository _classRepository;
     private readonly IUserRepository _userRepository;
 
     public UpdateQuizHandler(
         IQuizRepository quizRepository,
-        ICourseRepository courseRepository,
+        IClassRepository classRepository,
         IUserRepository userRepository)
     {
         _quizRepository = quizRepository;
-        _courseRepository = courseRepository;
+        _classRepository = classRepository;
         _userRepository = userRepository;
     }
 
@@ -26,7 +26,7 @@ public class UpdateQuizHandler
         int currentUserId,
         CancellationToken cancellationToken = default)
     {
-        ValidateRequest(request.CourseId, request.Title, request.Questions);
+        ValidateRequest(request.ClassId, request.Title, request.Questions);
 
         var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
         if (currentUser == null)
@@ -40,23 +40,23 @@ public class UpdateQuizHandler
             throw new KeyNotFoundException("Quiz not found.");
         }
 
-        if (quiz.Course == null || !QuizAuthorization.CanManageCourse(currentUser, quiz.Course))
+        if (quiz.Class == null || !QuizAuthorization.CanManageClass(currentUser, quiz.Class))
         {
             throw new UnauthorizedAccessException("You are not allowed to update this quiz.");
         }
 
-        var targetCourse = quiz.CourseId == request.CourseId
-            ? quiz.Course
-            : await _courseRepository.GetCourseDetailAsync(request.CourseId, cancellationToken);
+        var targetClass = quiz.ClassId == request.ClassId
+            ? quiz.Class
+            : await _classRepository.GetByIdWithDetailsAsync(request.ClassId, cancellationToken);
 
-        if (targetCourse == null)
+        if (targetClass == null)
         {
-            throw new KeyNotFoundException("Course not found.");
+            throw new KeyNotFoundException("Class not found.");
         }
 
-        if (!QuizAuthorization.CanManageCourse(currentUser, targetCourse))
+        if (!QuizAuthorization.CanManageClass(currentUser, targetClass))
         {
-            throw new UnauthorizedAccessException("You are not allowed to move this quiz to the selected course.");
+            throw new UnauthorizedAccessException("You are not allowed to move this quiz to the selected class.");
         }
 
         var now = DateTime.UtcNow;
@@ -64,8 +64,8 @@ public class UpdateQuizHandler
         _quizRepository.DeleteQuestions(existingQuestions);
         quiz.QuizQuestions.Clear();
 
-        quiz.CourseId = request.CourseId;
-        quiz.Course = targetCourse;
+        quiz.ClassId = request.ClassId;
+        quiz.Class = targetClass;
         quiz.Title = request.Title.Trim();
         quiz.UpdatedAt = now;
         quiz.QuizQuestions = BuildQuestions(request.Questions, now);
@@ -77,13 +77,13 @@ public class UpdateQuizHandler
     }
 
     private static void ValidateRequest(
-        int courseId,
+        int classId,
         string title,
         IEnumerable<UpdateQuizQuestionRequest>? questions)
     {
-        if (courseId <= 0)
+        if (classId <= 0)
         {
-            throw new ArgumentException("CourseId is required.");
+            throw new ArgumentException("ClassId is required.");
         }
 
         if (string.IsNullOrWhiteSpace(title))

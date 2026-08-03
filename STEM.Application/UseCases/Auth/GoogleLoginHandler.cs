@@ -51,7 +51,7 @@ public class GoogleLoginHandler
             };
 
             payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, validationSettings);
-            
+
             var validIssuers = new[] { "https://accounts.google.com", "https://accounts.google.com/" };
             if (string.IsNullOrEmpty(payload.Issuer) || !validIssuers.Contains(payload.Issuer))
                 throw new UnauthorizedAccessException("Invalid Google token issuer.");
@@ -80,11 +80,11 @@ public class GoogleLoginHandler
         if (!user.IsActive)
             throw new UnauthorizedAccessException("Tài khoản đã bị vô hiệu hóa.");
 
-        user.FullName = string.IsNullOrWhiteSpace(user.FullName) 
-            ? payload.Name ?? payload.Email 
+        user.FullName = string.IsNullOrWhiteSpace(user.FullName)
+            ? payload.Name ?? payload.Email
             : user.FullName;
         user.Avatar = string.IsNullOrWhiteSpace(user.Avatar) ? payload.Picture : user.Avatar;
-        
+
         _userRepository.Update(user);
         await _userRepository.SaveChangesAsync(cancellationToken);
 
@@ -95,6 +95,7 @@ public class GoogleLoginHandler
 
         return new GoogleLoginResponse
         {
+            Id = user.Id,
             Token = token,
             RefreshToken = refreshToken,
             Email = user.Email,

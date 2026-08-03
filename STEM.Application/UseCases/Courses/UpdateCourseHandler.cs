@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using STEM.Application.Dtos.Courses;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
@@ -8,11 +9,16 @@ public class UpdateCourseHandler
 {
     private readonly ICourseRepository _courseRepository;
     private readonly IUserRepository _userRepository;
+    private readonly ILogger<UpdateCourseHandler> _logger;
 
-    public UpdateCourseHandler(ICourseRepository courseRepository, IUserRepository userRepository)
+    public UpdateCourseHandler(
+        ICourseRepository courseRepository,
+        IUserRepository userRepository,
+        ILogger<UpdateCourseHandler> logger)
     {
         _courseRepository = courseRepository;
         _userRepository = userRepository;
+        _logger = logger;
     }
 
     public async Task<bool> Handle(
@@ -21,6 +27,11 @@ public class UpdateCourseHandler
         int currentUserId,
         CancellationToken cancellationToken = default)
     {
+        _logger.LogInformation("UpdateCourse called - CourseId: {CourseId}, Title: {Title}", courseId, request.Title);
+
+        if (string.IsNullOrWhiteSpace(request.Title))
+            throw new ArgumentException("Title is required.");
+
         var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
         if (currentUser == null)
             throw new UnauthorizedAccessException("Current user not found.");
@@ -30,28 +41,15 @@ public class UpdateCourseHandler
 
         var course = await _courseRepository.GetByIdAsync(courseId, cancellationToken);
         if (course == null)
-            return false; // Not found
+            return false;
 
         if (course.SchoolId != currentUser.SchoolId)
             throw new UnauthorizedAccessException("You can only update courses from your own school.");
 
-        // Validate teacher if it changed
-        if (course.TeacherId != request.TeacherId)
-        {
-            var teacher = await _userRepository.GetByIdAsync(request.TeacherId, cancellationToken);
-            if (teacher == null)
-                throw new ArgumentException("Teacher not found.");
-
-            if (teacher.Role?.Name != RoleNames.Teacher)
-                throw new ArgumentException("The specified user is not a teacher.");
-
-            if (teacher.SchoolId != currentUser.SchoolId)
-                throw new ArgumentException("The teacher does not belong to your school.");
-        }
-
-        course.Title = request.Title;
-        course.Description = request.Description;
-        course.TeacherId = request.TeacherId;
+        if (!string.IsNullOrWhiteSpace(request.Title))
+            course.Title = request.Title.Trim();
+        if (request.Description != null)
+            course.Description = request.Description.Trim();
         course.UpdatedAt = DateTime.UtcNow;
 
         _courseRepository.Update(course);

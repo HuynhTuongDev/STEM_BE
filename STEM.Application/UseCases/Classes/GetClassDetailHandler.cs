@@ -36,6 +36,8 @@ public class GetClassDetailHandler
         if (classEntity.SchoolId != currentUser.SchoolId && roleName != RoleNames.MasterAdministrator)
             throw new UnauthorizedAccessException("Bạn chỉ có thể xem lớp học thuộc trường của mình.");
 
+        var availableStudents = await _userRepository.GetStudentsNotInClassAsync(classId, classEntity.SchoolId, null, cancellationToken);
+
         return new ClassDetailResponse
         {
             Id = classEntity.Id,
@@ -57,6 +59,14 @@ public class GetClassDetailHandler
                 Email = e.Student?.Email ?? string.Empty,
                 EnrolledAt = e.CreatedAt
             }).ToList() ?? new List<StudentResponse>(),
+            AvailableStudents = availableStudents.Select(s => new AvailableStudentResponse
+            {
+                Id = s.Id,
+                FullName = s.FullName,
+                Email = s.Email,
+                Phone = s.Phone,
+                Gender = s.Gender
+            }).ToList() ?? new List<AvailableStudentResponse>(),
             Schedules = classEntity.Schedules?.Select(s => new ScheduleResponse
             {
                 Id = s.Id,

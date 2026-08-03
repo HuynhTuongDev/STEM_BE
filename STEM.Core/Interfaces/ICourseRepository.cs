@@ -10,7 +10,6 @@ public interface ICourseRepository : IRepository<Course>
         int pageSize,
         string? searchTerm,
         int? schoolId,
-        int? teacherId,
         CancellationToken cancellationToken = default);
 
     Task<Course?> GetCourseDetailAsync(int id, CancellationToken cancellationToken = default);

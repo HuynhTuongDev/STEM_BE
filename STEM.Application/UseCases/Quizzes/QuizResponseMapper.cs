@@ -7,17 +7,19 @@ internal static class QuizResponseMapper
 {
     public static QuizResponse Map(Quiz quiz, bool includeQuestions)
     {
-        var course = quiz.Course;
+        var classEntity = quiz.Class;
 
         return new QuizResponse
         {
             Id = quiz.Id,
-            CourseId = quiz.CourseId,
-            CourseTitle = course?.Title ?? string.Empty,
-            TeacherId = course?.TeacherId ?? 0,
-            TeacherName = course?.Teacher?.FullName ?? string.Empty,
-            SchoolId = course?.SchoolId,
-            SchoolName = course?.School?.Name,
+            ClassId = quiz.ClassId,
+            ClassCode = classEntity?.ClassCode ?? string.Empty,
+            CourseId = classEntity?.CourseId ?? 0,
+            CourseTitle = classEntity?.Course?.Title ?? string.Empty,
+            TeacherId = classEntity?.TeacherId ?? 0,
+            TeacherName = classEntity?.Teacher?.FullName ?? string.Empty,
+            SchoolId = classEntity?.SchoolId ?? 0,
+            SchoolName = classEntity?.School?.Name ?? string.Empty,
             Title = quiz.Title,
             QuestionsCount = quiz.QuizQuestions.Count,
             Questions = includeQuestions

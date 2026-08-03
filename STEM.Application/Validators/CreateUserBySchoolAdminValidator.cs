@@ -8,15 +8,16 @@ public class CreateUserBySchoolAdminValidator : AbstractValidator<CreateUserBySc
     public CreateUserBySchoolAdminValidator()
     {
         RuleFor(x => x.FullName)
-            .NotEmpty().WithMessage("Full name is required.");
+            .Must(name => string.IsNullOrWhiteSpace(name) || name.Trim().Length >= 2)
+            .WithMessage("Full name must have at least 2 characters if provided.");
 
         RuleFor(x => x.Email)
             .NotEmpty().WithMessage("Email is required.")
             .EmailAddress().WithMessage("A valid email is required.");
 
         RuleFor(x => x.Phone)
-            .NotEmpty().WithMessage("Phone number is required.")
-            .Matches(@"^\d{10}$").WithMessage("Phone number must be exactly 10 digits.");
+            .Must(phone => string.IsNullOrWhiteSpace(phone) || System.Text.RegularExpressions.Regex.IsMatch(phone, "^\\d{10}$"))
+            .WithMessage("Phone number must be exactly 10 digits if provided.");
 
         RuleFor(x => x.RoleId)
             .NotEmpty().WithMessage("Role is required.")

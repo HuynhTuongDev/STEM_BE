@@ -3,7 +3,7 @@ namespace STEM.Application.Dtos.VirtualLabs;
 public class GetVirtualLabsRequest
 {
     public string? SearchTerm { get; set; }
-    public int? LessonId { get; set; }
+    public int? ClassId { get; set; }
     public int? CourseId { get; set; }
     public int PageNumber { get; set; } = 1;
     public int PageSize { get; set; } = 20;
@@ -11,7 +11,7 @@ public class GetVirtualLabsRequest
 
 public class CreateVirtualLabRequest
 {
-    public int LessonId { get; set; }
+    public int ClassId { get; set; }
     public string SimulationName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string DiagramJson { get; set; } = string.Empty;
@@ -19,7 +19,7 @@ public class CreateVirtualLabRequest
 
 public class UpdateVirtualLabRequest
 {
-    public int LessonId { get; set; }
+    public int ClassId { get; set; }
     public string SimulationName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string DiagramJson { get; set; } = string.Empty;
@@ -29,14 +29,14 @@ public class VirtualLabResponse
 {
     public int Id { get; set; }
     public int SimulationId { get; set; }
-    public int LessonId { get; set; }
-    public string LessonTitle { get; set; } = string.Empty;
+    public int ClassId { get; set; }
+    public string ClassCode { get; set; } = string.Empty;
     public int CourseId { get; set; }
     public string CourseTitle { get; set; } = string.Empty;
     public int TeacherId { get; set; }
     public string TeacherName { get; set; } = string.Empty;
-    public int? SchoolId { get; set; }
-    public string? SchoolName { get; set; }
+    public int SchoolId { get; set; }
+    public string SchoolName { get; set; } = string.Empty;
     public string SimulationName { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string DiagramJson { get; set; } = string.Empty;

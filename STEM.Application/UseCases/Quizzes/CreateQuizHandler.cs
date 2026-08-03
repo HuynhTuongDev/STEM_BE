@@ -7,16 +7,16 @@ namespace STEM.Application.UseCases.Quizzes;
 public class CreateQuizHandler
 {
     private readonly IQuizRepository _quizRepository;
-    private readonly ICourseRepository _courseRepository;
+    private readonly IClassRepository _classRepository;
     private readonly IUserRepository _userRepository;
 
     public CreateQuizHandler(
         IQuizRepository quizRepository,
-        ICourseRepository courseRepository,
+        IClassRepository classRepository,
         IUserRepository userRepository)
     {
         _quizRepository = quizRepository;
-        _courseRepository = courseRepository;
+        _classRepository = classRepository;
         _userRepository = userRepository;
     }
 
@@ -25,7 +25,7 @@ public class CreateQuizHandler
         int currentUserId,
         CancellationToken cancellationToken = default)
     {
-        ValidateRequest(request.CourseId, request.Title, request.Questions);
+        ValidateRequest(request.ClassId, request.Title, request.Questions);
 
         var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
         if (currentUser == null)
@@ -33,22 +33,22 @@ public class CreateQuizHandler
             throw new UnauthorizedAccessException("Current user not found.");
         }
 
-        var course = await _courseRepository.GetCourseDetailAsync(request.CourseId, cancellationToken);
-        if (course == null)
+        var classEntity = await _classRepository.GetByIdWithDetailsAsync(request.ClassId, cancellationToken);
+        if (classEntity == null)
         {
-            throw new KeyNotFoundException("Course not found.");
+            throw new KeyNotFoundException("Class not found.");
         }
 
-        if (!QuizAuthorization.CanManageCourse(currentUser, course))
+        if (!QuizAuthorization.CanManageClass(currentUser, classEntity))
         {
-            throw new UnauthorizedAccessException("You are not allowed to create quizzes for this course.");
+            throw new UnauthorizedAccessException("You are not allowed to create quizzes for this class.");
         }
 
         var now = DateTime.UtcNow;
         var quiz = new Quiz
         {
-            CourseId = request.CourseId,
-            Course = course,
+            ClassId = request.ClassId,
+            Class = classEntity,
             Title = request.Title.Trim(),
             CreatedAt = now,
             UpdatedAt = now,
@@ -62,13 +62,13 @@ public class CreateQuizHandler
     }
 
     private static void ValidateRequest(
-        int courseId,
+        int classId,
         string title,
         IEnumerable<CreateQuizQuestionRequest>? questions)
     {
-        if (courseId <= 0)
+        if (classId <= 0)
         {
-            throw new ArgumentException("CourseId is required.");
+            throw new ArgumentException("ClassId is required.");
         }
 
         if (string.IsNullOrWhiteSpace(title))

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
@@ -68,8 +69,7 @@ public class UserRepository : Repository<User>, IUserRepository
         {
             var term = searchTerm.Trim().ToLower();
             query = query.Where(u => u.FullName.ToLower().Contains(term) 
-                                     || u.Email.ToLower().Contains(term) 
-                                     || (u.Phone != null && u.Phone.ToLower().Contains(term)));
+                                     || u.Email.ToLower().Contains(term));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);
@@ -81,5 +81,50 @@ public class UserRepository : Repository<User>, IUserRepository
             .ToListAsync(cancellationToken);
 
         return (users, totalCount);
+    }
+
+    public async Task<IEnumerable<User>> GetStudentsNotInClassAsync(int classId, int schoolId, string? searchTerm, CancellationToken cancellationToken = default)
+    {
+        var studentRoleName = RoleNames.Student;
+        var query = _dbSet
+            .Include(u => u.Role)
+            .Include(u => u.School)
+            .Where(u => !_context.Enrollments.Any(e => e.ClassId == classId && e.StudentId == u.Id))
+            .Where(u => u.SchoolId == schoolId)
+            .Where(u => u.Role != null && u.Role.Name == studentRoleName)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.Trim().ToLower();
+            query = query.Where(u => u.FullName.ToLower().Contains(term) 
+                                     || u.Email.ToLower().Contains(term));
+        }
+
+        return await query
+            .OrderBy(u => u.FullName)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IEnumerable<Schedule>> GetStudentSchedulesAsync(int studentId, DateTime? fromDate, DateTime? toDate, CancellationToken cancellationToken = default)
+    {
+        var query = _context.Enrollments
+            .Include(e => e.Class)
+                .ThenInclude(c => c.Course)
+            .Include(e => e.Class.Schedules)
+            .Where(e => e.StudentId == studentId)
+            .SelectMany(e => e.Class.Schedules)
+            .AsQueryable();
+
+        if (fromDate.HasValue)
+            query = query.Where(s => s.StartTime >= fromDate.Value);
+
+        if (toDate.HasValue)
+            query = query.Where(s => s.EndTime <= toDate.Value);
+
+        return await query
+            .Include(s => s.Class)
+            .OrderBy(s => s.StartTime)
+            .ToListAsync(cancellationToken);
     }
 }

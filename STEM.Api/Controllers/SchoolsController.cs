@@ -12,17 +12,20 @@ namespace STEM.Api.Controllers;
 public class SchoolsController : ControllerBase
 {
     private readonly IRepository<School> _schoolRepository;
+    private readonly IUserRepository _userRepository;
     private readonly RegisterSchoolHandler _registerSchoolHandler;
     private readonly UpdateSchoolHandler _updateSchoolHandler;
     private readonly DeleteSchoolHandler _deleteSchoolHandler;
 
     public SchoolsController(
         IRepository<School> schoolRepository,
+        IUserRepository userRepository,
         RegisterSchoolHandler registerSchoolHandler,
         UpdateSchoolHandler updateSchoolHandler,
         DeleteSchoolHandler deleteSchoolHandler)
     {
         _schoolRepository = schoolRepository;
+        _userRepository = userRepository;
         _registerSchoolHandler = registerSchoolHandler;
         _updateSchoolHandler = updateSchoolHandler;
         _deleteSchoolHandler = deleteSchoolHandler;
@@ -75,11 +78,27 @@ public class SchoolsController : ControllerBase
                 s => s.Status == SchoolStatus.Approved,
                 cancellationToken);
 
+            var representativeEmails = schools.Select(s => s.RepresentativeEmail).Distinct().ToList();
+            var users = await _userRepository.FindAsync(
+                u => representativeEmails.Contains(u.Email),
+                cancellationToken);
+            var userPhoneMap = users.GroupBy(u => u.Email).ToDictionary(g => g.Key, g => g.First().Phone);
+
             var result = schools.Select(s => new
             {
                 s.Id,
                 s.Name,
-                s.Address
+                s.Address,
+                RepresentativeEmail = s.RepresentativeEmail,
+                RepresentativeName = s.RepresentativeName,
+                Phone = userPhoneMap.TryGetValue(s.RepresentativeEmail, out var phone) ? phone : null,
+                CreatedAt = s.CreatedAt,
+                s.Status,
+                s.ProofOfActivity,
+                s.StudentScale,
+                s.RepresentativePosition,
+                s.Website,
+                s.Notes
             }).OrderBy(s => s.Name);
 
             return Ok(new { success = true, data = result });
@@ -92,9 +111,9 @@ public class SchoolsController : ControllerBase
 
     /// <summary>
     /// Lấy thông tin chi tiết một trường.
-    /// Chỉ School Administrator mới có quyền truy cập.
+    /// Public – không cần đăng nhập.
     /// </summary>
-    [Authorize(Policy = "MasterOnly")]
+    [AllowAnonymous]
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetSchool(int id, CancellationToken cancellationToken = default)
     {
@@ -104,14 +123,23 @@ public class SchoolsController : ControllerBase
             if (school == null)
                 return NotFound(new { success = false, message = "School not found." });
 
+            var adminUser = await _userRepository.GetByEmailAsync(school.RepresentativeEmail, cancellationToken);
+
             return Ok(new { success = true, data = new
             {
                 school.Id,
                 school.Name,
                 school.Address,
-                school.RepresentativeEmail,
-                school.RepresentativeName,
-                school.Status
+                RepresentativeEmail = school.RepresentativeEmail,
+                RepresentativeName = school.RepresentativeName,
+                Phone = adminUser?.Phone,
+                CreatedAt = school.CreatedAt,
+                school.Status,
+                school.ProofOfActivity,
+                school.StudentScale,
+                school.RepresentativePosition,
+                school.Website,
+                school.Notes
             }});
         }
         catch (Exception ex)
