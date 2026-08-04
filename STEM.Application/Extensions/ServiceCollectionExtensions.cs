@@ -7,6 +7,7 @@ using STEM.Application.UseCases.Schools;
 using STEM.Application.UseCases.Courses;
 using STEM.Application.UseCases.Classes;
 using STEM.Application.UseCases.Users;
+using STEM.Application.UseCases.Teachers;
 using STEM.Application.UseCases.Attendance;
 using STEM.Application.UseCases.Assignments;
 using STEM.Application.UseCases.Quizzes;
@@ -14,6 +15,12 @@ using STEM.Application.UseCases.Grading;
 using STEM.Application.UseCases.VirtualLabs;
 using STEM.Application.UseCases.Students;
 using STEM.Application.UseCases.Schedules;
+using STEM.Application.UseCases.Payments;
+using STEM.Application.UseCases.Simulation.Abstractions;
+using STEM.Application.UseCases.Simulation.Runners.Educational;
+using STEM.Application.UseCases.Simulation.Runners.Mock;
+using STEM.Application.UseCases.Simulation.Runners.Qemu;
+using STEM.Application.UseCases.Simulation.Runtime;
 using FluentValidation;
 using STEM.Application.Validators;
 
@@ -60,6 +67,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetUserDetailHandler>();
         services.AddScoped<UpdateTeacherHandler>();
         services.AddScoped<DeleteTeacherHandler>();
+        services.AddScoped<GetTeachersWithClassCountHandler>();
 
         // Attendance Handlers
         services.AddScoped<CreateAttendanceHandler>();
@@ -115,6 +123,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DeleteClassHandler>();
         services.AddScoped<AssignStudentsToClassHandler>();
         services.AddScoped<RemoveStudentFromClassHandler>();
+        services.AddScoped<GetAvailableStudentsHandler>();
 
         // Schedule Handlers
         services.AddScoped<CreateScheduleHandler>();
@@ -122,6 +131,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DeleteScheduleHandler>();
         services.AddScoped<GetTeacherScheduleHandler>();
         services.AddScoped<GetStudentScheduleHandler>();
+
+        // Payment Handlers
+        services.AddScoped<GetPackagesHandler>();
+        services.AddScoped<CreatePaymentHandler>();
+        services.AddScoped<PaymentCallbackHandler>();
+        services.AddScoped<GetPaymentsHandler>();
+        services.AddScoped<GetTokenBalanceHandler>();
+        services.AddScoped<GetTokenTransactionsHandler>();
+        services.AddScoped<UseTokenHandler>();
 
         // Validators
         services.AddValidatorsFromAssemblyContaining<CreateUserBySchoolAdminValidator>();

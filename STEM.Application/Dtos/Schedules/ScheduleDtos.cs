@@ -26,6 +26,35 @@ public class ScheduleResponse
     public DateTime UpdatedAt { get; set; }
 }
 
+public class CreateScheduleResponse
+{
+    public bool Success { get; set; }
+    public ScheduleResponse? Schedule { get; set; }
+    public List<ScheduleConflictDto>? Conflicts { get; set; }
+    public List<TeacherConflictDto>? TeacherConflicts { get; set; }
+    public string? Message { get; set; }
+}
+
+public class ScheduleConflictDto
+{
+    public int StudentId { get; set; }
+    public string StudentName { get; set; } = string.Empty;
+    public string StudentEmail { get; set; } = string.Empty;
+    public int ConflictingClassId { get; set; }
+    public string ConflictingClassCode { get; set; } = string.Empty;
+    public string ConflictingClassName { get; set; } = string.Empty;
+    public DateTime ConflictingStartTime { get; set; }
+    public DateTime ConflictingEndTime { get; set; }
+}
+
+public class TeacherConflictDto
+{
+    public int ConflictingClassId { get; set; }
+    public string ConflictingClassCode { get; set; } = string.Empty;
+    public DateTime ConflictingStartTime { get; set; }
+    public DateTime ConflictingEndTime { get; set; }
+}
+
 public class ScheduleCalendarResponse
 {
     public int Id { get; set; }

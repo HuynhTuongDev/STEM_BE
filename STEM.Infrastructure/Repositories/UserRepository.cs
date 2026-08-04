@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using STEM.Application.Dtos.Users;
 using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
@@ -126,5 +127,33 @@ public class UserRepository : Repository<User>, IUserRepository
             .Include(s => s.Class)
             .OrderBy(s => s.StartTime)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<(IEnumerable<User> Users, int TotalCount)> GetTeachersWithClassCountAsync(int schoolId, int page, int pageSize, string? searchTerm, CancellationToken cancellationToken = default)
+    {
+        var teacherRoleId = 3; // Teacher
+
+        var query = _dbSet
+            .Include(u => u.Role)
+            .Include(u => u.School)
+            .Where(u => u.SchoolId == schoolId && u.RoleId == teacherRoleId)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = searchTerm.Trim().ToLower();
+            query = query.Where(u => u.FullName.ToLower().Contains(term)
+                                     || u.Email.ToLower().Contains(term));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var users = await query
+            .OrderByDescending(u => u.CreatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (users, totalCount);
     }
 }

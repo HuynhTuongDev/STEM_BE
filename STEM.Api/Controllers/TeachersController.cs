@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Dtos.Users;
+using STEM.Application.UseCases.Teachers;
 using STEM.Application.UseCases.Users;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
@@ -16,20 +17,20 @@ namespace STEM.Api.Controllers;
 [Authorize(Policy = "SchoolAdminOnly")]
 public class TeachersController : ControllerBase
 {
-    private readonly GetUsersListHandler _getUsersListHandler;
+    private readonly GetTeachersWithClassCountHandler _getTeachersWithClassCountHandler;
     private readonly GetUserDetailHandler _getUserDetailHandler;
     private readonly UpdateTeacherHandler _updateTeacherHandler;
     private readonly DeleteTeacherHandler _deleteTeacherHandler;
     private readonly IUserRepository _userRepository;
 
     public TeachersController(
-        GetUsersListHandler getUsersListHandler,
+        GetTeachersWithClassCountHandler getTeachersWithClassCountHandler,
         GetUserDetailHandler getUserDetailHandler,
         UpdateTeacherHandler updateTeacherHandler,
         DeleteTeacherHandler deleteTeacherHandler,
         IUserRepository userRepository)
     {
-        _getUsersListHandler = getUsersListHandler;
+        _getTeachersWithClassCountHandler = getTeachersWithClassCountHandler;
         _getUserDetailHandler = getUserDetailHandler;
         _updateTeacherHandler = updateTeacherHandler;
         _deleteTeacherHandler = deleteTeacherHandler;
@@ -47,9 +48,20 @@ public class TeachersController : ControllerBase
     {
         try
         {
-            request.RoleId = 3; // Teacher
             var currentUserId = GetCurrentUserId();
-            var result = await _getUsersListHandler.Handle(request, currentUserId, cancellationToken);
+            var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
+            if (currentUser == null)
+                return Forbid();
+
+            var teachersRequest = new TeachersWithClassCountRequest
+            {
+                Page = request.PageNumber,
+                PageSize = request.PageSize,
+                Search = request.SearchTerm,
+                SchoolId = currentUser.SchoolId ?? 0
+            };
+
+            var result = await _getTeachersWithClassCountHandler.Handle(teachersRequest, cancellationToken);
             return Ok(new { success = true, data = result });
         }
         catch (UnauthorizedAccessException)

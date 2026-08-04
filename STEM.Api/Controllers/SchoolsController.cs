@@ -65,7 +65,8 @@ public class SchoolsController : ControllerBase
     }
 
     /// <summary>
-    /// Lấy danh sách tất cả trường đã được duyệt.
+    /// Lấy danh sách tất cả trường (tất cả trạng thái).
+    /// Dành cho Master Admin quản lý.
     /// Public – không cần đăng nhập.
     /// </summary>
     [AllowAnonymous]
@@ -75,7 +76,7 @@ public class SchoolsController : ControllerBase
         try
         {
             var schools = await _schoolRepository.FindAsync(
-                s => s.Status == SchoolStatus.Approved,
+                s => true,
                 cancellationToken);
 
             var representativeEmails = schools.Select(s => s.RepresentativeEmail).Distinct().ToList();
@@ -171,6 +172,45 @@ public class SchoolsController : ControllerBase
         catch (ArgumentException ex)
         {
             return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Khóa hoặc mở khóa một trường.
+    /// Chỉ Master Administrator mới có quyền truy cập.
+    /// </summary>
+    [Authorize(Policy = "MasterOnly")]
+    [HttpPut("{id:int}/toggle-lock")]
+    public async Task<IActionResult> ToggleSchoolLock(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var school = await _schoolRepository.GetByIdAsync(id, cancellationToken)
+                ?? throw new KeyNotFoundException($"School with id {id} not found.");
+
+            // Toggle between Approved and Rejected/Locked
+            school.Status = school.Status == SchoolStatus.Approved 
+                ? SchoolStatus.Rejected 
+                : SchoolStatus.Approved;
+
+            _schoolRepository.Update(school);
+            await _schoolRepository.SaveChangesAsync(cancellationToken);
+
+            var message = school.Status == SchoolStatus.Approved
+                ? "School unlocked successfully."
+                : "School locked successfully. All users in this school have been disabled.";
+
+            return Ok(new { success = true, message, status = school.Status });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
         }
         catch (Exception ex)
         {

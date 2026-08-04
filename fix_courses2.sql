@@ -1,0 +1,1 @@
+ALTER TABLE "Courses" DROP COLUMN IF EXISTS "TeacherId";

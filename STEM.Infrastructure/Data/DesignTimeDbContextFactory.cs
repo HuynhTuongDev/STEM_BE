@@ -8,13 +8,11 @@ public class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<StemDbCont
 {
     public StemDbContext CreateDbContext(string[] args)
     {
-        var optionsBuilder = new DbContextOptionsBuilder<StemDbContext>();
-
-        // Sử dụng connection string mặc định hoặc từ environment variable
         var connectionString = Environment.GetEnvironmentVariable("DB_CONNECTION_STRING")
-            ?? "Server=localhost;Database=STEM;User Id=sa;Password=Password123;TrustServerCertificate=True;MultipleActiveResultSets=true";
+            ?? "Host=localhost;Port=5432;Database=postgres;Username=postgres;Password=postgres;SSL Mode=Require;Trust Server Certificate=true";
 
-        optionsBuilder.UseSqlServer(connectionString);
+        var optionsBuilder = new DbContextOptionsBuilder<StemDbContext>();
+        optionsBuilder.UseNpgsql(connectionString);
 
         return new StemDbContext(optionsBuilder.Options);
     }

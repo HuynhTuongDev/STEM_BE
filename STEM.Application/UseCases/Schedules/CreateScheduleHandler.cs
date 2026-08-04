@@ -20,7 +20,7 @@ public class CreateScheduleHandler
         _userRepository = userRepository;
     }
 
-    public async Task<ScheduleResponse> Handle(CreateScheduleRequest request, int currentUserId, CancellationToken cancellationToken = default)
+    public async Task<CreateScheduleResponse> Handle(CreateScheduleRequest request, int currentUserId, CancellationToken cancellationToken = default)
     {
         var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
         if (currentUser == null)
@@ -36,17 +36,44 @@ public class CreateScheduleHandler
         if (request.StartTime >= request.EndTime)
             throw new InvalidOperationException("Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc.");
 
+        // Normalize times to UTC for comparison
+        var normalizedStartTime = new DateTime(request.StartTime.Year, request.StartTime.Month, request.StartTime.Day,
+                                     request.StartTime.Hour, request.StartTime.Minute, request.StartTime.Second,
+                                     DateTimeKind.Utc);
+        var normalizedEndTime = new DateTime(request.EndTime.Year, request.EndTime.Month, request.EndTime.Day,
+                                   request.EndTime.Hour, request.EndTime.Minute, request.EndTime.Second,
+                                   DateTimeKind.Utc);
+
+        // Check for student and teacher schedule conflicts in ONE call
+        var (conflicts, teacherConflicts) = await _scheduleRepository.GetAllConflictsAsync(
+            request.ClassId, classEntity.TeacherId, normalizedStartTime, normalizedEndTime, cancellationToken);
+
+        var conflictDtos = conflicts.Select(conflict => new ScheduleConflictDto
+        {
+            StudentId = conflict.StudentId,
+            StudentName = conflict.StudentName,
+            StudentEmail = conflict.StudentEmail,
+            ConflictingClassId = conflict.ConflictingClassId,
+            ConflictingClassCode = conflict.ConflictingClassCode,
+            ConflictingClassName = string.Empty,
+            ConflictingStartTime = conflict.ConflictingStartTime,
+            ConflictingEndTime = conflict.ConflictingEndTime
+        }).ToList();
+
+        var teacherConflictDtos = teacherConflicts.Select(c => new TeacherConflictDto
+        {
+            ConflictingClassId = c.ConflictingClassId,
+            ConflictingClassCode = c.ConflictingClassCode,
+            ConflictingStartTime = c.ConflictingStartTime,
+            ConflictingEndTime = c.ConflictingEndTime
+        }).ToList();
+
+        // Create the schedule regardless of conflicts (warnings only)
         var schedule = new Schedule
         {
             ClassId = request.ClassId,
-            // Store as UTC but with same wall-clock value as local time
-            // This prevents any timezone conversion during serialization
-            StartTime = new DateTime(request.StartTime.Year, request.StartTime.Month, request.StartTime.Day,
-                                     request.StartTime.Hour, request.StartTime.Minute, request.StartTime.Second,
-                                     DateTimeKind.Utc),
-            EndTime = new DateTime(request.EndTime.Year, request.EndTime.Month, request.EndTime.Day,
-                                   request.EndTime.Hour, request.EndTime.Minute, request.EndTime.Second,
-                                   DateTimeKind.Utc),
+            StartTime = normalizedStartTime,
+            EndTime = normalizedEndTime,
             CreatedAt = DateTime.UtcNow,
             UpdatedAt = DateTime.UtcNow
         };
@@ -54,16 +81,41 @@ public class CreateScheduleHandler
         await _scheduleRepository.AddAsync(schedule, cancellationToken);
         await _scheduleRepository.SaveChangesAsync(cancellationToken);
 
-        return new ScheduleResponse
+        var response = new CreateScheduleResponse
         {
-            Id = schedule.Id,
-            ClassId = schedule.ClassId,
-            ClassCode = classEntity.ClassCode,
-            ClassName = classEntity.Course?.Title ?? string.Empty,
-            StartTime = schedule.StartTime,
-            EndTime = schedule.EndTime,
-            CreatedAt = schedule.CreatedAt,
-            UpdatedAt = schedule.UpdatedAt
+            Success = true,
+            Schedule = new ScheduleResponse
+            {
+                Id = schedule.Id,
+                ClassId = schedule.ClassId,
+                ClassCode = classEntity.ClassCode,
+                ClassName = classEntity.Course?.Title ?? string.Empty,
+                StartTime = schedule.StartTime,
+                EndTime = schedule.EndTime,
+                CreatedAt = schedule.CreatedAt,
+                UpdatedAt = schedule.UpdatedAt
+            },
+            Conflicts = conflictDtos,
+            TeacherConflicts = teacherConflictDtos,
+            Message = BuildResponseMessage(conflictDtos.Count, teacherConflictDtos.Count)
         };
+
+        return response;
+    }
+
+    private static string BuildResponseMessage(int studentConflictCount, int teacherConflictCount)
+    {
+        var messages = new List<string>();
+
+        if (studentConflictCount > 0)
+            messages.Add($"{studentConflictCount} học sinh bị trùng lịch");
+
+        if (teacherConflictCount > 0)
+            messages.Add($"giáo viên trùng lịch với lớp khác");
+
+        if (messages.Any())
+            return $"Lịch đã được tạo nhưng có: {string.Join(" và ", messages)}.";
+
+        return "Lịch học đã được tạo thành công.";
     }
 }

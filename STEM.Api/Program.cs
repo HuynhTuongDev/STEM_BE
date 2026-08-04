@@ -5,6 +5,7 @@ using Microsoft.OpenApi.Models;
 using STEM.Infrastructure.Extensions;
 using STEM.Application.Extensions;
 using STEM.Core.Entities.Users;
+using STEM.Api.Converters;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,6 +16,11 @@ builder.Services.AddApplication();
 builder.Services.AddControllers(options =>
 {
     options.Filters.Add<STEM.Api.Filters.ValidationExceptionFilter>();
+})
+.AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.Converters.Add(new DateOnlyJsonConverter());
+    options.JsonSerializerOptions.Converters.Add(new NullableDateOnlyJsonConverter());
 });
 builder.Services.AddEndpointsApiExplorer();
 
@@ -98,15 +104,16 @@ builder.Services.AddAuthorization(options =>
         policy.RequireRole(RoleNames.MasterAdministrator, RoleNames.SchoolAdministrator));
 });
 
-// Configure CORS
+// Configure CORS - More permissive for development
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173", "https://localhost:5173")
+        policy.SetIsOriginAllowed(_ => true) // Allow any origin for development
               .AllowAnyHeader()
               .AllowAnyMethod()
-              .AllowCredentials();
+              .AllowCredentials()
+              .WithExposedHeaders("Content-Disposition"); // Allow file downloads
     });
 });
 

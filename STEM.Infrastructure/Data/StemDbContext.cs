@@ -11,6 +11,8 @@ using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Simulations;
 using STEM.Core.Entities.Assessments;
+using STEM.Core.Entities.Payments;
+using STEM.Core.Entities.VirtualLabs;
 using Microsoft.EntityFrameworkCore;
 
 public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(options)
@@ -55,6 +57,12 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Rubric> Rubrics => Set<Rubric>();
 
     public DbSet<Notification> Notifications => Set<Notification>();
+
+    // Payment
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<PaymentPackage> PaymentPackages => Set<PaymentPackage>();
+    public DbSet<TokenAccount> TokenAccounts => Set<TokenAccount>();
+    public DbSet<TokenTransaction> TokenTransactions => Set<TokenTransaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -363,5 +371,122 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany()
             .HasForeignKey(l => l.TeacherId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        // Payment -> Buyer (User)
+        modelBuilder.Entity<Payment>()
+            .HasOne(p => p.Buyer)
+            .WithMany(u => u.BuyerPayments)
+            .HasForeignKey(p => p.BuyerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Payment -> Seller (User)
+        modelBuilder.Entity<Payment>()
+            .HasOne(p => p.Seller)
+            .WithMany(u => u.SellerPayments)
+            .HasForeignKey(p => p.SellerId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Payment -> Package
+        modelBuilder.Entity<Payment>()
+            .HasOne(p => p.Package)
+            .WithMany(pkg => pkg.Payments)
+            .HasForeignKey(p => p.PackageId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // TokenAccount -> School
+        modelBuilder.Entity<TokenAccount>()
+            .HasOne(t => t.School)
+            .WithMany(s => s.TokenAccounts)
+            .HasForeignKey(t => t.SchoolId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // TokenTransaction -> School
+        modelBuilder.Entity<TokenTransaction>()
+            .HasOne(t => t.School)
+            .WithMany(s => s.TokenTransactions)
+            .HasForeignKey(t => t.SchoolId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // TokenTransaction -> Payment
+        modelBuilder.Entity<TokenTransaction>()
+            .HasOne(t => t.Payment)
+            .WithMany()
+            .HasForeignKey(t => t.PaymentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Seed Payment Packages
+        modelBuilder.Entity<PaymentPackage>().HasData(
+            new PaymentPackage 
+            { 
+                Id = 1, 
+                Name = "1 Tháng", 
+                Description = "Gói token sử dụng Virtual Lab trong 1 tháng", 
+                DurationMonths = 1, 
+                Price = 9.99m, 
+                TokenAmount = 100, 
+                IsActive = true, 
+                IsFeatured = false, 
+                SortOrder = 1,
+                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new PaymentPackage 
+            { 
+                Id = 2, 
+                Name = "3 Tháng", 
+                Description = "Gói token sử dụng Virtual Lab trong 3 tháng - Tiết kiệm 10%", 
+                DurationMonths = 3, 
+                Price = 26.99m, 
+                TokenAmount = 350, 
+                IsActive = true, 
+                IsFeatured = true, 
+                SortOrder = 2,
+                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new PaymentPackage 
+            { 
+                Id = 3, 
+                Name = "6 Tháng", 
+                Description = "Gói token sử dụng Virtual Lab trong 6 tháng - Tiết kiệm 20%", 
+                DurationMonths = 6, 
+                Price = 49.99m, 
+                TokenAmount = 800, 
+                IsActive = true, 
+                IsFeatured = true, 
+                SortOrder = 3,
+                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new PaymentPackage 
+            { 
+                Id = 4, 
+                Name = "9 Tháng", 
+                Description = "Gói token sử dụng Virtual Lab trong 9 tháng - Tiết kiệm 25%", 
+                DurationMonths = 9, 
+                Price = 69.99m, 
+                TokenAmount = 1350, 
+                IsActive = true, 
+                IsFeatured = false, 
+                SortOrder = 4,
+                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            },
+            new PaymentPackage 
+            { 
+                Id = 5, 
+                Name = "1 Năm", 
+                Description = "Gói token sử dụng Virtual Lab trong 12 tháng - Tiết kiệm 30%", 
+                DurationMonths = 12, 
+                Price = 89.99m, 
+                TokenAmount = 2000, 
+                IsActive = true, 
+                IsFeatured = true, 
+                SortOrder = 5,
+                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
+                UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
+            }
+        );
+
     }
 }

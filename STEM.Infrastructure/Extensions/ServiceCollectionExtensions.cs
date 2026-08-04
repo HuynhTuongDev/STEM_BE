@@ -36,6 +36,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISubmissionRepository, SubmissionRepository>();
         services.AddScoped<ISchoolRepository, SchoolRepository>();
         services.AddScoped<IScheduleRepository, ScheduleRepository>();
+        services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
+
+        // Payment Repositories
+        services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<IPaymentPackageRepository, PaymentPackageRepository>();
+        services.AddScoped<ITokenAccountRepository, TokenAccountRepository>();
+        services.AddScoped<ITokenTransactionRepository, TokenTransactionRepository>();
+
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IWokwiService, WokwiService>();
