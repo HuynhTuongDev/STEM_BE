@@ -20,11 +20,18 @@ public interface IFirmwareCacheService
     // Chỉ đọc cache, không compile — dùng cho đường Run thật (QemuEsp32Runner)
     // để quyết định có cần phát StudentCompileStarted/Finished hay bỏ qua hẳn
     // giai đoạn "Đang biên dịch..." khi đã có sẵn firmware.
+    // `sensorHeader` (Sensor Input Bridge — Phase 1, 2026-07-28): C++ tự sinh
+    // bởi SensorRuntimeHeaderGenerator, rỗng "" theo mặc định — rỗng nghĩa là
+    // "không có gì thêm", cache key/instrumented source giữ NGUYÊN 100% như
+    // trước khi có tính năng này (xem FirmwareCacheService.ResolveCacheDir).
+    // Chỉ khác rỗng khi diagram có sensor được cấu hình scenario VÀ feature
+    // flag SimulationRunner:Qemu:EnableSensorInputScenario bật.
     Task<CompileSimulationResponse?> TryGetCachedFirmwareAsync(
         string sourceCode,
         string board,
         string framework,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string sensorHeader = "");
 
     // Compile thật (qua ISimulationCompileService) rồi lưu cache nếu thành
     // công. `buildCacheScopeId` (tuỳ chọn) truyền tiếp làm
@@ -37,5 +44,6 @@ public interface IFirmwareCacheService
         string board,
         string framework,
         Guid? buildCacheScopeId,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        string sensorHeader = "");
 }

@@ -106,11 +106,35 @@ public sealed class QemuEsp32Runner : ISimulationRunner
 
         var snapshot = _diagramService.BuildRuntimeSnapshot(diagramAnalysis.DiagramJson);
 
+        // Sensor Input Bridge — Phase 1 (scenario/timeline, xem
+        // SensorRuntimeHeaderGenerator.cs + VIRTUAL_LAB_PLAN.md). Tắt theo mặc
+        // định (feature flag rỗng/false) — sensorHeader rỗng "" thì mọi hành vi
+        // compile/cache giữ NGUYÊN như trước khi có tính năng này (xem
+        // FirmwareCacheService.ResolveCacheDir). Tính rẻ (parse JSON string,
+        // không I/O) — an toàn để làm trong phần đồng bộ của RunAsync.
+        var sensorHeader = string.Empty;
+        if (_configuration.GetValue("SimulationRunner:Qemu:EnableSensorInputScenario", false))
+        {
+            var scenario = SensorRuntimeHeaderGenerator.TryParseScenario(diagramAnalysis.DiagramJson);
+            sensorHeader = SensorRuntimeHeaderGenerator.Generate(snapshot, scenario) ?? string.Empty;
+        }
+
+        // WiFi/Cloud — Virtual Cloud Runtime Phase 1 (xem
+        // CloudRuntimeHeaderGenerator.cs + VIRTUAL_LAB_PLAN.md). CỘNG THÊM vào
+        // sensorHeader (không phải khối riêng) — ResolveCacheDir chỉ nhận 1
+        // tham số sensorHeader, cộng chuỗi ở đây là đủ, không cần đổi chữ ký
+        // FirmwareCacheService. Rỗng khi diagram không có Cloud/Dashboard
+        // component -> cache key không đổi cho mọi diagram cũ.
+        if (_configuration.GetValue("SimulationRunner:Qemu:EnableCloudRuntime", false))
+        {
+            sensorHeader += CloudRuntimeHeaderGenerator.Generate(diagramAnalysis.DiagramJson) ?? string.Empty;
+        }
+
         var runCts = new CancellationTokenSource();
         _registry.Register(context.ProjectId, runCts);
 
         _ = Task.Run(
-            () => ExecuteInBackgroundAsync(context.SourceCode, board, snapshot, context, runCts),
+            () => ExecuteInBackgroundAsync(context.SourceCode, board, snapshot, context, runCts, sensorHeader),
             CancellationToken.None);
 
         return new SimulationRunResult
@@ -127,7 +151,8 @@ public sealed class QemuEsp32Runner : ISimulationRunner
         string board,
         VirtualLabRuntimeDiagramSnapshot snapshot,
         SimulationRunContext context,
-        CancellationTokenSource runCts)
+        CancellationTokenSource runCts,
+        string sensorHeader)
     {
         // Scope riêng cho LẦN CHẠY NÀY — IFirmwareCacheService (phụ thuộc
         // ISimulationCompileService, Scoped vì phụ thuộc StemDbContext) KHÔNG được
@@ -153,7 +178,7 @@ public sealed class QemuEsp32Runner : ISimulationRunner
             // project này, project khác, hoặc bản precompile sẵn cho starterCode
             // của Lab lúc giáo viên lưu bài), bỏ qua HẲN việc compile, chạy QEMU
             // ngay — đúng mục tiêu "nhanh như Wokwi" cho bài mẫu chưa sửa gì.
-            var cachedFirmware = await firmwareCache.TryGetCachedFirmwareAsync(sourceCode, board, "arduino", cancellationToken);
+            var cachedFirmware = await firmwareCache.TryGetCachedFirmwareAsync(sourceCode, board, "arduino", cancellationToken, sensorHeader);
             CompileSimulationResponse compileResult;
             if (cachedFirmware != null)
             {
@@ -184,7 +209,7 @@ public sealed class QemuEsp32Runner : ISimulationRunner
                 var buildCacheScopeId = Guid.TryParse(context.ProjectId, out var parsedScopeId)
                     ? parsedScopeId
                     : (Guid?)null;
-                compileResult = await firmwareCache.CompileAndCacheAsync(sourceCode, board, "arduino", buildCacheScopeId, cancellationToken);
+                compileResult = await firmwareCache.CompileAndCacheAsync(sourceCode, board, "arduino", buildCacheScopeId, cancellationToken, sensorHeader);
 
                 if (!compileResult.Success || string.IsNullOrEmpty(compileResult.FirmwareBase64))
                 {
@@ -455,6 +480,55 @@ public sealed class QemuEsp32Runner : ISimulationRunner
             if (Environment.GetEnvironmentVariable("STEM_QEMU_DEBUG") == "1")
             {
                 Console.Error.WriteLine($"[serial.log] {line}");
+            }
+
+            // WiFi/Cloud Phase 1 — kiểm tra marker cloud TRƯỚC SF_EVENT (không đụng
+            // nhau: "SF_CLOUD_EVENT"/"SF_CLOUD_LOG" không chứa substring "SF_EVENT "
+            // nên thứ tự không quan trọng, nhưng để rõ ràng vẫn xử lý riêng ở đây).
+            // KHÔNG increment eventsEmitted (giống nhánh raw-serial-passthrough bên
+            // dưới) — cloud event không ảnh hưởng heuristic suspiciousEarlyExit.
+            if (TryParseSfCloudEvent(line, out var cloudComponentId, out var cloudTopic, out var cloudValue))
+            {
+                var cloudTime = stopwatch.ElapsedMilliseconds;
+                await EmitAsync(eventStore, broadcaster, context.ProjectId, new SimulationEventResponse
+                {
+                    Type = "cloud-event",
+                    Time = cloudTime,
+                    Payload = new Dictionary<string, object?>
+                    {
+                        ["componentId"] = cloudComponentId,
+                        ["topic"] = cloudTopic,
+                        ["value"] = cloudValue,
+                        ["timeMs"] = cloudTime
+                    }
+                }, cancellationToken);
+
+                await EmitAsync(eventStore, broadcaster, context.ProjectId, new SimulationEventResponse
+                {
+                    Type = "serial",
+                    Time = cloudTime,
+                    Payload = new Dictionary<string, object?>
+                    {
+                        ["message"] = $"[cloud] {cloudTopic} = {cloudValue}",
+                        ["newline"] = true
+                    }
+                }, cancellationToken);
+                continue;
+            }
+
+            if (TryParseSfCloudLog(line, out var cloudLogComponentId, out var cloudLogMessage))
+            {
+                await EmitAsync(eventStore, broadcaster, context.ProjectId, new SimulationEventResponse
+                {
+                    Type = "serial",
+                    Time = stopwatch.ElapsedMilliseconds,
+                    Payload = new Dictionary<string, object?>
+                    {
+                        ["message"] = $"[cloud] {cloudLogMessage}",
+                        ["newline"] = true
+                    }
+                }, cancellationToken);
+                continue;
             }
 
             if (!TryParseSfEvent(line, out var pin, out var value))
@@ -733,6 +807,89 @@ public sealed class QemuEsp32Runner : ISimulationRunner
         }
         catch (JsonException)
         {
+            return false;
+        }
+    }
+
+    // WiFi/Cloud Phase 1 — value có thể là số (publish float/int) hoặc chuỗi
+    // (dự phòng, hiện StemFlowCloud chỉ publish số) -> giữ kiểu gốc từ JSON
+    // (double/string/bool) thay vì ép hết về string, để FE nhận đúng kiểu qua
+    // SignalR/JSON serialize lại. JSON lỗi -> false + cảnh báo ra stderr BE,
+    // KHÔNG throw/crash (dòng sẽ rơi xuống nhánh raw-serial-passthrough phía
+    // dưới, học sinh vẫn thấy dòng gốc trong Serial Monitor để debug).
+    private static bool TryParseSfCloudEvent(string line, out string componentId, out string topic, out object? value)
+    {
+        componentId = string.Empty;
+        topic = string.Empty;
+        value = null;
+
+        var markerIndex = line.IndexOf("SF_CLOUD_EVENT ", StringComparison.Ordinal);
+        if (markerIndex < 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var jsonPart = line[(markerIndex + "SF_CLOUD_EVENT ".Length)..].Trim();
+            using var doc = JsonDocument.Parse(jsonPart);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("componentId", out var idEl) || !root.TryGetProperty("topic", out var topicEl))
+            {
+                return false;
+            }
+
+            componentId = idEl.GetString() ?? string.Empty;
+            topic = topicEl.GetString() ?? string.Empty;
+            if (root.TryGetProperty("value", out var valueEl))
+            {
+                value = valueEl.ValueKind switch
+                {
+                    JsonValueKind.Number => valueEl.TryGetDouble(out var d) ? d : null,
+                    JsonValueKind.String => valueEl.GetString(),
+                    JsonValueKind.True => true,
+                    JsonValueKind.False => false,
+                    _ => null
+                };
+            }
+
+            return componentId.Length > 0 && topic.Length > 0;
+        }
+        catch (JsonException ex)
+        {
+            Console.Error.WriteLine($"[cloud] SF_CLOUD_EVENT JSON không hợp lệ, bỏ qua dòng này: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static bool TryParseSfCloudLog(string line, out string componentId, out string message)
+    {
+        componentId = string.Empty;
+        message = string.Empty;
+
+        var markerIndex = line.IndexOf("SF_CLOUD_LOG ", StringComparison.Ordinal);
+        if (markerIndex < 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var jsonPart = line[(markerIndex + "SF_CLOUD_LOG ".Length)..].Trim();
+            using var doc = JsonDocument.Parse(jsonPart);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("componentId", out var idEl) || !root.TryGetProperty("message", out var msgEl))
+            {
+                return false;
+            }
+
+            componentId = idEl.GetString() ?? string.Empty;
+            message = msgEl.GetString() ?? string.Empty;
+            return componentId.Length > 0;
+        }
+        catch (JsonException ex)
+        {
+            Console.Error.WriteLine($"[cloud] SF_CLOUD_LOG JSON không hợp lệ, bỏ qua dòng này: {ex.Message}");
             return false;
         }
     }

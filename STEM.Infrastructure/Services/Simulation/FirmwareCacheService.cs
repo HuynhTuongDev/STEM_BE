@@ -66,9 +66,10 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
         string sourceCode,
         string board,
         string framework,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string sensorHeader = "")
     {
-        var cacheDir = ResolveCacheDir(sourceCode, board, framework);
+        var cacheDir = ResolveCacheDir(sourceCode, board, framework, sensorHeader);
         var cacheKey = Path.GetFileName(cacheDir);
         var firmwarePath = Path.Combine(cacheDir, "firmware.bin");
         var metaPath = Path.Combine(cacheDir, "meta.json");
@@ -113,9 +114,10 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
         string board,
         string framework,
         Guid? buildCacheScopeId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string sensorHeader = "")
     {
-        var cacheDir = ResolveCacheDir(sourceCode, board, framework);
+        var cacheDir = ResolveCacheDir(sourceCode, board, framework, sensorHeader);
         var cacheKey = Path.GetFileName(cacheDir);
 
         // Single-flight qua ICompileCoordinator — nếu 1 caller khác (vd nền
@@ -125,7 +127,7 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
         // caller gốc có bỏ cuộc hay không — kết quả vẫn có ích cho cache.
         return _coordinator.GetOrCompileAsync(
             cacheKey,
-            () => CompileAndWriteCacheCoreAsync(sourceCode, board, framework, buildCacheScopeId, cacheDir, cacheKey),
+            () => CompileAndWriteCacheCoreAsync(sourceCode, board, framework, buildCacheScopeId, cacheDir, cacheKey, sensorHeader),
             cancellationToken);
     }
 
@@ -135,7 +137,8 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
         string framework,
         Guid? buildCacheScopeId,
         string cacheDir,
-        string cacheKey)
+        string cacheKey,
+        string sensorHeader)
     {
         // Kiểm tra lại cache NGAY TRONG closure được ICompileCoordinator bảo vệ
         // (không phải trước khi gọi coordinator) — bắt đúng trường hợp: 1 lần
@@ -146,7 +149,7 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
         // phát StudentCompileStarted hay không). Không có bước này,
         // CompileAndCacheAsync sẽ compile lại lãng phí ~40-90s mỗi lần gọi dù
         // nội dung không đổi.
-        var existing = await TryGetCachedFirmwareAsync(sourceCode, board, framework, CancellationToken.None);
+        var existing = await TryGetCachedFirmwareAsync(sourceCode, board, framework, CancellationToken.None, sensorHeader);
         if (existing != null)
         {
             return existing;
@@ -154,7 +157,11 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
 
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
 
-        var instrumentedSource = GpioInstrumentationPreamble + sourceCode;
+        // sensorHeader (Sensor Input Bridge, xem SensorRuntimeHeaderGenerator.cs)
+        // đứng SAU GpioInstrumentationPreamble, TRƯỚC sourceCode học sinh — rỗng
+        // "" theo mặc định (nối rỗng vào chuỗi không đổi gì, instrumentedSource
+        // giữ nguyên byte-for-byte như trước khi có tính năng này).
+        var instrumentedSource = GpioInstrumentationPreamble + sensorHeader + sourceCode;
         var compileResult = await _compileService.CompileAsync(new CompileSimulationRequest
         {
             SourceCode = instrumentedSource,
@@ -209,7 +216,7 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
         return Path.Combine(workingRoot, "firmware-cache");
     }
 
-    private string ResolveCacheDir(string sourceCode, string board, string framework)
+    private string ResolveCacheDir(string sourceCode, string board, string framework, string sensorHeader = "")
     {
         var fqbn = SimulationCompileService.NormalizeBoard(board);
         var keyInput = string.Join(
@@ -219,7 +226,8 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
             framework,
             fqbn,
             InstrumentationVersion,
-            RunnerMode);
+            RunnerMode,
+            sensorHeader);
         var hash = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(keyInput))).ToLowerInvariant();
         return Path.Combine(ResolveCacheRoot(), hash);
     }
