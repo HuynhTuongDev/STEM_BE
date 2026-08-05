@@ -12,7 +12,6 @@ using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Simulations;
 using STEM.Core.Entities.Assessments;
 using STEM.Core.Entities.Payments;
-using STEM.Core.Entities.VirtualLabs;
 using Microsoft.EntityFrameworkCore;
 
 public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(options)
@@ -40,6 +39,9 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<Assignment> Assignments => Set<Assignment>();
+    public DbSet<AssignmentQuizDetail> AssignmentQuizDetails => Set<AssignmentQuizDetail>();
+    public DbSet<AssignmentReportDetail> AssignmentReportDetails => Set<AssignmentReportDetail>();
+    public DbSet<AssignmentSimulationDetail> AssignmentSimulationDetails => Set<AssignmentSimulationDetail>();
     public DbSet<Submission> Submissions => Set<Submission>();
     public DbSet<Metric> Metrics => Set<Metric>();
     public DbSet<FileEntity> FileEntities => Set<FileEntity>();
@@ -49,6 +51,12 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<SimulationSession> SimulationSessions => Set<SimulationSession>();
     public DbSet<ExperimentLog> ExperimentLogs => Set<ExperimentLog>();
     public DbSet<LiveMonitoring> LiveMonitorings => Set<LiveMonitoring>();
+
+    public DbSet<VirtualLabProject> VirtualLabProjects => Set<VirtualLabProject>();
+    public DbSet<Lab> Labs => Set<Lab>();
+    public DbSet<LabClassAssignment> LabClassAssignments => Set<LabClassAssignment>();
+    public DbSet<LabProgress> LabProgresses => Set<LabProgress>();
+    public DbSet<ComponentGlueRegistry> ComponentGlueRegistry => Set<ComponentGlueRegistry>();
 
     public DbSet<Quiz> Quizzes => Set<Quiz>();
     public DbSet<QuizQuestion> QuizQuestions => Set<QuizQuestion>();
@@ -261,6 +269,68 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany()
             .HasForeignKey(a => a.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Assignment>()
+            .Property(a => a.AssignmentType)
+            .HasMaxLength(40);
+
+        modelBuilder.Entity<Assignment>()
+            .Property(a => a.Status)
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<Assignment>()
+            .Property(a => a.MaxScore)
+            .HasColumnType("numeric(6,2)");
+
+        modelBuilder.Entity<AssignmentQuizDetail>()
+            .HasOne(d => d.Assignment)
+            .WithOne(a => a.QuizDetail)
+            .HasForeignKey<AssignmentQuizDetail>(d => d.AssignmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AssignmentQuizDetail>()
+            .Property(d => d.QuestionsJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentReportDetail>()
+            .HasOne(d => d.Assignment)
+            .WithOne(a => a.ReportDetail)
+            .HasForeignKey<AssignmentReportDetail>(d => d.AssignmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AssignmentReportDetail>()
+            .Property(d => d.AllowedSubmissionTypesJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentReportDetail>()
+            .Property(d => d.AllowedFileExtensionsJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .HasOne(d => d.Assignment)
+            .WithOne(a => a.SimulationDetail)
+            .HasForeignKey<AssignmentSimulationDetail>(d => d.AssignmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .Property(d => d.BaseDiagramJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .Property(d => d.AllowedComponentTypesJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .Property(d => d.AnswerKeyJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .Property(d => d.EnvironmentSource)
+            .HasMaxLength(40);
+
+        modelBuilder.Entity<AssignmentSimulationDetail>()
+            .Property(d => d.StudentInputMode)
+            .HasMaxLength(40);
 
         // Submission -> Assignment
         modelBuilder.Entity<Submission>()
@@ -488,5 +558,374 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             }
         );
 
+        modelBuilder.Entity<VirtualLabProject>()
+            .Property(project => project.Status)
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<VirtualLabProject>()
+            .Property(project => project.SimulationEventsJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<VirtualLabProject>()
+            .HasIndex(project => project.LabId);
+
+        modelBuilder.Entity<VirtualLabProject>()
+            .HasOne<Lab>()
+            .WithMany()
+            .HasForeignKey(project => project.LabId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Lab>()
+            .HasOne(l => l.CreatedBy)
+            .WithMany()
+            .HasForeignKey(l => l.CreatedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Lab>()
+            .HasOne(l => l.LinkedAssignment)
+            .WithMany()
+            .HasForeignKey(l => l.LinkedAssignmentId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.Title)
+            .HasMaxLength(200);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.Category)
+            .HasMaxLength(40);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.ThumbnailUrl)
+            .HasMaxLength(2048);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.SimulationMode)
+            .HasMaxLength(40);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.BoardType)
+            .HasMaxLength(40);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.CircuitConfigJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.AllowedComponentTypesJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.WokwiProjectId)
+            .HasMaxLength(80);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.WokwiProjectUrl)
+            .HasMaxLength(2048);
+
+        modelBuilder.Entity<Lab>()
+            .Property(l => l.Status)
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<Lab>()
+            .HasIndex(l => l.Status);
+
+        modelBuilder.Entity<Lab>()
+            .HasIndex(l => l.Category);
+
+        modelBuilder.Entity<LabClassAssignment>()
+            .HasOne(assignment => assignment.Lab)
+            .WithMany(lab => lab.ClassAssignments)
+            .HasForeignKey(assignment => assignment.LabId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LabClassAssignment>()
+            .HasOne(assignment => assignment.Class)
+            .WithMany()
+            .HasForeignKey(assignment => assignment.ClassId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LabClassAssignment>()
+            .HasIndex(assignment => new { assignment.LabId, assignment.ClassId })
+            .IsUnique();
+
+        modelBuilder.Entity<LabProgress>()
+            .HasOne(progress => progress.Lab)
+            .WithMany(lab => lab.Progresses)
+            .HasForeignKey(progress => progress.LabId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<LabProgress>()
+            .HasOne(progress => progress.Student)
+            .WithMany()
+            .HasForeignKey(progress => progress.StudentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<LabProgress>()
+            .HasIndex(progress => new { progress.LabId, progress.StudentId })
+            .IsUnique();
+
+        modelBuilder.Entity<ComponentGlueRegistry>()
+            .HasKey(component => component.ComponentType);
+
+        modelBuilder.Entity<ComponentGlueRegistry>()
+            .Property(component => component.ComponentType)
+            .HasMaxLength(80);
+
+        modelBuilder.Entity<ComponentGlueRegistry>()
+            .Property(component => component.Label)
+            .HasMaxLength(120);
+
+        modelBuilder.Entity<ComponentGlueRegistry>()
+            .Property(component => component.PinRequirementsJson)
+            .HasColumnType("jsonb");
+
+        var componentSeedTime = new DateTime(2026, 7, 9, 0, 0, 0, DateTimeKind.Utc);
+        modelBuilder.Entity<ComponentGlueRegistry>().HasData(
+            new ComponentGlueRegistry
+            {
+                ComponentType = "led",
+                Label = "LED",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"pin","kind":"digital_output"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "push_button",
+                Label = "Push Button",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"pin","kind":"digital_input"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "buzzer",
+                Label = "Buzzer",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"pin","kind":"pwm_output"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "potentiometer",
+                Label = "Potentiometer",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"pin","kind":"analog_input"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "servo",
+                Label = "Servo",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"pin","kind":"pwm_output"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "dht22",
+                Label = "DHT22",
+                Supported = false,
+                PinRequirementsJson = """{"pins":[{"name":"data","kind":"digital_bidirectional"}]}""",
+                CreatedAt = componentSeedTime,
+                UpdatedAt = componentSeedTime
+            });
+
+        // Robot giao hàng mini — additive, không sửa/xoá 6 dòng seed cũ ở trên
+        // (những dòng đó vẫn giữ type ngắn "led"/"buzzer"/... đã lệch so với DB
+        // thật, được vá tay qua SQLScripts/FixVirtualLabComponentTypeMismatch.sql
+        // — không thuộc phạm vi task này). Dùng tiền tố "wokwi-" khớp đúng quy
+        // ước SupportedPins trong VirtualLabDiagramService.cs và dữ liệu DB thật
+        // hiện tại, tránh lặp lại đúng lỗi lệch type đã xảy ra trước đó.
+        //
+        // Cả 10 type đều Supported=true — ComponentGlueRegistry chỉ quyết định
+        // "có xuất hiện trong palette giáo viên + qua được
+        // EnsureAllowedComponentsSupportedAsync lúc lưu Lab" hay không, KHÔNG
+        // quyết định có tham gia wiring/netlist hay không (việc đó do
+        // SupportedPins trong VirtualLabDiagramService.cs quyết định). 4 linh
+        // kiện có điện (hc-sr04/l298n/dc-motor/battery-pack/power-switch — riêng
+        // power-switch xem SupportedPins) có entry trong SupportedPins nên được
+        // validate wiring thật; 5 linh kiện cơ khí/hiển thị thuần (wheel/caster
+        // wheel/chassis/breadboard/delivery-box) CỐ TÌNH KHÔNG có trong
+        // SupportedPins — parse thành part bình thường (chỉ warning "not modeled
+        // by MVP validator", không error) nhưng không tham gia netlist/wiring,
+        // không có pin-dot ở FE (pinMaps.ts không có entry). PinRequirementsJson
+        // "visualOnly":true chỉ là ghi chú, chưa có code nào đọc field này.
+        var robotKitSeedTime = new DateTime(2026, 7, 26, 0, 0, 0, DateTimeKind.Utc);
+        modelBuilder.Entity<ComponentGlueRegistry>().HasData(
+            new ComponentGlueRegistry
+            {
+                ComponentType = "wokwi-hc-sr04",
+                Label = "HC-SR04 Ultrasonic Sensor",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"TRIG","kind":"digital_output"},{"name":"ECHO","kind":"digital_input"},{"name":"GND","kind":"ground"}]}""",
+                CreatedAt = robotKitSeedTime,
+                UpdatedAt = robotKitSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "wokwi-l298n",
+                Label = "L298N Motor Driver",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"IN1","kind":"digital_output"},{"name":"IN2","kind":"digital_output"},{"name":"IN3","kind":"digital_output"},{"name":"IN4","kind":"digital_output"},{"name":"ENA","kind":"pwm_output"},{"name":"ENB","kind":"pwm_output"},{"name":"OUT1","kind":"motor_output"},{"name":"OUT2","kind":"motor_output"},{"name":"OUT3","kind":"motor_output"},{"name":"OUT4","kind":"motor_output"},{"name":"VIN","kind":"power"},{"name":"GND","kind":"ground"},{"name":"5V","kind":"power"}]}""",
+                CreatedAt = robotKitSeedTime,
+                UpdatedAt = robotKitSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "wokwi-dc-motor",
+                Label = "DC Geared Motor / TT Motor",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"terminal1","kind":"motor_terminal"},{"name":"terminal2","kind":"motor_terminal"}]}""",
+                CreatedAt = robotKitSeedTime,
+                UpdatedAt = robotKitSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "wokwi-battery-pack",
+                Label = "Battery Pack 7.4V (2x18650)",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"+","kind":"power"},{"name":"-","kind":"ground"}]}""",
+                CreatedAt = robotKitSeedTime,
+                UpdatedAt = robotKitSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "wokwi-power-switch",
+                Label = "Power Switch",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"IN","kind":"power"},{"name":"OUT","kind":"power"}]}""",
+                CreatedAt = robotKitSeedTime,
+                UpdatedAt = robotKitSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "wokwi-robot-wheel",
+                Label = "Robot Wheel",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[],"visualOnly":true}""",
+                CreatedAt = robotKitSeedTime,
+                UpdatedAt = robotKitSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "wokwi-caster-wheel",
+                Label = "Caster Wheel",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[],"visualOnly":true}""",
+                CreatedAt = robotKitSeedTime,
+                UpdatedAt = robotKitSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "wokwi-robot-chassis",
+                Label = "Robot Chassis",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[],"visualOnly":true}""",
+                CreatedAt = robotKitSeedTime,
+                UpdatedAt = robotKitSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "wokwi-breadboard",
+                Label = "Breadboard",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[],"visualOnly":true}""",
+                CreatedAt = robotKitSeedTime,
+                UpdatedAt = robotKitSeedTime
+            },
+            new ComponentGlueRegistry
+            {
+                ComponentType = "wokwi-delivery-box",
+                Label = "Mini Delivery Box",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[],"visualOnly":true}""",
+                CreatedAt = robotKitSeedTime,
+                UpdatedAt = robotKitSeedTime
+            });
+
+        // Ngoài Robot giao hàng mini — bằng chứng nhóm "output-easy" (chỉ cần
+        // digitalWrite, giống LED/Buzzer/L298N) có thể mở rộng an toàn theo
+        // đúng pattern cũ, không cần khả năng runtime mới nào.
+        var nextTierSeedTime = new DateTime(2026, 7, 27, 0, 0, 0, DateTimeKind.Utc);
+        modelBuilder.Entity<ComponentGlueRegistry>().HasData(
+            new ComponentGlueRegistry
+            {
+                ComponentType = "wokwi-rgb-led",
+                Label = "RGB LED",
+                Supported = true,
+                PinRequirementsJson = """{"pins":[{"name":"R","kind":"digital_output"},{"name":"G","kind":"digital_output"},{"name":"B","kind":"digital_output"},{"name":"COM","kind":"power_or_ground"}]}""",
+                CreatedAt = nextTierSeedTime,
+                UpdatedAt = nextTierSeedTime
+            });
+
+        // Thư viện linh kiện mở rộng (Component Library, 2026-07-27) — phục vụ
+        // các bài demo ngoài Robot giao hàng mini (sensor/actuator/display/
+        // communication/robot cơ khí). TẤT CẢ đều Supported=true (điều kiện
+        // DUY NHẤT để xuất hiện trong palette) kể cả item visual-only — visual-
+        // only chỉ khác ở chỗ KHÔNG có entry tương ứng trong SupportedPins (BE)
+        // nên không tham gia netlist/wiring, giống Robot Wheel/Chassis/... đã
+        // có từ trước. wokwi-dht11/wokwi-lcd1602 đã có sẵn SupportedPins nhưng
+        // CHƯA từng có dòng ComponentGlueRegistry — bổ sung ở đây để lần đầu
+        // xuất hiện trong palette.
+        var libSeedTime = new DateTime(2026, 7, 27, 12, 0, 0, DateTimeKind.Utc);
+        modelBuilder.Entity<ComponentGlueRegistry>().HasData(
+            new ComponentGlueRegistry { ComponentType = "wokwi-flame-sensor", Label = "Flame Sensor", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"DOUT","kind":"digital_input"},{"name":"AOUT","kind":"analog"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-gas-sensor", Label = "MQ Gas Sensor", Supported = true, PinRequirementsJson = """{"pins":[{"name":"AOUT","kind":"analog"},{"name":"DOUT","kind":"digital_input"},{"name":"GND","kind":"ground"},{"name":"VCC","kind":"power"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-pir-motion-sensor", Label = "PIR Motion Sensor", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"OUT","kind":"digital_input"},{"name":"GND","kind":"ground"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-photoresistor-sensor", Label = "Light Sensor / LDR", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"DO","kind":"digital_input"},{"name":"AO","kind":"analog"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-ntc-temperature-sensor", Label = "Temperature Sensor (NTC)", Supported = true, PinRequirementsJson = """{"pins":[{"name":"GND","kind":"ground"},{"name":"VCC","kind":"power"},{"name":"OUT","kind":"analog"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-hx711", Label = "Load Cell HX711", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"DT","kind":"digital_input"},{"name":"SCK","kind":"digital_output"},{"name":"GND","kind":"ground"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-ir-receiver", Label = "IR Receiver", Supported = true, PinRequirementsJson = """{"pins":[{"name":"GND","kind":"ground"},{"name":"VCC","kind":"power"},{"name":"DAT","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-membrane-keypad", Label = "Keypad (4x4)", Supported = true, PinRequirementsJson = """{"pins":[{"name":"R1","kind":"digital_output"},{"name":"R2","kind":"digital_output"},{"name":"R3","kind":"digital_output"},{"name":"R4","kind":"digital_output"},{"name":"C1","kind":"digital_input"},{"name":"C2","kind":"digital_input"},{"name":"C3","kind":"digital_input"},{"name":"C4","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-ssd1306", Label = "OLED SSD1306", Supported = true, PinRequirementsJson = """{"pins":[{"name":"DATA","kind":"i2c"},{"name":"CLK","kind":"i2c"},{"name":"DC","kind":"digital_output"},{"name":"RST","kind":"digital_output"},{"name":"CS","kind":"digital_output"},{"name":"3V3","kind":"power"},{"name":"VIN","kind":"power"},{"name":"GND","kind":"ground"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-lcd1602", Label = "LCD 16x2", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VSS","kind":"ground"},{"name":"VDD","kind":"power"},{"name":"V0","kind":"analog"},{"name":"RS","kind":"digital_output"},{"name":"RW","kind":"digital_output"},{"name":"E","kind":"digital_output"},{"name":"D0","kind":"digital_output"},{"name":"D1","kind":"digital_output"},{"name":"D2","kind":"digital_output"},{"name":"D3","kind":"digital_output"},{"name":"D4","kind":"digital_output"},{"name":"D5","kind":"digital_output"},{"name":"D6","kind":"digital_output"},{"name":"D7","kind":"digital_output"},{"name":"A","kind":"power"},{"name":"K","kind":"ground"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-lcd1602-i2c", Label = "LCD 16x2 I2C", Supported = true, PinRequirementsJson = """{"pins":[{"name":"GND","kind":"ground"},{"name":"VCC","kind":"power"},{"name":"SDA","kind":"i2c"},{"name":"SCL","kind":"i2c"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-neopixel", Label = "NeoPixel / LED Strip", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VDD","kind":"power"},{"name":"DOUT","kind":"digital_output"},{"name":"VSS","kind":"ground"},{"name":"DIN","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-led-bar-graph", Label = "LED Bar Graph", Supported = true, PinRequirementsJson = """{"pins":[{"name":"A1","kind":"digital_output"},{"name":"A2","kind":"digital_output"},{"name":"A3","kind":"digital_output"},{"name":"A4","kind":"digital_output"},{"name":"A5","kind":"digital_output"},{"name":"A6","kind":"digital_output"},{"name":"A7","kind":"digital_output"},{"name":"A8","kind":"digital_output"},{"name":"A9","kind":"digital_output"},{"name":"A10","kind":"digital_output"},{"name":"C1","kind":"ground"},{"name":"C2","kind":"ground"},{"name":"C3","kind":"ground"},{"name":"C4","kind":"ground"},{"name":"C5","kind":"ground"},{"name":"C6","kind":"ground"},{"name":"C7","kind":"ground"},{"name":"C8","kind":"ground"},{"name":"C9","kind":"ground"},{"name":"C10","kind":"ground"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-7segment", Label = "Seven Segment Display", Supported = true, PinRequirementsJson = """{"pins":[{"name":"COM.1","kind":"power_or_ground"},{"name":"COM.2","kind":"power_or_ground"},{"name":"A","kind":"digital_output"},{"name":"B","kind":"digital_output"},{"name":"C","kind":"digital_output"},{"name":"D","kind":"digital_output"},{"name":"E","kind":"digital_output"},{"name":"F","kind":"digital_output"},{"name":"G","kind":"digital_output"},{"name":"DP","kind":"digital_output"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-stepper-motor", Label = "Stepper Motor", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-ili9341", Label = "TFT Display (ILI9341)", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-dht11", Label = "DHT11", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"SDA","kind":"digital_bidirectional"},{"name":"NC","kind":"none"},{"name":"GND","kind":"ground"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-relay-module", Label = "Relay Module", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"IN","kind":"digital_input"},{"name":"GND","kind":"ground"},{"name":"NO","kind":"switch"},{"name":"COM","kind":"switch"},{"name":"NC","kind":"switch"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-fan", Label = "Fan / DC Fan", Supported = true, PinRequirementsJson = """{"pins":[{"name":"+","kind":"power"},{"name":"-","kind":"ground"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-water-pump", Label = "Water Pump / Mini Pump", Supported = true, PinRequirementsJson = """{"pins":[{"name":"+","kind":"power"},{"name":"-","kind":"ground"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-water-leak-sensor", Label = "Water Leak Sensor", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"S","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-rain-sensor", Label = "Rain Sensor", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"DO","kind":"digital_input"},{"name":"AO","kind":"analog"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-soil-moisture-sensor", Label = "Soil Moisture Sensor", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"DO","kind":"digital_input"},{"name":"AO","kind":"analog"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-ir-obstacle-sensor", Label = "IR Obstacle Sensor", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"OUT","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-line-tracking-sensor", Label = "Line Tracking Sensor", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"OUT","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-color-sensor", Label = "Color Sensor", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"SDA","kind":"i2c"},{"name":"SCL","kind":"i2c"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-vibration-sensor", Label = "Vibration Sensor / SW-420", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"OUT","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-solenoid-valve", Label = "Solenoid / Valve", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-esp32-cam", Label = "ESP32-CAM", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-wifi-cloud-node", Label = "WiFi / Cloud Node", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-dashboard-cloud", Label = "Dashboard / Cloud", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-robot-arm-base", Label = "Robot Arm Base", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-gripper", Label = "Gripper", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-conveyor-belt", Label = "Conveyor Belt", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-sorting-box", Label = "Sorting Box", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-ball", Label = "Ball", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-fire-extinguisher", Label = "Fire Extinguisher", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-water-tank", Label = "Water Tank", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-drone-frame", Label = "Drone Frame", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-propeller", Label = "Propeller", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-drone-motor", Label = "Drone Motor", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-stair-obstacle", Label = "Stair / Obstacle Block", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-trash-object", Label = "Trash Object", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-delivery-item", Label = "Delivery Package / Item", Supported = true, PinRequirementsJson = """{"pins":[],"visualOnly":true}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-mpu6050", Label = "IMU MPU6050", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"SCL","kind":"i2c"},{"name":"SDA","kind":"i2c"},{"name":"XDA","kind":"i2c"},{"name":"XCL","kind":"i2c"},{"name":"AD0","kind":"digital_input"},{"name":"INT","kind":"digital_output"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-esc", Label = "ESC (Electronic Speed Controller)", Supported = true, PinRequirementsJson = """{"pins":[{"name":"SIG","kind":"digital_input"},{"name":"GND","kind":"ground"},{"name":"BATT+","kind":"power"},{"name":"BATT-","kind":"ground"},{"name":"OUT+","kind":"power"},{"name":"OUT-","kind":"ground"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-heating-element", Label = "Heating Element", Supported = true, PinRequirementsJson = """{"pins":[{"name":"+","kind":"power"},{"name":"-","kind":"ground"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-ph-sensor", Label = "pH Sensor", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"PO","kind":"analog"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-line-tracking-3ch", Label = "Line Tracking Sensor (3 kênh)", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"OUT1","kind":"digital_input"},{"name":"OUT2","kind":"digital_input"},{"name":"OUT3","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-line-tracking-5ch", Label = "Line Tracking Sensor (5 kênh)", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"OUT1","kind":"digital_input"},{"name":"OUT2","kind":"digital_input"},{"name":"OUT3","kind":"digital_input"},{"name":"OUT4","kind":"digital_input"},{"name":"OUT5","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
+            new ComponentGlueRegistry { ComponentType = "wokwi-lcd2004", Label = "LCD 20x4 I2C", Supported = true, PinRequirementsJson = """{"pins":[{"name":"GND","kind":"ground"},{"name":"VCC","kind":"power"},{"name":"SDA","kind":"i2c"},{"name":"SCL","kind":"i2c"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime });
     }
 }
