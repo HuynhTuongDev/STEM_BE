@@ -33,7 +33,10 @@ public class CreateUserBySchoolAdminHandler
     {
         await _validator.ValidateAndThrowAsync(request, cancellationToken);
 
-        var existingUser = await _userRepository.GetByEmailAsync(request.Email, cancellationToken);
+        var trimmedEmail = request.Email.Trim();
+        var trimmedPhone = request.Phone.Trim();
+
+        var existingUser = await _userRepository.GetByEmailAsync(trimmedEmail, cancellationToken);
         if (existingUser != null)
             throw new InvalidOperationException("Email is already registered.");
 
@@ -48,11 +51,12 @@ public class CreateUserBySchoolAdminHandler
 
         var user = new User
         {
-            Email = request.Email,
-            FullName = string.IsNullOrWhiteSpace(request.FullName)
-                ? request.Email.Substring(0, request.Email.IndexOf('@'))
-                : request.FullName.Trim(),
-            Phone = string.IsNullOrWhiteSpace(request.Phone) ? string.Empty : request.Phone.Trim(),
+            Email = trimmedEmail,
+            FullName = request.FullName.Trim(),
+            Phone = trimmedPhone,
+            Gender = request.Gender,
+            DateOfBirth = DateOnly.TryParse(request.DateOfBirth, out var dob) ? dob : (DateOnly?)null,
+            Address = request.Address,
             IsActive = true,
             IsEmailVerified = true,
             RoleId = request.RoleId,

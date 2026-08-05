@@ -6,6 +6,7 @@ namespace STEM.Core.Repository;
 public interface IUserRepository : IRepository<User>
 {
     Task<User?> GetByEmailAsync(string email, CancellationToken cancellationToken = default);
+    Task<User?> GetByPhoneAsync(string phone, CancellationToken cancellationToken = default);
     Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default);
     Task<(IEnumerable<User> Users, int TotalCount)> GetUsersPagedAsync(
         int pageNumber,

@@ -29,6 +29,14 @@ public class UserRepository : Repository<User>, IUserRepository
             .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
     }
 
+    public async Task<User?> GetByPhoneAsync(string phone, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(u => u.Role)
+            .Include(u => u.School)
+            .FirstOrDefaultAsync(u => u.Phone == phone, cancellationToken);
+    }
+
     public async Task<User?> GetByUsernameAsync(string username, CancellationToken cancellationToken = default)
     {
         return await _dbSet

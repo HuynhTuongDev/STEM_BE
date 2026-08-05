@@ -16,13 +16,10 @@ using STEM.Application.UseCases.VirtualLabs;
 using STEM.Application.UseCases.Students;
 using STEM.Application.UseCases.Schedules;
 using STEM.Application.UseCases.Payments;
-using STEM.Application.UseCases.Simulation.Abstractions;
-using STEM.Application.UseCases.Simulation.Runners.Educational;
-using STEM.Application.UseCases.Simulation.Runners.Mock;
-using STEM.Application.UseCases.Simulation.Runners.Qemu;
-using STEM.Application.UseCases.Simulation.Runtime;
 using FluentValidation;
 using STEM.Application.Validators;
+using STEM.Core.Repository;
+using STEM.Application.Dtos.Auth;
 
 namespace STEM.Application.Extensions;
 
@@ -141,8 +138,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetTokenTransactionsHandler>();
         services.AddScoped<UseTokenHandler>();
 
-        // Validators
+        // Validators - register all validators from assembly
         services.AddValidatorsFromAssemblyContaining<CreateUserBySchoolAdminValidator>();
+
+        // Override specific validator with DI support
+        services.AddScoped<IValidator<CreateUserBySchoolAdminRequest>>(sp =>
+            new CreateUserBySchoolAdminValidator(sp.GetRequiredService<IUserRepository>()));
 
         return services;
     }
