@@ -204,6 +204,17 @@ public class DashboardController : ControllerBase
 
             chartData["schoolsGrowth"] = schoolsGrowth;
 
+            // User distribution by role
+            var allUsers = (await _userRepository.GetAllAsync(cancellationToken)).ToList();
+            var userDistribution = new[]
+            {
+                new { name = "Master Admin", value = allUsers.Count(u => u.RoleId == 1) },
+                new { name = "School Admin", value = allUsers.Count(u => u.RoleId == 2) },
+                new { name = "Giáo viên", value = allUsers.Count(u => u.RoleId == 3) },
+                new { name = "Học sinh", value = allUsers.Count(u => u.RoleId == 4) },
+            };
+            chartData["usersByRole"] = userDistribution;
+
             return Ok(new { success = true, data = chartData });
         }
         catch (Exception ex)

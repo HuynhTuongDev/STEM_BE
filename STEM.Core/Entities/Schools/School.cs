@@ -24,6 +24,10 @@ public class School : BaseEntity
     public string? RepresentativePosition { get; set; }
     public string? Website { get; set; }
     public string? Notes { get; set; }
+    public string? RejectionReason { get; set; }
+    public string? AttachmentUrl { get; set; }
+    public string? AttachmentFileName { get; set; }
+    public string? OriginalAttachmentFileName { get; set; }
 
     public ICollection<User> Users { get; set; } = new List<User>();
     public ICollection<Class> Classes { get; set; } = new List<Class>();

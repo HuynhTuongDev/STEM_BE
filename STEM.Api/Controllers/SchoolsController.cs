@@ -15,20 +15,17 @@ public class SchoolsController : ControllerBase
     private readonly IUserRepository _userRepository;
     private readonly RegisterSchoolHandler _registerSchoolHandler;
     private readonly UpdateSchoolHandler _updateSchoolHandler;
-    private readonly DeleteSchoolHandler _deleteSchoolHandler;
 
     public SchoolsController(
         IRepository<School> schoolRepository,
         IUserRepository userRepository,
         RegisterSchoolHandler registerSchoolHandler,
-        UpdateSchoolHandler updateSchoolHandler,
-        DeleteSchoolHandler deleteSchoolHandler)
+        UpdateSchoolHandler updateSchoolHandler)
     {
         _schoolRepository = schoolRepository;
         _userRepository = userRepository;
         _registerSchoolHandler = registerSchoolHandler;
         _updateSchoolHandler = updateSchoolHandler;
-        _deleteSchoolHandler = deleteSchoolHandler;
     }
 
     /// <summary>
@@ -99,7 +96,10 @@ public class SchoolsController : ControllerBase
                 s.StudentScale,
                 s.RepresentativePosition,
                 s.Website,
-                s.Notes
+                s.Notes,
+                s.AttachmentUrl,
+                s.AttachmentFileName,
+                s.OriginalAttachmentFileName
             }).OrderBy(s => s.Name);
 
             return Ok(new { success = true, data = result });
@@ -140,7 +140,10 @@ public class SchoolsController : ControllerBase
                 school.StudentScale,
                 school.RepresentativePosition,
                 school.Website,
-                school.Notes
+                school.Notes,
+                school.AttachmentUrl,
+                school.AttachmentFileName,
+                school.OriginalAttachmentFileName
             }});
         }
         catch (Exception ex)
@@ -195,16 +198,29 @@ public class SchoolsController : ControllerBase
                 ?? throw new KeyNotFoundException($"School with id {id} not found.");
 
             // Toggle between Approved and Rejected/Locked
-            school.Status = school.Status == SchoolStatus.Approved 
-                ? SchoolStatus.Rejected 
-                : SchoolStatus.Approved;
+            var wasLocked = school.Status == SchoolStatus.Rejected;
+            school.Status = wasLocked
+                ? SchoolStatus.Approved
+                : SchoolStatus.Rejected;
 
             _schoolRepository.Update(school);
+
+            // Disable or enable all users in this school
+            var usersInSchool = await _userRepository.FindAsync(
+                u => u.SchoolId == id,
+                cancellationToken);
+
+            foreach (var user in usersInSchool)
+            {
+                user.IsActive = wasLocked; // If unlocking, enable users; if locking, disable users
+                _userRepository.Update(user);
+            }
+
             await _schoolRepository.SaveChangesAsync(cancellationToken);
 
             var message = school.Status == SchoolStatus.Approved
-                ? "School unlocked successfully."
-                : "School locked successfully. All users in this school have been disabled.";
+                ? "Trường đã được mở khóa. Tất cả người dùng trong trường đã được kích hoạt."
+                : "Trường đã bị khóa. Tất cả người dùng trong trường đã bị vô hiệu hóa.";
 
             return Ok(new { success = true, message, status = school.Status });
         }
@@ -218,26 +234,7 @@ public class SchoolsController : ControllerBase
         }
     }
 
-    /// <summary>
-    /// Xóa một trường khỏi hệ thống.
-    /// Chỉ School Administrator mới có quyền truy cập.
-    /// </summary>
-    [Authorize(Policy = "MasterOnly")]
-    [HttpDelete("{id:int}")]
-    public async Task<IActionResult> DeleteSchool(int id, CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            await _deleteSchoolHandler.Handle(id, cancellationToken);
-            return Ok(new { success = true, message = "School deleted successfully." });
-        }
-        catch (KeyNotFoundException ex)
-        {
-            return NotFound(new { success = false, message = ex.Message });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = ex.Message });
-        }
-    }
+    // NOTE: Delete endpoint has been removed.
+    // Master Admin can only lock/unlock schools, not delete them.
+    // Use /{id}/toggle-lock instead.
 }
