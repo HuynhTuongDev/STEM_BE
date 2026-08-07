@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using STEM.Application.Dtos.Students;
+using STEM.Application.Dtos.Schedules;
 using STEM.Application.UseCases.Students;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
@@ -337,6 +338,67 @@ public class StudentsController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "An error occurred while deleting the student.", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get schedule for a specific student.
+    /// </summary>
+    [HttpGet("{studentId:int}/schedule")]
+    [ProducesResponseType(typeof(IEnumerable<ScheduleCalendarResponse>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> GetStudentSchedule(
+        int studentId,
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
+            if (currentUser == null)
+                throw new UnauthorizedAccessException("User is not authenticated properly.");
+
+            var student = await _userRepository.GetByIdAsync(studentId, cancellationToken);
+            if (student == null)
+                return NotFound(new { message = "Student not found." });
+
+            if (student.Role?.Name != "Student")
+                return NotFound(new { message = "Student not found." });
+
+            if (currentUser.SchoolId != student.SchoolId)
+                return NotFound(new { message = "Student not found in your school." });
+
+            var schedules = await _userRepository.GetStudentSchedulesAsync(studentId, fromDate, toDate, cancellationToken);
+
+            var scheduleColors = new[]
+            {
+                "#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6",
+                "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"
+            };
+
+            var response = schedules.Select((s, index) => new ScheduleCalendarResponse
+            {
+                Id = s.Id,
+                Title = $"{s.Class?.Course?.Title ?? "Lớp học"} - {s.Class?.ClassCode}",
+                Start = s.StartTime,
+                End = s.EndTime,
+                ClassCode = s.Class?.ClassCode ?? string.Empty,
+                ClassName = s.Class?.Course?.Title ?? string.Empty,
+                Color = scheduleColors[index % scheduleColors.Length]
+            });
+
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
         }
     }
 }

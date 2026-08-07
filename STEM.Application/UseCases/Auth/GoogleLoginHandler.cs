@@ -5,6 +5,7 @@ using STEM.Application.Dtos.Auth;
 using STEM.Application.Interfaces;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
+using STEM.Core.Entities.Schools;
 
 namespace STEM.Application.UseCases.Auth;
 
@@ -35,7 +36,8 @@ public class GoogleLoginHandler
 
     public async Task<GoogleLoginResponse> Handle(GoogleLoginRequest request, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.IdToken))
+        var idToken = request.GetIdToken();
+        if (string.IsNullOrWhiteSpace(idToken))
             throw new UnauthorizedAccessException("ID token is required.");
 
         var clientId = _configuration["GoogleSettings:ClientId"];
@@ -49,6 +51,7 @@ public class GoogleLoginHandler
             {
                 Audience = new[] { clientId }
             };
+
 
             payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, validationSettings);
 
@@ -79,6 +82,12 @@ public class GoogleLoginHandler
 
         if (!user.IsActive)
             throw new UnauthorizedAccessException("Tài khoản đã bị vô hiệu hóa.");
+
+        // Check if the user's school is locked (for school-related users)
+        if (user.SchoolId.HasValue && user.School != null && user.School.Status == SchoolStatus.Rejected)
+        {
+            throw new UnauthorizedAccessException("Trường học của bạn đang bị khóa. Vui lòng liên hệ quản trị viên hệ thống.");
+        }
 
         user.FullName = string.IsNullOrWhiteSpace(user.FullName)
             ? payload.Name ?? payload.Email

@@ -7,6 +7,7 @@ using STEM.Application.UseCases.Schools;
 using STEM.Application.UseCases.Courses;
 using STEM.Application.UseCases.Classes;
 using STEM.Application.UseCases.Users;
+using STEM.Application.UseCases.Teachers;
 using STEM.Application.UseCases.Attendance;
 using STEM.Application.UseCases.Assignments;
 using STEM.Application.UseCases.Quizzes;
@@ -14,8 +15,16 @@ using STEM.Application.UseCases.Grading;
 using STEM.Application.UseCases.VirtualLabs;
 using STEM.Application.UseCases.Students;
 using STEM.Application.UseCases.Schedules;
+using STEM.Application.UseCases.Simulation.Abstractions;
+using STEM.Application.UseCases.Simulation.Runners.Educational;
+using STEM.Application.UseCases.Simulation.Runners.Mock;
+using STEM.Application.UseCases.Simulation.Runners.Qemu;
+using STEM.Application.UseCases.Simulation.Runtime;
+using STEM.Application.UseCases.Payments;
 using FluentValidation;
 using STEM.Application.Validators;
+using STEM.Core.Repository;
+using STEM.Application.Dtos.Auth;
 
 namespace STEM.Application.Extensions;
 
@@ -46,6 +55,15 @@ public static class ServiceCollectionExtensions
         // Simulation Handlers
         services.AddScoped<SimulationHandler>();
         services.AddScoped<AiSuggestHandler>();
+        services.AddSingleton<VirtualLabDiagramService>();
+        services.AddSingleton<EducationalProgramAnalyzer>();
+        services.AddSingleton<EducationalEventGenerator>();
+        services.AddSingleton<VirtualLabMockRunner>();
+        services.AddSingleton<EducationalSimulationRunner>();
+        services.AddSingleton<QemuEsp32Runner>();
+        services.AddScoped<ISimulationRunnerResolver, SimulationRunnerResolver>();
+        services.AddSingleton<IRunningSimulationRegistry, RunningSimulationRegistry>();
+        services.AddSingleton<ICompileCoordinator, CompileCoordinator>();
         services.AddHttpClient("Anthropic", client =>
         {
             client.BaseAddress = new Uri("https://api.anthropic.com");
@@ -60,6 +78,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetUserDetailHandler>();
         services.AddScoped<UpdateTeacherHandler>();
         services.AddScoped<DeleteTeacherHandler>();
+        services.AddScoped<GetTeachersWithClassCountHandler>();
 
         // Attendance Handlers
         services.AddScoped<CreateAttendanceHandler>();
@@ -115,6 +134,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DeleteClassHandler>();
         services.AddScoped<AssignStudentsToClassHandler>();
         services.AddScoped<RemoveStudentFromClassHandler>();
+        services.AddScoped<GetAvailableStudentsHandler>();
 
         // Schedule Handlers
         services.AddScoped<CreateScheduleHandler>();
@@ -123,8 +143,21 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetTeacherScheduleHandler>();
         services.AddScoped<GetStudentScheduleHandler>();
 
-        // Validators
+        // Payment Handlers
+        services.AddScoped<GetPackagesHandler>();
+        services.AddScoped<CreatePaymentHandler>();
+        services.AddScoped<PaymentCallbackHandler>();
+        services.AddScoped<GetPaymentsHandler>();
+        services.AddScoped<GetTokenBalanceHandler>();
+        services.AddScoped<GetTokenTransactionsHandler>();
+        services.AddScoped<UseTokenHandler>();
+
+        // Validators - register all validators from assembly
         services.AddValidatorsFromAssemblyContaining<CreateUserBySchoolAdminValidator>();
+
+        // Override specific validator with DI support
+        services.AddScoped<IValidator<CreateUserBySchoolAdminRequest>>(sp =>
+            new CreateUserBySchoolAdminValidator(sp.GetRequiredService<IUserRepository>()));
 
         return services;
     }

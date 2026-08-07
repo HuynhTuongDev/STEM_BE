@@ -25,7 +25,12 @@ public class CreateAssignmentHandler
         int currentUserId,
         CancellationToken cancellationToken = default)
     {
-        ValidateRequest(request.ClassId, request.Title);
+        AssignmentRequestMapper.ValidateBase(
+            request.ClassId,
+            request.Title,
+            request.AssignmentType,
+            request.Status,
+            request.MaxScore);
 
         var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
         if (currentUser == null)
@@ -33,7 +38,7 @@ public class CreateAssignmentHandler
             throw new UnauthorizedAccessException("Current user not found.");
         }
 
-        var classEntity = await _classRepository.GetByIdWithDetailsAsync(request.ClassId, cancellationToken);
+        var classEntity = await _classRepository.GetByIdSummaryAsync(request.ClassId, cancellationToken);
         if (classEntity == null)
         {
             throw new KeyNotFoundException("Class not found.");
@@ -45,31 +50,15 @@ public class CreateAssignmentHandler
         }
 
         var now = DateTime.UtcNow;
-        var assignment = new Assignment
-        {
-            ClassId = request.ClassId,
-            Title = request.Title.Trim(),
-            CreatedAt = now,
-            UpdatedAt = now,
-            Class = classEntity
-        };
+        var assignment = new Assignment();
+        AssignmentRequestMapper.ApplyBase(assignment, request, currentUser.Id, now);
+        AssignmentRequestMapper.ApplyDetails(assignment, request, now);
 
         await _assignmentRepository.AddAsync(assignment, cancellationToken);
         await _assignmentRepository.SaveChangesAsync(cancellationToken);
 
+        assignment.Class = classEntity;
+
         return AssignmentResponseMapper.Map(assignment);
-    }
-
-    private static void ValidateRequest(int classId, string title)
-    {
-        if (classId <= 0)
-        {
-            throw new ArgumentException("ClassId is required.");
-        }
-
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            throw new ArgumentException("Title is required.");
-        }
     }
 }

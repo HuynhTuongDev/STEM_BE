@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Schools;
+using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 
@@ -29,11 +32,82 @@ public class ClassRepository : Repository<Class>, IClassRepository
     public async Task<IEnumerable<Class>> GetClassesByTeacherIdAsync(int teacherId, CancellationToken cancellationToken = default)
     {
         return await _context.Classes
-            .Include(c => c.School)
-            .Include(c => c.Course)
-            .Include(c => c.Teacher)
+            .AsNoTracking()
             .Where(c => c.TeacherId == teacherId)
+            .Select(c => new Class
+            {
+                Id = c.Id,
+                ClassCode = c.ClassCode,
+                SchoolId = c.SchoolId,
+                CourseId = c.CourseId,
+                TeacherId = c.TeacherId,
+                StartDate = c.StartDate,
+                EndDate = c.EndDate,
+                CreatedAt = c.CreatedAt,
+                UpdatedAt = c.UpdatedAt,
+                School = c.School == null ? null : new School
+                {
+                    Id = c.School.Id,
+                    Name = c.School.Name
+                },
+                Course = c.Course == null ? null : new Course
+                {
+                    Id = c.Course.Id,
+                    Title = c.Course.Title
+                },
+                Teacher = c.Teacher == null ? null : new User
+                {
+                    Id = c.Teacher.Id,
+                    FullName = c.Teacher.FullName
+                },
+                Enrollments = c.Enrollments
+                    .Select(e => new Enrollment
+                    {
+                        Id = e.Id,
+                        ClassId = e.ClassId,
+                        StudentId = e.StudentId,
+                        CreatedAt = e.CreatedAt,
+                        UpdatedAt = e.UpdatedAt
+                    })
+                    .ToList()
+            })
+            .OrderByDescending(c => c.CreatedAt)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Class?> GetByIdSummaryAsync(int id, CancellationToken cancellationToken = default)
+    {
+        return await _context.Classes
+            .AsNoTracking()
+            .Where(c => c.Id == id)
+            .Select(c => new Class
+            {
+                Id = c.Id,
+                ClassCode = c.ClassCode,
+                SchoolId = c.SchoolId,
+                CourseId = c.CourseId,
+                TeacherId = c.TeacherId,
+                StartDate = c.StartDate,
+                EndDate = c.EndDate,
+                CreatedAt = c.CreatedAt,
+                UpdatedAt = c.UpdatedAt,
+                School = c.School == null ? null : new School
+                {
+                    Id = c.School.Id,
+                    Name = c.School.Name
+                },
+                Course = c.Course == null ? null : new Course
+                {
+                    Id = c.Course.Id,
+                    Title = c.Course.Title
+                },
+                Teacher = c.Teacher == null ? null : new User
+                {
+                    Id = c.Teacher.Id,
+                    FullName = c.Teacher.FullName
+                }
+            })
+            .FirstOrDefaultAsync(cancellationToken);
     }
 
     public async Task<(IEnumerable<Class> Classes, int TotalCount)> GetClassesPagedAsync(
@@ -62,9 +136,12 @@ public class ClassRepository : Repository<Class>, IClassRepository
             query = query.Where(c => c.TeacherId == teacherId.Value);
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
-            query = query.Where(c => c.ClassCode.Contains(searchTerm) ||
-                                     (c.Course != null && c.Course.Title.Contains(searchTerm)) ||
-                                     (c.Teacher != null && c.Teacher.FullName.Contains(searchTerm)));
+        {
+            var term = searchTerm.Trim().ToLower();
+            query = query.Where(c => c.ClassCode.ToLower().Contains(term) ||
+                                     (c.Course != null && c.Course.Title.ToLower().Contains(term)) ||
+                                     (c.Teacher != null && c.Teacher.FullName.ToLower().Contains(term)));
+        }
 
         var totalCount = await query.CountAsync(cancellationToken);
 
@@ -107,4 +184,72 @@ public class ClassRepository : Repository<Class>, IClassRepository
             .OrderBy(s => s.StartTime)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<IEnumerable<Schedule>> GetSchedulesAsync(int classId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Schedules
+            .Where(s => s.ClassId == classId)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<int>> GetAvailableTeacherIdsForClassAsync(int classId, CancellationToken cancellationToken = default)
+    {
+        var targetClass = await _context.Classes
+            .Where(c => c.Id == classId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (targetClass == null)
+            return new List<int>();
+
+        var targetSchedules = await _context.Schedules
+            .Where(s => s.ClassId == classId)
+            .ToListAsync(cancellationToken);
+
+        var teacherRoleId = 3; // Teacher role ID
+
+        var allTeachers = await _context.Users
+            .Where(u => u.SchoolId == targetClass.SchoolId && u.RoleId == teacherRoleId && u.IsActive)
+            .Select(u => u.Id)
+            .ToListAsync(cancellationToken);
+
+        if (!targetSchedules.Any())
+            return allTeachers;
+
+        // Get all classes with their schedules where teacher is assigned
+        var teacherClasses = await _context.Classes
+            .Include(c => c.Schedules)
+            .Where(c => c.TeacherId > 0 && allTeachers.Contains(c.TeacherId))
+            .ToListAsync(cancellationToken);
+
+        var availableTeachers = new List<int>();
+
+        foreach (var teacherId in allTeachers)
+        {
+            var classesWithTeacher = teacherClasses.Where(c => c.TeacherId == teacherId).ToList();
+            bool hasConflict = false;
+
+            foreach (var target in targetSchedules)
+            {
+                foreach (var cls in classesWithTeacher)
+                {
+                    foreach (var schedule in cls.Schedules)
+                    {
+                        if (schedule.StartTime < target.EndTime && schedule.EndTime > target.StartTime)
+                        {
+                            hasConflict = true;
+                            break;
+                        }
+                    }
+                    if (hasConflict) break;
+                }
+                if (hasConflict) break;
+            }
+
+            if (!hasConflict)
+                availableTeachers.Add(teacherId);
+        }
+
+        return availableTeachers;
+    }
+
 }

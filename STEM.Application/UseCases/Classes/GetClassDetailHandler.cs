@@ -8,11 +8,19 @@ public class GetClassDetailHandler
 {
     private readonly IClassRepository _classRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IEnrollmentRepository _enrollmentRepository;
+    private readonly IRepository<Role> _roleRepository;
 
-    public GetClassDetailHandler(IClassRepository classRepository, IUserRepository userRepository)
+    public GetClassDetailHandler(
+        IClassRepository classRepository,
+        IUserRepository userRepository,
+        IEnrollmentRepository enrollmentRepository,
+        IRepository<Role> roleRepository)
     {
         _classRepository = classRepository;
         _userRepository = userRepository;
+        _enrollmentRepository = enrollmentRepository;
+        _roleRepository = roleRepository;
     }
 
     public async Task<ClassDetailResponse> Handle(
@@ -36,7 +44,36 @@ public class GetClassDetailHandler
         if (classEntity.SchoolId != currentUser.SchoolId && roleName != RoleNames.MasterAdministrator)
             throw new UnauthorizedAccessException("Bạn chỉ có thể xem lớp học thuộc trường của mình.");
 
-        var availableStudents = await _userRepository.GetStudentsNotInClassAsync(classId, classEntity.SchoolId, null, cancellationToken);
+        // Get enrolled student IDs
+        var enrolledStudentIds = classEntity.Enrollments?.Select(e => e.StudentId).ToHashSet() ?? new HashSet<int>();
+
+        // Get student role
+        var studentRole = (await _roleRepository.FindAsync(r => r.Name == "Student", cancellationToken)).FirstOrDefault();
+
+        // Batch query: Get all conflicting student IDs at once
+        var conflictingStudentIds = await _enrollmentRepository.GetConflictingStudentIdsAsync(classId, cancellationToken);
+        var conflictingSet = conflictingStudentIds.ToHashSet();
+
+        // Get all students in school who are not enrolled and not conflicting
+        var availableStudentsList = new List<AvailableStudentResponse>();
+        if (studentRole != null)
+        {
+            var allStudents = await _userRepository.FindAsync(u =>
+                u.SchoolId == classEntity.SchoolId &&
+                u.RoleId == studentRole.Id, cancellationToken);
+
+            availableStudentsList = allStudents
+                .Where(s => !enrolledStudentIds.Contains(s.Id) && !conflictingSet.Contains(s.Id))
+                .Select(s => new AvailableStudentResponse
+                {
+                    Id = s.Id,
+                    FullName = s.FullName,
+                    Email = s.Email,
+                    Phone = s.Phone,
+                    Gender = s.Gender
+                })
+                .ToList();
+        }
 
         return new ClassDetailResponse
         {
@@ -59,14 +96,7 @@ public class GetClassDetailHandler
                 Email = e.Student?.Email ?? string.Empty,
                 EnrolledAt = e.CreatedAt
             }).ToList() ?? new List<StudentResponse>(),
-            AvailableStudents = availableStudents.Select(s => new AvailableStudentResponse
-            {
-                Id = s.Id,
-                FullName = s.FullName,
-                Email = s.Email,
-                Phone = s.Phone,
-                Gender = s.Gender
-            }).ToList() ?? new List<AvailableStudentResponse>(),
+            AvailableStudents = availableStudentsList,
             Schedules = classEntity.Schedules?.Select(s => new ScheduleResponse
             {
                 Id = s.Id,

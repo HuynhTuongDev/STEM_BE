@@ -13,6 +13,9 @@ public class SchoolRegistrationRequest
     public string? Website { get; set; }
     public string? Notes { get; set; }
 
+    // Document URL (uploaded certificate file)
+    public string? DocumentUrl { get; set; }
+
     // User (representative) info
     public string FullName { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;

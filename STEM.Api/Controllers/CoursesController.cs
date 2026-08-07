@@ -77,7 +77,7 @@ public class CoursesController : ControllerBase
 
             return Ok(new { success = true, data = result });
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException)
         {
             return Forbid();
         }
@@ -103,7 +103,7 @@ public class CoursesController : ControllerBase
             var resultId = await _createCourseHandler.Handle(request, currentUserId, cancellationToken);
             return Ok(new { success = true, data = new { id = resultId } });
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException)
         {
             return Forbid();
         }
@@ -141,7 +141,7 @@ public class CoursesController : ControllerBase
 
             return Ok(new { success = true, message = "Course updated successfully." });
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException)
         {
             return Forbid();
         }
@@ -172,7 +172,7 @@ public class CoursesController : ControllerBase
 
             return Ok(new { success = true, message = "Course deleted successfully." });
         }
-        catch (UnauthorizedAccessException ex)
+        catch (UnauthorizedAccessException)
         {
             return Forbid();
         }

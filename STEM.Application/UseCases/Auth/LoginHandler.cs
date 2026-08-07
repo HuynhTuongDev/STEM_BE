@@ -5,6 +5,8 @@ using STEM.Application.Interfaces;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 using FluentValidation;
+using BCrypt.Net;
+using STEM.Core.Entities.Schools;
 
 namespace STEM.Application.UseCases.Auth;
 
@@ -46,6 +48,16 @@ public class LoginHandler
 
         if (!user.IsActive)
             throw new UnauthorizedAccessException("Account is disabled.");
+
+        // Check if the user's school is locked (for school-related users)
+        if (user.SchoolId.HasValue && user.School != null && user.School.Status == SchoolStatus.Rejected)
+        {
+            throw new UnauthorizedAccessException("Trường học của bạn đang bị khóa. Vui lòng liên hệ quản trị viên hệ thống.");
+        }
+
+        // Verify password
+        if (string.IsNullOrEmpty(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            throw new UnauthorizedAccessException("Invalid email or password.");
 
         if (user.RoleId == 3 || user.RoleId == 4) // Student/Teacher - must use Google OAuth
         {
@@ -101,6 +113,12 @@ public class LoginHandler
 
         if (!user.IsActive)
             throw new UnauthorizedAccessException("Account is disabled.");
+
+        // Check if the user's school is locked (for school-related users)
+        if (user.SchoolId.HasValue && user.School != null && user.School.Status == SchoolStatus.Rejected)
+        {
+            throw new UnauthorizedAccessException("Trường học của bạn đang bị khóa. Vui lòng liên hệ quản trị viên hệ thống.");
+        }
 
         var newAccessToken = _tokenService.GenerateAccessToken(user);
         var newRefreshToken = await CreateRefreshTokenAsync(user, cancellationToken);

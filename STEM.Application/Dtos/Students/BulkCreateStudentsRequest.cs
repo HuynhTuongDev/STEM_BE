@@ -1,7 +1,10 @@
+using System.Text.Json.Serialization;
+
 namespace STEM.Application.Dtos.Students;
 
 public class BulkCreateStudentsRequest
 {
+    [JsonPropertyName("students")]
     public List<CreateStudentRequest> Students { get; set; } = new();
 }
 

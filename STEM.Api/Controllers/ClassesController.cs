@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using STEM.Application.Dtos.Classes;
 using STEM.Application.UseCases.Classes;
+using STEM.Core.Entities.Users;
 using System.Security.Claims;
 
 namespace STEM.Api.Controllers;
@@ -19,6 +20,7 @@ public class ClassesController : ControllerBase
     private readonly DeleteClassHandler _deleteClassHandler;
     private readonly AssignStudentsToClassHandler _assignStudentsToClassHandler;
     private readonly RemoveStudentFromClassHandler _removeStudentFromClassHandler;
+    private readonly GetAvailableStudentsHandler _getAvailableStudentsHandler;
 
     public ClassesController(
         GetClassesListHandler getClassesListHandler,
@@ -27,7 +29,8 @@ public class ClassesController : ControllerBase
         UpdateClassHandler updateClassHandler,
         DeleteClassHandler deleteClassHandler,
         AssignStudentsToClassHandler assignStudentsToClassHandler,
-        RemoveStudentFromClassHandler removeStudentFromClassHandler)
+        RemoveStudentFromClassHandler removeStudentFromClassHandler,
+        GetAvailableStudentsHandler getAvailableStudentsHandler)
     {
         _getClassesListHandler = getClassesListHandler;
         _getClassDetailHandler = getClassDetailHandler;
@@ -36,6 +39,7 @@ public class ClassesController : ControllerBase
         _deleteClassHandler = deleteClassHandler;
         _assignStudentsToClassHandler = assignStudentsToClassHandler;
         _removeStudentFromClassHandler = removeStudentFromClassHandler;
+        _getAvailableStudentsHandler = getAvailableStudentsHandler;
     }
 
     [HttpGet]
@@ -56,6 +60,34 @@ public class ClassesController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy danh sách lớp học.", error = ex.Message });
+        }
+    }
+
+    [HttpGet("my-classes/{id:int}")]
+    [Authorize(Roles = RoleNames.Teacher)]
+    public async Task<IActionResult> GetMyClasses(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            if (id <= 0)
+                return BadRequest(new { success = false, message = "TeacherId is required." });
+
+            if (id != currentUserId)
+                return Forbid();
+
+            var result = await _getClassesListHandler.HandleTeacherClasses(id, currentUserId, cancellationToken);
+            return Ok(new { success = true, data = result });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "ÄÃ£ xáº£y ra lá»—i khi láº¥y danh sÃ¡ch lá»›p há»c cá»§a giÃ¡o viÃªn.", error = ex.Message });
         }
     }
 
@@ -173,8 +205,22 @@ public class ClassesController : ControllerBase
         try
         {
             var currentUserId = GetCurrentUserId();
-            await _assignStudentsToClassHandler.Handle(classId, request, currentUserId);
-            return Ok(new { success = true, message = "Đã thêm học sinh vào lớp thành công." });
+            var result = await _assignStudentsToClassHandler.Handle(classId, request, currentUserId);
+            
+            if (result.AlreadyEnrolledCount > 0 && result.SuccessCount == 0)
+            {
+                return Ok(new { 
+                    success = true, 
+                    message = $"Tất cả học sinh đã được thêm vào lớp trước đó.",
+                    alreadyEnrolled = result.AlreadyEnrolledCount
+                });
+            }
+            
+            return Ok(new { 
+                success = true, 
+                message = $"Đã thêm {result.SuccessCount} học sinh vào lớp.",
+                data = result
+            });
         }
         catch (UnauthorizedAccessException)
         {
@@ -215,6 +261,69 @@ public class ClassesController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi xóa học sinh khỏi lớp.", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get available students for a class (students who can be added without schedule conflicts)
+    /// </summary>
+    [HttpGet("{classId}/available-students")]
+    [Authorize(Policy = "SchoolAdminOnly")]
+    public async Task<IActionResult> GetAvailableStudents(
+        int classId,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] string? search = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var request = new AvailableStudentsRequest
+            {
+                Page = page,
+                PageSize = pageSize,
+                Search = search
+            };
+            var result = await _getAvailableStudentsHandler.Handle(classId, currentUserId, request);
+            return Ok(new { success = true, data = result });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy danh sách học sinh.", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get available teachers for a class (teachers who can be assigned without schedule conflicts)
+    /// </summary>
+    [HttpGet("{classId}/available-teachers")]
+    [Authorize(Policy = "SchoolAdminOnly")]
+    public async Task<IActionResult> GetAvailableTeachers(
+        int classId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var result = await _getAvailableStudentsHandler.HandleGetAvailableTeachers(classId, cancellationToken);
+            return Ok(new { success = true, data = result });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy danh sách giáo viên.", error = ex.Message });
         }
     }
 

@@ -55,6 +55,7 @@ public class RegisterSchoolHandler
             RepresentativePosition = request.RepresentativePosition,
             Website = request.Website,
             Notes = request.Notes,
+            AttachmentUrl = request.DocumentUrl,
             CreatedAt = now,
             UpdatedAt = now
         };

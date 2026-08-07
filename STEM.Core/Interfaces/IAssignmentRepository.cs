@@ -7,6 +7,7 @@ public interface IAssignmentRepository : IRepository<Assignment>
     Task<IEnumerable<Assignment>> GetByCourseIdAsync(int courseId, CancellationToken cancellationToken = default);
 
     Task<Assignment?> GetByIdWithDetailsAsync(int id, CancellationToken cancellationToken = default);
+    Task DeleteDetailsAsync(int assignmentId, CancellationToken cancellationToken = default);
 
     Task<(IEnumerable<Assignment> Assignments, int TotalCount)> GetPagedAsync(
         int pageNumber,
