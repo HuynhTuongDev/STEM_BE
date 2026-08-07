@@ -177,10 +177,18 @@ public sealed class EducationalEventGeneratorTests
 
         Assert.True(result.Success, string.Join("; ", result.Errors));
 
-        // Kỳ vọng ĐÚNG theo ngữ nghĩa C++ thật: đúng 6 event (3 vòng x 2 lần
-        // đổi trạng thái), tất cả trong 4 giây đầu, KHÔNG có event nào sau đó.
-        Assert.Equal(6, digitalWriteEvents.Count);
-        Assert.All(digitalWriteEvents, item => Assert.True(item.ElapsedMs < 4000,
-            $"digitalWrite event tại {item.ElapsedMs}ms — lẽ ra while(true) phải giữ mãi mãi sau vòng lặp thứ 3, không còn digitalWrite nào nữa."));
+        // Ba vòng tạo đúng sáu lần ghi tại t=0..5000. Delay cuối đưa timeline
+        // tới t=6000 rồi while(true) chỉ delay, nên không còn GPIO event nào.
+        var actualSequence = digitalWriteEvents
+            .Select(item => (item.Event.Time, Value: item.Event.Payload["value"]?.ToString()))
+            .ToArray();
+        var expectedSequence = new (long Time, string? Value)[]
+        {
+            (0, "HIGH"), (1000, "LOW"),
+            (2000, "HIGH"), (3000, "LOW"),
+            (4000, "HIGH"), (5000, "LOW")
+        };
+
+        Assert.Equal(expectedSequence, actualSequence);
     }
 }

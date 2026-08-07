@@ -17,6 +17,9 @@ public sealed class EducationalProgramAnalyzer
     private static readonly Regex AnalogWriteRegex = new(@"\banalogWrite\s*\(\s*(?<pin>[^,\)]+)\s*,\s*(?<value>[A-Za-z_]\w*|\d+)\s*\)", RegexOptions.Compiled);
     private static readonly Regex ServoAttachRegex = new(@"\b(?<name>[A-Za-z_]\w*)\s*\.\s*attach\s*\(\s*(?<pin>[^,\)]+)", RegexOptions.Compiled);
     private static readonly Regex ServoWriteRegex = new(@"\b(?<name>[A-Za-z_]\w*)\s*\.\s*write\s*\(\s*(?<angle>[A-Za-z_]\w*|\d+)\s*\)", RegexOptions.Compiled);
+    private static readonly Regex ForLoopRegex = new(
+        @"^\s*(?:(?:int|long|byte|uint8_t|size_t)\s+)?(?<variable>[A-Za-z_]\w*)\s*=\s*(?<start>[A-Za-z_]\w*|\d+)\s*;\s*\k<variable>\s*(?<comparison><=|<)\s*(?<end>[A-Za-z_]\w*|\d+)\s*;\s*(?:\k<variable>\s*\+\+|\+\+\s*\k<variable>|\k<variable>\s*\+=\s*1)\s*$",
+        RegexOptions.Compiled);
 
     public EducationalProgram Analyze(string sourceCode)
     {
@@ -61,6 +64,76 @@ public sealed class EducationalProgramAnalyzer
     }
 
     private static IReadOnlyList<EducationalInstruction> ParseInstructions(
+        string body,
+        IReadOnlyDictionary<string, string> symbols,
+        IReadOnlySet<string> servoNames,
+        ICollection<string> warnings)
+    {
+        var instructions = new List<EducationalInstruction>();
+        var source = StripLineComments(body);
+        var segmentStart = 0;
+        var index = 0;
+        var depth = 0;
+
+        while (index < source.Length)
+        {
+            if (source[index] == '{')
+            {
+                depth++;
+                index++;
+                continue;
+            }
+
+            if (source[index] == '}')
+            {
+                depth = Math.Max(0, depth - 1);
+                index++;
+                continue;
+            }
+
+            if (depth == 0 &&
+                (TryReadControlBlock(source, index, "for", out var header, out var controlBody, out var nextIndex) ||
+                 TryReadControlBlock(source, index, "while", out header, out controlBody, out nextIndex)))
+            {
+                instructions.AddRange(ParseFlatInstructions(
+                    source[segmentStart..index], symbols, servoNames, warnings));
+
+                if (source.AsSpan(index).StartsWith("for", StringComparison.Ordinal))
+                {
+                    if (TryGetForIterationCount(header, symbols, out var iterationCount))
+                    {
+                        instructions.Add(EducationalInstruction.CountedLoop(
+                            ParseInstructions(controlBody, symbols, servoNames, warnings),
+                            iterationCount));
+                    }
+                    else
+                    {
+                        warnings.Add($"Unsupported for loop: for ({header.Trim()}).");
+                    }
+                }
+                else if (header.Trim() is "true" or "1")
+                {
+                    instructions.Add(EducationalInstruction.ForeverLoop(
+                        ParseInstructions(controlBody, symbols, servoNames, warnings)));
+                }
+                else
+                {
+                    warnings.Add($"Unsupported while condition: {header.Trim()}.");
+                }
+
+                index = nextIndex;
+                segmentStart = nextIndex;
+                continue;
+            }
+
+            index++;
+        }
+
+        instructions.AddRange(ParseFlatInstructions(source[segmentStart..], symbols, servoNames, warnings));
+        return instructions;
+    }
+
+    private static IReadOnlyList<EducationalInstruction> ParseFlatInstructions(
         string body,
         IReadOnlyDictionary<string, string> symbols,
         IReadOnlySet<string> servoNames,
@@ -197,6 +270,100 @@ public sealed class EducationalProgramAnalyzer
         return instructions;
     }
 
+    private static bool TryGetForIterationCount(
+        string header,
+        IReadOnlyDictionary<string, string> symbols,
+        out int iterationCount)
+    {
+        var match = ForLoopRegex.Match(header);
+        if (!match.Success ||
+            !TryResolveInt(match.Groups["start"].Value, symbols, out var start) ||
+            !TryResolveInt(match.Groups["end"].Value, symbols, out var end))
+        {
+            iterationCount = 0;
+            return false;
+        }
+
+        var inclusive = match.Groups["comparison"].Value == "<=";
+        var count = (long)end - start + (inclusive ? 1L : 0L);
+        iterationCount = (int)Math.Clamp(count, 0L, int.MaxValue);
+        return true;
+    }
+
+    private static bool TryReadControlBlock(
+        string source,
+        int startIndex,
+        string keyword,
+        out string header,
+        out string body,
+        out int nextIndex)
+    {
+        header = string.Empty;
+        body = string.Empty;
+        nextIndex = startIndex;
+
+        if (!source.AsSpan(startIndex).StartsWith(keyword, StringComparison.Ordinal) ||
+            (startIndex + keyword.Length < source.Length &&
+             (char.IsLetterOrDigit(source[startIndex + keyword.Length]) || source[startIndex + keyword.Length] == '_')))
+        {
+            return false;
+        }
+
+        var openParenthesis = startIndex + keyword.Length;
+        while (openParenthesis < source.Length && char.IsWhiteSpace(source[openParenthesis]))
+        {
+            openParenthesis++;
+        }
+
+        if (openParenthesis >= source.Length || source[openParenthesis] != '(' ||
+            !TryFindMatchingDelimiter(source, openParenthesis, '(', ')', out var closeParenthesis))
+        {
+            return false;
+        }
+
+        var openBrace = closeParenthesis + 1;
+        while (openBrace < source.Length && char.IsWhiteSpace(source[openBrace]))
+        {
+            openBrace++;
+        }
+
+        if (openBrace >= source.Length || source[openBrace] != '{' ||
+            !TryFindMatchingDelimiter(source, openBrace, '{', '}', out var closeBrace))
+        {
+            return false;
+        }
+
+        header = source[(openParenthesis + 1)..closeParenthesis];
+        body = source[(openBrace + 1)..closeBrace];
+        nextIndex = closeBrace + 1;
+        return true;
+    }
+
+    private static bool TryFindMatchingDelimiter(
+        string source,
+        int openIndex,
+        char openDelimiter,
+        char closeDelimiter,
+        out int closeIndex)
+    {
+        var depth = 0;
+        for (var index = openIndex; index < source.Length; index++)
+        {
+            if (source[index] == openDelimiter)
+            {
+                depth++;
+            }
+            else if (source[index] == closeDelimiter && --depth == 0)
+            {
+                closeIndex = index;
+                return true;
+            }
+        }
+
+        closeIndex = -1;
+        return false;
+    }
+
     private static Dictionary<string, string> BuildSymbolTable(string sourceCode)
     {
         var symbols = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -312,7 +479,9 @@ public sealed record EducationalInstruction(
     int DurationMs = 0,
     string? Message = null,
     bool Newline = false,
-    string? ServoName = null)
+    string? ServoName = null,
+    IReadOnlyList<EducationalInstruction>? Body = null,
+    int IterationCount = 0)
 {
     public static EducationalInstruction PinMode(string pin, string mode) =>
         new(EducationalInstructionKind.PinMode, Pin: pin, Value: mode);
@@ -343,6 +512,14 @@ public sealed record EducationalInstruction(
 
     public static EducationalInstruction ServoWrite(string servoName, int angle) =>
         new(EducationalInstructionKind.ServoWrite, NumericValue: Math.Clamp(angle, 0, 180), ServoName: servoName);
+
+    public static EducationalInstruction CountedLoop(
+        IReadOnlyList<EducationalInstruction> body,
+        int iterationCount) =>
+        new(EducationalInstructionKind.CountedLoop, Body: body, IterationCount: Math.Max(0, iterationCount));
+
+    public static EducationalInstruction ForeverLoop(IReadOnlyList<EducationalInstruction> body) =>
+        new(EducationalInstructionKind.ForeverLoop, Body: body);
 }
 
 public enum EducationalInstructionKind
@@ -356,5 +533,7 @@ public enum EducationalInstructionKind
     NoTone,
     AnalogWrite,
     ServoAttach,
-    ServoWrite
+    ServoWrite,
+    CountedLoop,
+    ForeverLoop
 }

@@ -91,13 +91,21 @@ public sealed class EducationalEventGenerator
                 return await state.FailAsync(onEventEmitted, "MaxInstructionCount exceeded.", cancellationToken);
             }
 
-            await ExecuteInstructionAsync(instruction, state, onEventEmitted, cancellationToken);
+            var instructionResult = await ExecuteInstructionAsync(
+                instruction,
+                state,
+                onEventEmitted,
+                cancellationToken);
+            if (instructionResult != null)
+            {
+                return instructionResult;
+            }
         }
 
         return state.ToResult(success: true);
     }
 
-    private static async Task ExecuteInstructionAsync(
+    private static async Task<SimulationRunResult?> ExecuteInstructionAsync(
         EducationalInstruction instruction,
         EducationalRunState state,
         SimulationEventEmittedCallback onEventEmitted,
@@ -114,7 +122,7 @@ public sealed class EducationalEventGenerator
                     ["pin"] = instruction.Pin,
                     ["mode"] = instruction.Value
                 }, cancellationToken);
-                break;
+                return null;
 
             case EducationalInstructionKind.DigitalWrite:
                 state.PinValues[instruction.Pin!] = instruction.Value!;
@@ -135,7 +143,7 @@ public sealed class EducationalEventGenerator
                     await EmitAsync(state, onEventEmitted, buzzer.ToDigitalEvent(state.Time, instruction.Value!), cancellationToken);
                 }
 
-                break;
+                return null;
 
             case EducationalInstructionKind.DigitalRead:
                 var pinMode = state.PinModes.TryGetValue(instruction.Pin!, out var mode) ? mode : null;
@@ -149,11 +157,11 @@ public sealed class EducationalEventGenerator
                     ["value"] = value,
                     ["operation"] = "digitalRead"
                 }, cancellationToken);
-                break;
+                return null;
 
             case EducationalInstructionKind.Delay:
                 await AdvanceTimeAsync(state, instruction.DurationMs, cancellationToken);
-                break;
+                return null;
 
             case EducationalInstructionKind.Serial:
                 await EmitAsync(state, onEventEmitted, "serial", state.Time, new Dictionary<string, object?>
@@ -161,7 +169,7 @@ public sealed class EducationalEventGenerator
                     ["message"] = instruction.Message ?? string.Empty,
                     ["newline"] = instruction.Newline
                 }, cancellationToken);
-                break;
+                return null;
 
             case EducationalInstructionKind.Tone:
                 await EmitAsync(state, onEventEmitted, "pin-state", state.Time, new Dictionary<string, object?>
@@ -185,7 +193,7 @@ public sealed class EducationalEventGenerator
                     }
                 }
 
-                break;
+                return null;
 
             case EducationalInstructionKind.NoTone:
                 await EmitAsync(state, onEventEmitted, "pin-state", state.Time, new Dictionary<string, object?>
@@ -199,7 +207,7 @@ public sealed class EducationalEventGenerator
                     await EmitAsync(state, onEventEmitted, buzzer.ToSilentEvent(state.Time), cancellationToken);
                 }
 
-                break;
+                return null;
 
             case EducationalInstructionKind.AnalogWrite:
                 await EmitAsync(state, onEventEmitted, "pin-state", state.Time, new Dictionary<string, object?>
@@ -225,7 +233,7 @@ public sealed class EducationalEventGenerator
                         cancellationToken);
                 }
 
-                break;
+                return null;
 
             case EducationalInstructionKind.ServoAttach:
                 state.ServoPins[instruction.ServoName!] = instruction.Pin!;
@@ -235,13 +243,13 @@ public sealed class EducationalEventGenerator
                     ["operation"] = "servo.attach",
                     ["servo"] = instruction.ServoName
                 }, cancellationToken);
-                break;
+                return null;
 
             case EducationalInstructionKind.ServoWrite:
                 if (!state.ServoPins.TryGetValue(instruction.ServoName!, out var servoPin))
                 {
                     state.Warnings.Add($"Servo '{instruction.ServoName}' write ignored because attach() was not detected.");
-                    break;
+                    return null;
                 }
 
                 foreach (var servo in state.FindServos(servoPin))
@@ -249,7 +257,62 @@ public sealed class EducationalEventGenerator
                     await EmitAsync(state, onEventEmitted, servo.ToAngleEvent(state.Time, instruction.NumericValue), cancellationToken);
                 }
 
-                break;
+                return null;
+
+            case EducationalInstructionKind.CountedLoop:
+                for (var iteration = 0; iteration < instruction.IterationCount; iteration++)
+                {
+                    var loopResult = await ExecuteBlockAsync(
+                        instruction.Body ?? Array.Empty<EducationalInstruction>(),
+                        state,
+                        onEventEmitted,
+                        isLoop: true,
+                        cancellationToken);
+                    if (!loopResult.Success || state.ReachedMaxDuration)
+                    {
+                        return loopResult;
+                    }
+
+                    state.InstructionCount++;
+                    if (state.InstructionCount > state.Context.MaxInstructionCount)
+                    {
+                        return await state.FailAsync(
+                            onEventEmitted,
+                            "MaxInstructionCount exceeded.",
+                            cancellationToken);
+                    }
+                }
+
+                return null;
+
+            case EducationalInstructionKind.ForeverLoop:
+                while (!state.ReachedMaxDuration)
+                {
+                    var loopResult = await ExecuteBlockAsync(
+                        instruction.Body ?? Array.Empty<EducationalInstruction>(),
+                        state,
+                        onEventEmitted,
+                        isLoop: true,
+                        cancellationToken);
+                    if (!loopResult.Success || state.ReachedMaxDuration)
+                    {
+                        return loopResult;
+                    }
+
+                    state.InstructionCount++;
+                    if (state.InstructionCount > state.Context.MaxInstructionCount)
+                    {
+                        return await state.FailAsync(
+                            onEventEmitted,
+                            "MaxInstructionCount exceeded.",
+                            cancellationToken);
+                    }
+                }
+
+                return state.ToResult(success: true);
+
+            default:
+                return null;
         }
     }
 
