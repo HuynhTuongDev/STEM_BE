@@ -59,18 +59,42 @@ STEM_BE/
 │
 ├── STEM.Core/                          (Domain Layer - Miền kinh doanh)
 │   ├── Entities/
-│   │   ├── Orders/                     (Entities liên quan Orders)
-│   │   ├── Payments/                   (Entities liên quan Payments)
-│   │   └── Products/                   (Entities liên quan Products)
-│   ├── Repositories/
+│   │   ├── BaseEntity.cs               (Base class cho tất cả entities)
+│   │   ├── Users/
+│   │   ├── Orders/
+│   │   ├── Payments/
+│   │   ├── Products/
+│   │   ├── Classes/
+│   │   ├── Courses/
+│   │   ├── Quizzes/
+│   │   ├── Projects/
+│   │   ├── Simulations/
+│   │   └── (các domain entities khác)
+│   ├── Interfaces/                     (Repository Interfaces)
+│   │   ├── IRepository.cs              (Generic base interface)
+│   │   ├── IUserRepository.cs
 │   │   ├── IOrderRepository.cs
 │   │   ├── IPaymentRepository.cs
 │   │   ├── IProductRepository.cs
-│   │   └── (các interface repository chính)
+│   │   ├── IClassRepository.cs
+│   │   ├── ICourseRepository.cs
+│   │   ├── IQuizRepository.cs
+│   │   ├── IProjectRepository.cs
+│   │   ├── ISimulationRepository.cs
+│   │   └── (tất cả repository interfaces)
+│   ├── DTOs/                           (Data Transfer Objects)
+│   │   └── Auth/
+│   │       └── (auth-related DTOs)
 │   └── STEM.Core.csproj
 │
 ├── STEM.Application/                   (Application Layer - Quy tắc ứng dụng)
 │   ├── UseCases/
+│   │   ├── Auth/
+│   │   │   ├── LoginHandler.cs
+│   │   │   ├── RegisterHandler.cs
+│   │   │   ├── VerifyEmailHandler.cs
+│   │   │   ├── ForgotPasswordHandler.cs
+│   │   │   └── ResetPasswordHandler.cs
 │   │   ├── Orders/
 │   │   │   ├── CreateOrderHandler.cs
 │   │   │   ├── GetOrderHandler.cs
@@ -84,6 +108,13 @@ STEM_BE/
 │   │       ├── ListProductsHandler.cs
 │   │       └── CreateProductHandler.cs
 │   ├── Dtos/
+│   │   ├── Auth/
+│   │   │   ├── LoginRequest.cs
+│   │   │   ├── LoginResponse.cs
+│   │   │   ├── RegisterRequest.cs
+│   │   │   ├── VerifyEmailRequest.cs
+│   │   │   ├── ForgotPasswordRequest.cs
+│   │   │   └── ResetPasswordRequest.cs
 │   │   ├── Orders/
 │   │   │   ├── CreateOrderDto.cs
 │   │   │   ├── OrderResponseDto.cs
@@ -95,20 +126,31 @@ STEM_BE/
 │   │       ├── ProductDto.cs
 │   │       ├── CreateProductDto.cs
 │   │       └── UpdateProductDto.cs
+│   ├── Interfaces/                     (Application Service Interfaces - không phải repository)
+│   │   ├── IEmailService.cs            (Email service interface)
+│   │   └── IJwtProvider.cs             (JWT token provider interface)
+│   ├── Extensions/
+│   │   └── ServiceCollectionExtensions.cs (DI setup for handlers)
 │   └── STEM.Application.csproj
 │
 ├── STEM.Infrastructure/                (Infrastructure Layer - Triển khai kỹ thuật)
 │   ├── Data/
 │   │   ├── StemDbContext.cs            (Entity Framework DbContext)
 │   │   ├── DbContextFactory.cs
-│   │   └── Migrations/                 (Database migrations)
-│   ├── Repositories/
+│   │   └── Migrations/                 (EF Core migrations)
+│   ├── Repositories/                   (Repository Implementations)
+│   │   ├── Repository.cs               (Generic repository base)
+│   │   ├── UserRepository.cs
 │   │   ├── OrderRepository.cs
 │   │   ├── PaymentRepository.cs
 │   │   ├── ProductRepository.cs
-│   │   └── BaseRepository.cs
+│   │   ├── (tất cả repository implementations)
+│   ├── Services/
+│   │   ├── EmailService.cs             (Implements IEmailService - MailKit)
+│   │   └── Authentication/
+│   │       └── JwtProvider.cs          (Implements IJwtProvider - JWT token generation)
 │   ├── Extensions/
-│   │   ├── ServiceCollectionExtensions.cs
+│   │   ├── ServiceCollectionExtensions.cs (DI registration)
 │   │   ├── DbContextExtensions.cs
 │   │   └── MappingExtensions.cs
 │   └── STEM.Infrastructure.csproj
@@ -167,21 +209,33 @@ STEM_BE/
 
 ### 1. Products Management
 - **Entity**: Product (ID, Name, Description, Price, Stock)
-- **Operations**: Create, Read, Update, Delete, List
+- **Handler**: GetProductHandler, CreateProductHandler, ListProductsHandler
+- **DTOs**: ProductDto, CreateProductDto, UpdateProductDto
 - **API Endpoint**: `/api/products`
 
 ### 2. Orders Management
 - **Entity**: Order (ID, OrderDate, TotalAmount, Status)
+- **Handlers**: CreateOrderHandler, GetOrderHandler, UpdateOrderHandler, DeleteOrderHandler
 - **Relations**: Contains multiple OrderItems
+- **DTOs**: CreateOrderDto, OrderResponseDto, UpdateOrderDto
 - **API Endpoint**: `/api/orders`
 
 ### 3. Payments Processing
 - **Entity**: Payment (ID, Amount, Status, PaymentMethod)
+- **Handler**: ProcessPaymentHandler, GetPaymentStatusHandler
 - **Relations**: Links to Orders
+- **DTOs**: PaymentRequestDto, PaymentResponseDto
 - **API Endpoint**: `/api/payments`
 
-## Quy Trình Yêu Cầu
+### 4. Authentication & Authorization
+- **Handlers**: LoginHandler, RegisterHandler, VerifyEmailHandler, ForgotPasswordHandler, ResetPasswordHandler
+- **DTOs**: LoginRequest, LoginResponse, RegisterRequest, VerifyEmailRequest, ForgotPasswordRequest, ResetPasswordRequest
+- **Services**: IJwtProvider, IEmailService (in Infrastructure)
+- **API Endpoint**: `/api/auth`
 
+## Dependency Inversion Principle (DIP)
+
+### Repository Interfaces Location: STEM.Core/Interfaces
 ```
 Client Request
     ↓

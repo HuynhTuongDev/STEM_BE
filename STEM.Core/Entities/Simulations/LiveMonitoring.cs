@@ -1,4 +1,4 @@
-using STEM.Core.Entities.Users;
+﻿using STEM.Core.Entities.Users;
 
 namespace STEM.Core.Entities.Simulations;
 

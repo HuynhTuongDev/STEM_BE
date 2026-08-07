@@ -1,4 +1,4 @@
-namespace STEM.Core.Entities.Simulations;
+﻿namespace STEM.Core.Entities.Simulations;
 
 public class ExperimentLog : BaseEntity
 {
