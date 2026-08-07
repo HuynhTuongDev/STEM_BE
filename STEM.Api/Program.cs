@@ -2,6 +2,8 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using STEM.Api.Hubs;
+using STEM.Application.UseCases.Simulation.Abstractions;
 using STEM.Infrastructure.Extensions;
 using STEM.Application.Extensions;
 using STEM.Core.Entities.Users;
@@ -16,6 +18,8 @@ builder.Services.AddControllers(options =>
 {
     options.Filters.Add<STEM.Api.Filters.ValidationExceptionFilter>();
 });
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<ISimulationEventBroadcaster, SignalRSimulationEventBroadcaster>();
 builder.Services.AddEndpointsApiExplorer();
 
 // Configure Swagger for JWT Auth
@@ -70,6 +74,23 @@ if (!string.IsNullOrEmpty(secretKey))
             ValidAudience = jwtSettings["Audience"],
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey)),
             RoleClaimType = System.Security.Claims.ClaimTypes.Role
+        };
+
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    path.StartsWithSegments("/hubs/virtual-lab"))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 }
@@ -137,5 +158,6 @@ app.MapGet("/", context =>
 });
 
 app.MapControllers();
+app.MapHub<VirtualLabHub>("/hubs/virtual-lab");
 
 app.Run();

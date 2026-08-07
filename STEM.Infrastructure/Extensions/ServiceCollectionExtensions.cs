@@ -2,11 +2,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using STEM.Application.Interfaces;
+using STEM.Application.UseCases.Simulation.Abstractions;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 using STEM.Infrastructure.Repositories;
 using STEM.Infrastructure.Services;
 using STEM.Infrastructure.Services.Authentication;
+using STEM.Infrastructure.Services.Simulation;
 using STEM.Infrastructure.Services.Wokwi;
 using Supabase;
 
@@ -40,6 +42,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IWokwiService, WokwiService>();
         services.AddTransient<IEmailService, EmailService>();
+        
+        services.AddScoped<IVirtualLabProjectService, VirtualLabProjectService>();
+        services.AddHttpClient<ILabService, LabService>();
+        services.AddScoped<ISimulationCompileService, SimulationCompileService>();
+        services.AddScoped<IVirtualLabRuntimeService, VirtualLabRuntimeService>();
+        services.AddScoped<ISimulationEventStore, SimulationEventStore>();
+        services.AddScoped<IFirmwareCacheService, FirmwareCacheService>();
+        services.AddSingleton<IPrecompileTriggerService, PrecompileTriggerService>();
 
         // Supabase Configuration
         var supabaseUrl = configuration["Supabase:Url"];

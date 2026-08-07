@@ -35,7 +35,8 @@ public class GoogleLoginHandler
 
     public async Task<GoogleLoginResponse> Handle(GoogleLoginRequest request, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.IdToken))
+        var idToken = request.GetIdToken();
+        if (string.IsNullOrWhiteSpace(idToken))
             throw new UnauthorizedAccessException("ID token is required.");
 
         var clientId = _configuration["GoogleSettings:ClientId"];
@@ -49,6 +50,7 @@ public class GoogleLoginHandler
             {
                 Audience = new[] { clientId }
             };
+
 
             payload = await GoogleJsonWebSignature.ValidateAsync(request.IdToken, validationSettings);
 

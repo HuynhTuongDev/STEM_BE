@@ -25,8 +25,14 @@ public class SubmissionResponse
     public int? StudentId { get; set; }
     public string StudentName { get; set; } = string.Empty;
     public string StudentEmail { get; set; } = string.Empty;
-    public int FileId { get; set; }
+    public int? FileId { get; set; }
     public string FileUrl { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public string ContentJson { get; set; } = "{}";
+    public string? AutoGradeResultJson { get; set; }
+    public decimal? AutoScore { get; set; }
+    public decimal? FinalScore { get; set; }
+    public int AttemptNumber { get; set; }
     public decimal? Score { get; set; }
     public string? Feedback { get; set; }
     public int? GradedById { get; set; }

@@ -25,7 +25,12 @@ public class UpdateAssignmentHandler
         int currentUserId,
         CancellationToken cancellationToken = default)
     {
-        ValidateRequest(request.ClassId, request.Title);
+        AssignmentRequestMapper.ValidateBase(
+            request.ClassId,
+            request.Title,
+            request.AssignmentType,
+            request.Status,
+            request.MaxScore);
 
         var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
         if (currentUser == null)
@@ -33,20 +38,21 @@ public class UpdateAssignmentHandler
             throw new UnauthorizedAccessException("Current user not found.");
         }
 
-        var assignment = await _assignmentRepository.GetByIdWithDetailsAsync(assignmentId, cancellationToken);
+        var assignment = await _assignmentRepository.GetByIdAsync(assignmentId, cancellationToken);
         if (assignment == null)
         {
             throw new KeyNotFoundException("Assignment not found.");
         }
 
-        if (assignment.Class == null || !AssignmentAuthorization.CanManageClass(currentUser, assignment.Class))
+        var currentClass = await _classRepository.GetByIdSummaryAsync(assignment.ClassId, cancellationToken);
+        if (currentClass == null || !AssignmentAuthorization.CanManageClass(currentUser, currentClass))
         {
             throw new UnauthorizedAccessException("You are not allowed to update this assignment.");
         }
 
         var targetClass = assignment.ClassId == request.ClassId
-            ? assignment.Class
-            : await _classRepository.GetByIdWithDetailsAsync(request.ClassId, cancellationToken);
+            ? currentClass
+            : await _classRepository.GetByIdSummaryAsync(request.ClassId, cancellationToken);
 
         if (targetClass == null)
         {
@@ -58,27 +64,15 @@ public class UpdateAssignmentHandler
             throw new UnauthorizedAccessException("You are not allowed to move this assignment to the selected class.");
         }
 
-        assignment.ClassId = request.ClassId;
         assignment.Class = targetClass;
-        assignment.Title = request.Title.Trim();
-        assignment.UpdatedAt = DateTime.UtcNow;
+        var now = DateTime.UtcNow;
+        AssignmentRequestMapper.ApplyBase(assignment, request, now);
+        await _assignmentRepository.DeleteDetailsAsync(assignment.Id, cancellationToken);
+        AssignmentRequestMapper.ApplyDetails(assignment, request, now);
 
         _assignmentRepository.Update(assignment);
         await _assignmentRepository.SaveChangesAsync(cancellationToken);
 
         return AssignmentResponseMapper.Map(assignment);
-    }
-
-    private static void ValidateRequest(int classId, string title)
-    {
-        if (classId <= 0)
-        {
-            throw new ArgumentException("ClassId is required.");
-        }
-
-        if (string.IsNullOrWhiteSpace(title))
-        {
-            throw new ArgumentException("Title is required.");
-        }
     }
 }
