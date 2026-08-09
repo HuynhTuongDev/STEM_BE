@@ -70,6 +70,10 @@ public class GetAvailableStudentsHandler
             // Skip if already enrolled
             if (enrolledStudentIds.Contains(student.Id))
                 continue;
+            
+            // Skip inactive/deleted students
+            if (!student.IsActive)
+                continue;
 
             // Check if student has any conflicting class
             var canAdd = await _enrollmentRepository.CanAddStudentToClassAsync(student.Id, classId);
@@ -123,10 +127,12 @@ public class GetAvailableStudentsHandler
             .Select(e => e.StudentId)
             .ToHashSet();
 
-        // Get all students in the school (excluding already enrolled)
+        // Get all students in the school (excluding already enrolled and inactive)
         var allStudents = (await _userRepository.FindAsync(u =>
             u.SchoolId == schoolId &&
-            u.RoleId == studentRole.Id)).Where(s => !enrolledStudentIds.Contains(s.Id)).ToList();
+            u.RoleId == studentRole.Id &&
+            u.IsActive))
+            .Where(s => !enrolledStudentIds.Contains(s.Id)).ToList();
 
         var totalCount = allStudents.Count;
         var pagedStudents = allStudents

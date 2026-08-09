@@ -51,4 +51,20 @@ public class CourseRepository : Repository<Course>, ICourseRepository
             .Include(c => c.School)
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
     }
+
+    public async Task<bool> ExistsByTitleAsync(string title, int schoolId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet.AnyAsync(c => 
+            c.SchoolId == schoolId && 
+            c.Title.ToLower() == title.ToLower(), 
+            cancellationToken);
+    }
+
+    public async Task<bool> HasClassesAsync(int courseId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(c => c.Classes)
+            .Where(c => c.Id == courseId)
+            .AnyAsync(c => c.Classes.Any(), cancellationToken);
+    }
 }

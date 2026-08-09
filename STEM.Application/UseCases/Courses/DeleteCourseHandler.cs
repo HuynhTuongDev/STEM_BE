@@ -33,6 +33,11 @@ public class DeleteCourseHandler
         if (course.SchoolId != currentUser.SchoolId)
             throw new UnauthorizedAccessException("You can only delete courses from your own school.");
 
+        // Check if course has any classes
+        var hasClasses = await _courseRepository.HasClassesAsync(courseId, cancellationToken);
+        if (hasClasses)
+            throw new InvalidOperationException("Không thể xóa khóa học đã có lớp học. Vui lòng xóa các lớp học liên quan trước.");
+
         _courseRepository.Delete(course);
         await _courseRepository.SaveChangesAsync(cancellationToken);
 
