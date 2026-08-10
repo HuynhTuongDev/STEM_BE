@@ -15,6 +15,7 @@ public class UserDetailResponse
     public int RoleId { get; set; }
     public string Role { get; set; } = string.Empty;
     public int? SchoolId { get; set; }
+    public string? SchoolName { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

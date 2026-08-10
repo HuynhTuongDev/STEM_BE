@@ -13,4 +13,8 @@ public interface ICourseRepository : IRepository<Course>
         CancellationToken cancellationToken = default);
 
     Task<Course?> GetCourseDetailAsync(int id, CancellationToken cancellationToken = default);
+    
+    Task<bool> ExistsByTitleAsync(string title, int schoolId, CancellationToken cancellationToken = default);
+    
+    Task<bool> HasClassesAsync(int courseId, CancellationToken cancellationToken = default);
 }

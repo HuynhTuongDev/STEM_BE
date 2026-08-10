@@ -46,6 +46,15 @@ public class UpdateCourseHandler
         if (course.SchoolId != currentUser.SchoolId)
             throw new UnauthorizedAccessException("You can only update courses from your own school.");
 
+        // Check for duplicate course title in the same school (excluding current course)
+        if (!string.IsNullOrWhiteSpace(request.Title) && 
+            course.Title.ToLower() != request.Title.Trim().ToLower())
+        {
+            var titleExists = await _courseRepository.ExistsByTitleAsync(request.Title.Trim(), currentUser.SchoolId!.Value, cancellationToken);
+            if (titleExists)
+                throw new InvalidOperationException($"A course with the title '{request.Title.Trim()}' already exists in your school.");
+        }
+
         if (!string.IsNullOrWhiteSpace(request.Title))
             course.Title = request.Title.Trim();
         if (request.Description != null)

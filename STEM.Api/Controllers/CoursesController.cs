@@ -149,6 +149,10 @@ public class CoursesController : ControllerBase
         {
             return BadRequest(new { success = false, message = ex.Message });
         }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "An error occurred while updating course.", error = ex.Message });
@@ -175,6 +179,10 @@ public class CoursesController : ControllerBase
         catch (UnauthorizedAccessException)
         {
             return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
         }
         catch (Exception ex)
         {

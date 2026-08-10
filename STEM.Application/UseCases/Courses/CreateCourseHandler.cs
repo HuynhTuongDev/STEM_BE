@@ -45,6 +45,11 @@ public class CreateCourseHandler
         if (!schoolExists)
             throw new InvalidOperationException($"School with ID {currentUser.SchoolId.Value} does not exist. Please contact your administrator.");
 
+        // Check for duplicate course title in the same school
+        var titleExists = await _courseRepository.ExistsByTitleAsync(request.Title.Trim(), currentUser.SchoolId.Value, cancellationToken);
+        if (titleExists)
+            throw new InvalidOperationException($"A course with the title '{request.Title.Trim()}' already exists in your school.");
+
         var course = new Course
         {
             Title = request.Title.Trim(),

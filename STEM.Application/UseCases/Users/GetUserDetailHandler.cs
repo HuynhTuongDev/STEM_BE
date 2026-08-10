@@ -34,6 +34,7 @@ public class GetUserDetailHandler
             RoleId           = user.RoleId,
             Role             = user.Role?.Name ?? string.Empty,
             SchoolId         = user.SchoolId,
+            SchoolName       = user.School?.Name,
             CreatedAt        = user.CreatedAt,
             UpdatedAt        = user.UpdatedAt
         };
