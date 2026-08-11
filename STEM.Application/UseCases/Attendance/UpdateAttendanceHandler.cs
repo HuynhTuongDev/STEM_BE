@@ -1,5 +1,7 @@
 using STEM.Application.Dtos.Attendance;
+using STEM.Application.Interfaces;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Attendance;
@@ -8,13 +10,16 @@ public class UpdateAttendanceHandler
 {
     private readonly IAttendanceRepository _attendanceRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public UpdateAttendanceHandler(
         IAttendanceRepository attendanceRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IDateTimeProvider dateTimeProvider)
     {
         _attendanceRepository = attendanceRepository;
         _userRepository = userRepository;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<AttendanceResponse> Handle(
@@ -38,6 +43,18 @@ public class UpdateAttendanceHandler
         if (attendanceRecord.Class == null || !AttendanceAuthorization.CanManageClass(currentUser, attendanceRecord.Class))
         {
             throw new UnauthorizedAccessException("You are not allowed to update this attendance record.");
+        }
+
+        // Teachers may only edit attendance on the day the class session actually happens.
+        // Uses the record's real stored AttendanceDate (never a client-supplied value) as source of truth.
+        // SchoolAdministrator is not restricted by this rule.
+        if (currentUser.Role?.Name == RoleNames.Teacher)
+        {
+            var today = DateOnly.FromDateTime(_dateTimeProvider.UtcNow);
+            if (attendanceRecord.AttendanceDate != today)
+            {
+                throw new ArgumentException("Attendance can only be modified on the scheduled class date.");
+            }
         }
 
         var status = AttendanceStatuses.Normalize(request.Status);

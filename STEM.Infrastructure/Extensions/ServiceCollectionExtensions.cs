@@ -58,6 +58,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISimulationEventStore, SimulationEventStore>();
         services.AddScoped<IFirmwareCacheService, FirmwareCacheService>();
         services.AddSingleton<IPrecompileTriggerService, PrecompileTriggerService>();
+        services.AddScoped<IAiQuotaUsageStore, AiQuotaUsageStore>();
+        services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 
         // Supabase Configuration
         var supabaseUrl = configuration["Supabase:Url"];

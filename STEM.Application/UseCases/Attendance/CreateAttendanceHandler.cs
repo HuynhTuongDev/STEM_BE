@@ -1,5 +1,7 @@
 using STEM.Application.Dtos.Attendance;
+using STEM.Application.Interfaces;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Attendance;
@@ -9,15 +11,18 @@ public class CreateAttendanceHandler
     private readonly IAttendanceRepository _attendanceRepository;
     private readonly IClassRepository _classRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public CreateAttendanceHandler(
         IAttendanceRepository attendanceRepository,
         IClassRepository classRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IDateTimeProvider dateTimeProvider)
     {
         _attendanceRepository = attendanceRepository;
         _classRepository = classRepository;
         _userRepository = userRepository;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<CreateAttendanceResponse> Handle(
@@ -55,6 +60,17 @@ public class CreateAttendanceHandler
         if (!AttendanceAuthorization.CanManageClass(currentUser, classEntity))
         {
             throw new UnauthorizedAccessException("You are not allowed to create attendance for this class.");
+        }
+
+        // Teachers may only take attendance on the day the class session actually happens.
+        // SchoolAdministrator is not restricted by this rule (their edit rights follow separate business needs).
+        if (currentUser.Role?.Name == RoleNames.Teacher)
+        {
+            var today = DateOnly.FromDateTime(_dateTimeProvider.UtcNow);
+            if (request.AttendanceDate != today)
+            {
+                throw new ArgumentException("Attendance can only be created on the scheduled class date.");
+            }
         }
 
         var duplicatedStudentIds = request.Records

@@ -32,6 +32,7 @@ public class GetTeacherScheduleHandler
         return schedules.Select((s, index) => new ScheduleCalendarResponse
         {
             Id = s.Id,
+            ClassId = s.ClassId,
             Title = $"{s.Class?.Course?.Title ?? "Lớp học"} - {s.Class?.ClassCode}",
             Start = s.StartTime,
             End = s.EndTime,

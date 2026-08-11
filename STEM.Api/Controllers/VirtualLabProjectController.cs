@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Dtos.Simulation;
 using STEM.Application.Dtos.VirtualLab;
 using STEM.Application.Interfaces;
+using STEM.Application.UseCases.Simulation;
 using STEM.Core.Entities.Simulations;
 using STEM.Core.Entities.Users;
 
@@ -19,13 +20,16 @@ public class VirtualLabProjectController : ControllerBase
 {
     private readonly IVirtualLabProjectService _service;
     private readonly IVirtualLabRuntimeService _runtimeService;
+    private readonly LabAiAssistHandler _aiAssistHandler;
 
     public VirtualLabProjectController(
         IVirtualLabProjectService service,
-        IVirtualLabRuntimeService runtimeService)
+        IVirtualLabRuntimeService runtimeService,
+        LabAiAssistHandler aiAssistHandler)
     {
         _service = service;
         _runtimeService = runtimeService;
+        _aiAssistHandler = aiAssistHandler;
     }
 
     [HttpPost]
@@ -177,6 +181,30 @@ public class VirtualLabProjectController : ControllerBase
         {
             return Forbid();
         }
+    }
+
+    // AI Assistant trong phòng Lab — workflow đề xuất-rồi-xác-nhận (Codex/Cursor-style).
+    // AI KHÔNG tự áp dụng thay đổi; endpoint này chỉ trả về proposedChanges để FE hiển thị
+    // preview, người dùng phải tự bấm Apply. Validate ownership project TRƯỚC khi gọi AI
+    // (không tính token cho request bị từ chối do không sở hữu project).
+    [HttpPost("{id}/ai-assist")]
+    public async Task<IActionResult> AiAssist(
+        Guid id,
+        [FromBody] LabAiAssistRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var project = await _service.GetProjectAsync(id, GetCurrentUserId());
+            if (project == null) return NotFound();
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+
+        var response = await _aiAssistHandler.Handle(request, GetCurrentUserId(), cancellationToken);
+        return Ok(response);
     }
 
     private int GetCurrentUserId()
