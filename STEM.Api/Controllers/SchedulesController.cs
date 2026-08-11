@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Dtos.Schedules;
 using STEM.Application.UseCases.Schedules;
+using STEM.Core.Entities.Users;
 using System.Security.Claims;
 
 namespace STEM.Api.Controllers;
@@ -127,8 +128,9 @@ public class SchedulesController : ControllerBase
         try
         {
             var currentUserId = GetCurrentUserId();
-            var currentUser = GetCurrentUser();
-            var roleName = currentUser?.Role?.Name;
+            var roleName = User.FindFirst(ClaimTypes.Role)?.Value 
+                ?? User.FindFirst("role")?.Value 
+                ?? User.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
 
             IEnumerable<ScheduleCalendarResponse> result;
 
@@ -159,6 +161,30 @@ public class SchedulesController : ControllerBase
         if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
             throw new UnauthorizedAccessException("Invalid user token.");
         return userId;
+    }
+
+    [HttpGet("class/{classId:int}")]
+    [Authorize(Roles = "SchoolAdmin,Student")]
+    public async Task<IActionResult> GetSchedulesByClass(
+        int classId,
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var result = await _getStudentScheduleHandler.Handle(
+                new GetScheduleRequest { ClassId = classId, FromDate = fromDate, ToDate = toDate },
+                0, // Not used for admin
+                cancellationToken,
+                isAdmin: true
+            );
+            return Ok(new { success = true, data = result });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy lịch.", error = ex.Message });
+        }
     }
 
     private Core.Entities.Users.User? GetCurrentUser()

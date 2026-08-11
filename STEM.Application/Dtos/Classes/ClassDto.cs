@@ -3,6 +3,7 @@ namespace STEM.Application.Dtos.Classes;
 public class GetClassesRequest
 {
     public string? SearchTerm { get; set; }
+    public string? Status { get; set; }
     public int? CourseId { get; set; }
     public int? TeacherId { get; set; }
     public int PageNumber { get; set; } = 1;

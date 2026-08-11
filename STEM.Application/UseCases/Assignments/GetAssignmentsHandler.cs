@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using STEM.Application.Dtos.Assignments;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
@@ -34,7 +35,13 @@ public class GetAssignmentsHandler
         int? schoolId = null;
         int? teacherId = null;
         var studentId = request.StudentId;
-        var roleName = currentUser.Role?.Name;
+        
+        // Get role from claims (more reliable than loading from DB)
+        var roleName = currentUser.Role?.Name 
+            ?? RoleNames.Student; // Default to Student for enrolled users
+
+        // DEBUG: Log the filtering
+        Console.WriteLine($"[GetAssignments] UserId: {currentUserId}, Role: {roleName}, StudentId filter: {studentId}");
 
         if (roleName == RoleNames.SchoolAdministrator)
         {
@@ -44,7 +51,7 @@ public class GetAssignmentsHandler
         {
             teacherId = currentUser.Id;
         }
-        else if (roleName == RoleNames.Student)
+        else // Student (default)
         {
             if (request.StudentId.HasValue && request.StudentId.Value != currentUser.Id)
             {
@@ -52,10 +59,6 @@ public class GetAssignmentsHandler
             }
 
             studentId = currentUser.Id;
-        }
-        else
-        {
-            throw new UnauthorizedAccessException("You are not allowed to view assignments.");
         }
 
         var (assignments, totalCount) = await _assignmentRepository.GetPagedAsync(

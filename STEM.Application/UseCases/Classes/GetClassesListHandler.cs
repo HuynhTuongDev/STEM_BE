@@ -102,4 +102,78 @@ public class GetClassesListHandler
             })
             .ToList();
     }
+
+    public async Task<PagedClassListResponse> HandleStudentClasses(
+        int studentId,
+        GetClassesRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUser = await _userRepository.GetByIdAsync(studentId, cancellationToken);
+        if (currentUser == null)
+            throw new UnauthorizedAccessException("Người dùng không tồn tại.");
+
+        if (currentUser.Role?.Name != RoleNames.Student)
+            throw new UnauthorizedAccessException("Chỉ học sinh mới được xem danh sách lớp học của mình.");
+
+        var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
+        var pageSize = request.PageSize < 1 ? 20 : Math.Min(request.PageSize, 100);
+
+        // Get student's enrolled classes
+        var enrollments = await _classRepository.GetStudentEnrollmentsAsync(studentId, cancellationToken);
+        
+        // Filter by status if provided
+        var now = DateTime.UtcNow;
+        var filteredEnrollments = enrollments.AsEnumerable();
+        
+        if (!string.IsNullOrEmpty(request.Status))
+        {
+            filteredEnrollments = request.Status switch
+            {
+                "active" => filteredEnrollments.Where(e => 
+                    e.Class != null && 
+                    e.Class.StartDate <= now && 
+                    e.Class.EndDate >= now),
+                "completed" => filteredEnrollments.Where(e => 
+                    e.Class != null && 
+                    e.Class.EndDate < now),
+                "upcoming" => filteredEnrollments.Where(e => 
+                    e.Class != null && 
+                    e.Class.StartDate > now),
+                _ => filteredEnrollments
+            };
+        }
+
+        var totalCount = filteredEnrollments.Count();
+        var pagedEnrollments = filteredEnrollments
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        var items = pagedEnrollments
+            .Where(e => e.Class != null)
+            .Select(e => new ClassListItemResponse
+            {
+                Id = e.Class!.Id,
+                ClassCode = e.Class!.ClassCode,
+                SchoolId = e.Class!.SchoolId,
+                SchoolName = e.Class!.School?.Name,
+                CourseId = e.Class!.CourseId,
+                CourseName = e.Class!.Course?.Title ?? string.Empty,
+                TeacherId = e.Class!.TeacherId,
+                TeacherName = e.Class!.Teacher?.FullName ?? string.Empty,
+                StartDate = e.Class!.StartDate,
+                EndDate = e.Class!.EndDate,
+                CreatedAt = e.Class!.CreatedAt,
+                StudentCount = 0 // Will be fetched separately if needed
+            })
+            .ToList();
+
+        return new PagedClassListResponse
+        {
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            Items = items
+        };
+    }
 }

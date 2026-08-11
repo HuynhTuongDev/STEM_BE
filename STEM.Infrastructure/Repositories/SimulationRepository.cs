@@ -127,6 +127,23 @@ public class SimulationRepository : Repository<SimulationTemplate>, ISimulationR
         _context.Simulations.Remove(simulation);
     }
 
+    public async Task<IEnumerable<Enrollment>> GetStudentEnrollmentsAsync(int studentId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Enrollments
+            .AsNoTracking()
+            .Where(e => e.StudentId == studentId)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IEnumerable<SimulationSession>> GetStudentSubmissionsAsync(int studentId, CancellationToken cancellationToken = default)
+    {
+        return await _context.SimulationSessions
+            .AsNoTracking()
+            .Include(s => s.Template)
+            .Where(s => s.StudentId == studentId)
+            .ToListAsync(cancellationToken);
+    }
+
     private IQueryable<SimulationTemplate> BuildTemplateDetailsQuery()
     {
         return _context.SimulationTemplates

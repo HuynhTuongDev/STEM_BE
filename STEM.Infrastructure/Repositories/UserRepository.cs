@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using STEM.Application.Dtos.Users;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
@@ -117,24 +118,53 @@ public class UserRepository : Repository<User>, IUserRepository
 
     public async Task<IEnumerable<Schedule>> GetStudentSchedulesAsync(int studentId, DateTime? fromDate, DateTime? toDate, CancellationToken cancellationToken = default)
     {
-        var query = _context.Enrollments
-            .Include(e => e.Class)
-                .ThenInclude(c => c.Course)
-            .Include(e => e.Class.Schedules)
-            .Where(e => e.StudentId == studentId)
-            .SelectMany(e => e.Class.Schedules)
-            .AsQueryable();
+        // Convert dates to UTC if they have Kind=Unspecified
+        var fromDateUtc = fromDate.HasValue ? DateTime.SpecifyKind(fromDate.Value, DateTimeKind.Utc) : (DateTime?)null;
+        var toDateUtc = toDate.HasValue ? DateTime.SpecifyKind(toDate.Value, DateTimeKind.Utc) : (DateTime?)null;
 
-        if (fromDate.HasValue)
-            query = query.Where(s => s.StartTime >= fromDate.Value);
-
-        if (toDate.HasValue)
-            query = query.Where(s => s.EndTime <= toDate.Value);
-
-        return await query
+        // Include Class and Enrollments for filtering
+        var schedules = await _context.Schedules
             .Include(s => s.Class)
+                .ThenInclude(c => c!.Enrollments)
+            .Where(s => s.Class != null && s.Class.Enrollments != null && s.Class.Enrollments.Any(e => e.StudentId == studentId))
+            .Where(s => (!fromDateUtc.HasValue || s.StartTime >= fromDateUtc.Value)
+                     && (!toDateUtc.HasValue || s.EndTime <= toDateUtc.Value))
+            .Select(s => new Schedule
+            {
+                Id = s.Id,
+                ClassId = s.ClassId,
+                StartTime = s.StartTime,
+                EndTime = s.EndTime,
+                CreatedAt = s.CreatedAt,
+                UpdatedAt = s.UpdatedAt
+            })
             .OrderBy(s => s.StartTime)
             .ToListAsync(cancellationToken);
+
+        // Fetch class info separately to avoid cycle
+        var classIds = schedules.Select(s => s.ClassId).Distinct().ToList();
+        var classInfos = await _context.Classes
+            .Where(c => classIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.ClassCode, CourseTitle = c.Course != null ? c.Course.Title : "" })
+            .ToListAsync(cancellationToken);
+        
+        var classInfoDict = classInfos.ToDictionary(c => c.Id);
+
+        // Attach class info to schedules
+        foreach (var schedule in schedules)
+        {
+            if (classInfoDict.TryGetValue(schedule.ClassId, out var info))
+            {
+                schedule.Class = new Class
+                {
+                    Id = info.Id,
+                    ClassCode = info.ClassCode,
+                    Course = new Course { Title = info.CourseTitle }
+                };
+            }
+        }
+
+        return schedules;
     }
 
     public async Task<(IEnumerable<User> Users, int TotalCount)> GetTeachersWithClassCountAsync(int schoolId, int page, int pageSize, string? searchTerm, CancellationToken cancellationToken = default)

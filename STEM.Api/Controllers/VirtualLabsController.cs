@@ -164,6 +164,33 @@ public class VirtualLabsController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Get virtual labs for student (enrolled classes)
+    /// </summary>
+    [HttpGet("student")]
+    [Authorize(Roles = "Student")]
+    public async Task<IActionResult> GetVirtualLabsForStudent(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] int? classId = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var response = await _getVirtualLabsHandler.HandleForStudent(currentUserId, pageNumber, pageSize, classId, cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to get virtual labs.", error = ex.Message });
+        }
+    }
+
     private int GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

@@ -327,6 +327,99 @@ public class ClassesController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Get my enrolled classes (for students)
+    /// </summary>
+    [HttpGet("my-classes")]
+    [Authorize(Roles = RoleNames.Student)]
+    public async Task<IActionResult> GetMyClasses(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 10,
+        [FromQuery] string? status = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var request = new GetClassesRequest
+            {
+                PageNumber = pageNumber,
+                PageSize = pageSize,
+                Status = status
+            };
+            var result = await _getClassesListHandler.HandleStudentClasses(currentUserId, request, cancellationToken);
+            return Ok(new { success = true, data = result });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy danh sách lớp học.", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get class detail for student
+    /// </summary>
+    [HttpGet("{classId}/detail")]
+    [Authorize(Roles = RoleNames.Student)]
+    public async Task<IActionResult> GetClassDetailForStudent(
+        int classId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var result = await _getClassDetailHandler.HandleForStudent(classId, currentUserId, cancellationToken);
+            return Ok(new { success = true, data = result });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy chi tiết lớp học.", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get class schedule for student
+    /// </summary>
+    [HttpGet("{classId}/schedule")]
+    [Authorize(Roles = RoleNames.Student)]
+    public async Task<IActionResult> GetClassScheduleForStudent(
+        int classId,
+        [FromQuery] DateTime? fromDate,
+        [FromQuery] DateTime? toDate,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var result = await _getClassDetailHandler.HandleGetScheduleForStudent(classId, currentUserId, fromDate, toDate, cancellationToken);
+            return Ok(new { success = true, data = result });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy lịch học.", error = ex.Message });
+        }
+    }
+
     private int GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;

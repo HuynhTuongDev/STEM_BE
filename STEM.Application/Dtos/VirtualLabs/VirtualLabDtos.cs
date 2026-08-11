@@ -43,6 +43,9 @@ public class VirtualLabResponse
     public int SessionsCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+    
+    // Student-specific fields
+    public string? Status { get; set; }
 }
 
 public class PagedVirtualLabResponse

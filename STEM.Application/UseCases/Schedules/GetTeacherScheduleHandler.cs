@@ -27,14 +27,22 @@ public class GetTeacherScheduleHandler
         if (currentUser == null)
             throw new UnauthorizedAccessException("Người dùng không tồn tại.");
 
-        var schedules = await _classRepository.GetSchedulesByTeacherAsync(currentUserId, request.FromDate, request.ToDate, cancellationToken);
+        // Convert dates to UTC if they have Kind=Unspecified
+        DateTime? fromDateUtc = request.FromDate.HasValue 
+            ? DateTime.SpecifyKind(request.FromDate.Value, DateTimeKind.Utc) 
+            : null;
+        DateTime? toDateUtc = request.ToDate.HasValue 
+            ? DateTime.SpecifyKind(request.ToDate.Value, DateTimeKind.Utc) 
+            : null;
+
+        var schedules = await _classRepository.GetSchedulesByTeacherAsync(currentUserId, fromDateUtc, toDateUtc, cancellationToken);
 
         return schedules.Select((s, index) => new ScheduleCalendarResponse
         {
             Id = s.Id,
             Title = $"{s.Class?.Course?.Title ?? "Lớp học"} - {s.Class?.ClassCode}",
-            Start = s.StartTime,
-            End = s.EndTime,
+            Start = DateTime.SpecifyKind(s.StartTime, DateTimeKind.Utc),
+            End = DateTime.SpecifyKind(s.EndTime, DateTimeKind.Utc),
             ClassCode = s.Class?.ClassCode ?? string.Empty,
             ClassName = s.Class?.Course?.Title ?? string.Empty,
             Color = ScheduleColors[index % ScheduleColors.Length]

@@ -34,39 +34,46 @@ RUN arduino-cli core install esp32:esp32@2.0.17
 
 ## Cho team member — pull image có sẵn (không cần tự build)
 
-```powershell
-docker pull trieu77/stem-arduino-cli-sandbox:v1-esp32-2.0.17
-```
+### Pull cả 2 image cùng lúc
 
-Hoặc chạy script tự động pull + tag lại đúng tên local + verify core version:
+Để chạy BE local + chức năng compile/chạy mô phỏng ESP32/QEMU, cần cả 2 image:
 
 ```powershell
-cd docker/simulation-compile-sandbox
-./pull-and-verify.ps1
+# Pull từ Docker Hub
+docker pull trieu77/stem-arduino-cli-sandbox:sensor-v2
+docker pull trieu77/stem-qemu-runner-sandbox:qemu-v1
+
+# Tag lại thành tên mặc định (code BE tìm image theo tên này)
+docker tag trieu77/stem-arduino-cli-sandbox:sensor-v2 stem-arduino-cli-sandbox:latest
+docker tag trieu77/stem-qemu-runner-sandbox:qemu-v1 stem-qemu-runner-sandbox:latest
+
+# Verify đã pull đúng
+docker images | findstr stem
 ```
 
-Script này pull `trieu77/stem-arduino-cli-sandbox:v1-esp32-2.0.17`, tag lại
-thành `stem-arduino-cli-sandbox:latest` (đúng tên mặc định code đang tìm —
-xem phần config bên dưới), rồi verify bên trong image thật sự có
-`esp32:esp32 2.0.17`.
-
-Sau khi pull xong, backend dùng được ngay — không cần đổi gì thêm nếu bạn
-giữ nguyên `SimulationCompile:DockerImage` trỏ tới `stem-arduino-cli-sandbox:latest`
-(giá trị mặc định hard-code trong code nếu không có trong `appsettings.json`).
+Sau khi hoàn tất, chạy BE bình thường — không cần cấu hình thêm.
 
 ## Cho chủ Docker Hub repo (`trieu77`) — build/tag/push bản mới
 
-Chỉ người có quyền push lên `trieu77/stem-arduino-cli-sandbox` mới cần chạy
-bước này (khi core version đổi, hoặc Dockerfile có thay đổi khác).
+Chỉ người có quyền push lên Docker Hub mới cần chạy bước này (khi core
+version đổi, hoặc Dockerfile có thay đổi).
+
+**Arduino CLI sandbox:**
 
 ```powershell
 docker login
 cd docker/simulation-compile-sandbox
-./build-and-push.ps1
+./build-and-push.ps1 -Tag sensor-v2
 ```
 
-Xem chi tiết tham số ở phần script bên dưới (có thể build/tag mà không push
-bằng `-SkipPush`, hoặc đổi tag version bằng `-Tag`).
+**QEMU runner sandbox:**
+
+```powershell
+docker login
+cd docker/simulation-qemu-sandbox
+docker build -t trieu77/stem-qemu-runner-sandbox:qemu-v1 .
+docker push trieu77/stem-qemu-runner-sandbox:qemu-v1
+```
 
 ## Cấu hình backend dùng image từ Docker Hub
 
@@ -74,8 +81,8 @@ bằng `-SkipPush`, hoặc đổi tag version bằng `-Tag`).
 qua key `SimulationCompile:DockerImage`. Có 2 cách dùng:
 
 **Cách 1 (khuyến nghị, đơn giản nhất):** giữ nguyên giá trị mặc định
-`stem-arduino-cli-sandbox:latest`, để `pull-and-verify.ps1` tự tag lại image
-đã pull thành đúng tên này — không cần sửa `appsettings.json` gì cả.
+`stem-arduino-cli-sandbox:latest` và `stem-qemu-runner-sandbox:latest`,
+để lệnh tag ở trên tự đặt đúng tên này — không cần sửa `appsettings.json` gì cả.
 
 **Cách 2:** trỏ thẳng tới tag đầy đủ trên Docker Hub (không cần tag lại local):
 
@@ -96,7 +103,9 @@ Docker Hub) — không đổi:
 - Cách `QemuEsp32Runner`/`SimulationCompileService` gọi Docker (`--network none`,
   `--cap-drop ALL`, `--read-only`, non-root user, resource limits... giữ nguyên).
 - Sandbox vẫn bắt buộc, không có đường tắt bỏ qua Docker.
-- Core version vẫn pin `2.0.17`.
+- Core version vẫn pin `2.0.17` (arduino-cli sandbox).
+- Mỗi image có vai trò riêng: compile sandbox (arduino-cli + toolchain) và
+  runner sandbox (QEMU thực thi firmware đã compile).
 
 ## Lưu ý bảo mật
 
@@ -105,5 +114,4 @@ Docker Hub) — không đổi:
 - **Không** commit Docker Hub password/token — `docker login` chạy tương tác
   trên máy bạn, không lưu credential vào script hay file nào trong repo.
 - Nếu Docker Hub repo cần private, đảm bảo mọi thành viên team đã được thêm
-  quyền pull trước khi dùng `pull-and-verify.ps1` (script không tự xử lý
-  đăng nhập).
+  quyền pull trước khi dùng lệnh pull (không script tự xử lý đăng nhập).

@@ -70,6 +70,13 @@ public class AssignmentRepository : Repository<Assignment>, IAssignmentRepositor
             .AsNoTracking()
             .AsQueryable();
 
+        // Include Enrollments for student filtering
+        if (studentId.HasValue)
+        {
+            query = query.Include(a => a.Class)
+                .ThenInclude(c => c!.Enrollments);
+        }
+
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
             var term = searchTerm.Trim().ToLower();

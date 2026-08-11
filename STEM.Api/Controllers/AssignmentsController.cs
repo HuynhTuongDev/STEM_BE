@@ -52,6 +52,28 @@ public class AssignmentsController : ControllerBase
         }
     }
 
+    [HttpGet("student")]
+    public async Task<IActionResult> GetStudentAssignments(
+        [FromQuery] GetAssignmentsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            // Override StudentId với current user
+            request.StudentId = GetCurrentUserId();
+            var response = await _getAssignmentsHandler.Handle(request, GetCurrentUserId(), cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to get student assignments.", error = ex.Message });
+        }
+    }
+
     [HttpGet("{id:int}")]
     public async Task<IActionResult> GetAssignment(
         int id,

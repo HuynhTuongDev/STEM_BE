@@ -187,7 +187,38 @@ public class LabService : ILabService
         var currentUser = await GetCurrentUserAsync(currentUserId, cancellationToken);
         EnsureCanManageLabs(currentUser);
 
+        // Retry logic for optimistic concurrency
+        const int maxRetries = 3;
+        for (int attempt = 0; attempt < maxRetries; attempt++)
+        {
+            try
+            {
+                return await UpdateLabInternalAsync(id, request, currentUser, cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(ex, "Concurrency conflict on lab {LabId}, attempt {Attempt}", id, attempt + 1);
+                if (attempt == maxRetries - 1)
+                {
+                    throw new InvalidOperationException(
+                        "Lab was modified by another user. Please refresh and try again.", ex);
+                }
+                // Detach all entries to clear EF tracking cache
+                _context.ChangeTracker.Clear();
+                await Task.Delay(100 * (attempt + 1), cancellationToken);
+            }
+        }
+        throw new InvalidOperationException("Failed to update lab after retries.");
+    }
+
+    private async Task<LabResponse> UpdateLabInternalAsync(
+        Guid id,
+        UpdateLabRequest request,
+        User currentUser,
+        CancellationToken cancellationToken)
+    {
         var lab = await BuildLabQuery(asNoTracking: false)
+            .Include(l => l.ClassAssignments)
             .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (lab == null)
         {

@@ -1,4 +1,5 @@
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Projects;
 
 namespace STEM.Core.Repository;
 
@@ -6,6 +7,8 @@ public interface IClassRepository : IRepository<Class>
 {
     Task<IEnumerable<Class>> GetByCourseIdAsync(int courseId, CancellationToken cancellationToken = default);
     Task<IEnumerable<Class>> GetByTeacherIdAsync(int teacherId, CancellationToken cancellationToken = default);
+    Task<IEnumerable<Enrollment>> GetStudentEnrollmentsAsync(int studentId, CancellationToken cancellationToken = default);
+    Task<IEnumerable<Assignment>> GetClassAssignmentsAsync(int classId, CancellationToken cancellationToken = default);
 
     Task<IEnumerable<Class>> GetClassesByTeacherIdAsync(int teacherId, CancellationToken cancellationToken = default);
     Task<(IEnumerable<Class> Classes, int TotalCount)> GetClassesPagedAsync(
