@@ -57,6 +57,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<LabClassAssignment> LabClassAssignments => Set<LabClassAssignment>();
     public DbSet<LabProgress> LabProgresses => Set<LabProgress>();
     public DbSet<ComponentGlueRegistry> ComponentGlueRegistry => Set<ComponentGlueRegistry>();
+    public DbSet<AiQuotaUsage> AiQuotaUsages => Set<AiQuotaUsage>();
 
     public DbSet<Quiz> Quizzes => Set<Quiz>();
     public DbSet<QuizQuestion> QuizQuestions => Set<QuizQuestion>();
@@ -557,6 +558,10 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
                 UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
             }
         );
+
+        modelBuilder.Entity<AiQuotaUsage>()
+            .HasIndex(usage => new { usage.UserId, usage.UsageDate })
+            .IsUnique();
 
         modelBuilder.Entity<VirtualLabProject>()
             .Property(project => project.Status)

@@ -55,6 +55,7 @@ public static class ServiceCollectionExtensions
         // Simulation Handlers
         services.AddScoped<SimulationHandler>();
         services.AddScoped<AiSuggestHandler>();
+        services.AddScoped<LabAiAssistHandler>();
         services.AddSingleton<VirtualLabDiagramService>();
         services.AddSingleton<EducationalProgramAnalyzer>();
         services.AddSingleton<EducationalEventGenerator>();
