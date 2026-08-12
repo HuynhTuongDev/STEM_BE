@@ -28,7 +28,8 @@ public class GetUserProfileHandler
             Avatar = user.Avatar ?? string.Empty,
             Gender = user.Gender ?? string.Empty,
             DateOfBirth = user.DateOfBirth,
-            Address = user.Address ?? string.Empty
+            Address = user.Address ?? string.Empty,
+            CreatedAt = user.CreatedAt
         };
     }
 }

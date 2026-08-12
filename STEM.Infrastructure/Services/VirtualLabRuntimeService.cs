@@ -697,9 +697,16 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException("Lab not found.");
 
-        return new ProjectPlatform(
-            SimulationCompileService.NormalizeBoard(lab.BoardType),
-            DefaultLanguage);
+        // Do NOT NormalizeBoard() here — the resolved value (e.g.
+        // "esp32:esp32:esp32:FlashMode=dio") gets stored as VirtualLabProject.Board
+        // and later re-used as CompileSimulationRequest.Board, which
+        // SimulationCompileService.ValidateRequestAsync checks against SupportedBoards
+        // by KEY (raw aliases like "esp32_devkit_v1"), not by the normalized FQBN value.
+        // CompileCoreAsync already calls NormalizeBoard exactly once, right before the
+        // actual docker/arduino-cli invocation — normalizing here too was a double
+        // resolution that made every newly-created project fail to compile/run with
+        // "Unsupported board '<already-normalized-fqbn>'".
+        return new ProjectPlatform(lab.BoardType, DefaultLanguage);
     }
 
     /// <summary>
