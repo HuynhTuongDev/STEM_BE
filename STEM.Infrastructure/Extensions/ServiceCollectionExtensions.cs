@@ -53,6 +53,13 @@ public static class ServiceCollectionExtensions
         
         services.AddScoped<IVirtualLabProjectService, VirtualLabProjectService>();
         services.AddHttpClient<ILabService, LabService>();
+        services.AddHttpClient<ILabAiProvider, BeeknoeeLabAiProvider>(client =>
+        {
+            var baseUrl = configuration["Beeknoee:BaseUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl)) baseUrl = "https://platform.beeknoee.com/api/v1";
+            if (!baseUrl.EndsWith('/')) baseUrl += "/";
+            client.BaseAddress = new Uri(baseUrl);
+        });
         services.AddScoped<ISimulationCompileService, SimulationCompileService>();
         services.AddScoped<IVirtualLabRuntimeService, VirtualLabRuntimeService>();
         services.AddScoped<ISimulationEventStore, SimulationEventStore>();

@@ -1,5 +1,3 @@
-using System.Net.Http.Headers;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using STEM.Application.Dtos.Simulation;
@@ -12,25 +10,29 @@ namespace STEM.Application.UseCases.Simulation;
 /// AI chỉ trả về proposedChanges, KHÔNG bao giờ tự sửa code/diagram. FE chịu trách
 /// nhiệm áp dụng sau khi người dùng bấm Apply. Khác với AiSuggestHandler (sinh mạch
 /// mới từ đầu theo prompt) — handler này review code/diagram ĐANG có trong project.
+///
+/// Handler KHÔNG biết provider AI cụ thể là ai (Anthropic/Beeknoee/...), URL, hay API key —
+/// chỉ phụ thuộc <see cref="ILabAiProvider"/>. Provider cụ thể được chọn qua DI registration.
 /// </summary>
 public class LabAiAssistHandler
 {
-    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly ILabAiProvider _aiProvider;
     private readonly IConfiguration _configuration;
     private readonly IAiQuotaUsageStore _quotaStore;
+    private readonly ILabService _labService;
 
-    private const string ClaudeModel = "claude-sonnet-4-20250514";
-    private const int MaxTokens = 3072;
     private const int DefaultDailyTokenLimit = 50000;
 
     public LabAiAssistHandler(
-        IHttpClientFactory httpClientFactory,
+        ILabAiProvider aiProvider,
         IConfiguration configuration,
-        IAiQuotaUsageStore quotaStore)
+        IAiQuotaUsageStore quotaStore,
+        ILabService labService)
     {
-        _httpClientFactory = httpClientFactory;
+        _aiProvider = aiProvider;
         _configuration = configuration;
         _quotaStore = quotaStore;
+        _labService = labService;
     }
 
     public async Task<LabAiAssistResponse> Handle(
@@ -46,8 +48,7 @@ public class LabAiAssistHandler
             return QuotaExceededResponse(usedSoFar, dailyLimit);
         }
 
-        var apiKey = _configuration["Anthropic:ApiKey"];
-        if (string.IsNullOrWhiteSpace(apiKey))
+        if (!_aiProvider.IsConfigured)
         {
             return new LabAiAssistResponse
             {
@@ -64,7 +65,11 @@ public class LabAiAssistHandler
         int completionTokens;
         try
         {
-            (rawText, promptTokens, completionTokens) = await CallClaudeAsync(request, apiKey, cancellationToken);
+            var userContent = BuildUserMessage(request);
+            var result = await _aiProvider.CompleteAsync(SystemPrompt, userContent, cancellationToken);
+            rawText = result.Text;
+            promptTokens = result.PromptTokens;
+            completionTokens = result.CompletionTokens;
         }
         catch (Exception ex)
         {
@@ -78,7 +83,11 @@ public class LabAiAssistHandler
             };
         }
 
-        var parsed = ParseClaudeResponse(rawText);
+        var supportedComponentTypes = (await _labService.GetComponentGlueRegistryAsync(supportedOnly: true, cancellationToken))
+            .Select(c => c.ComponentType)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var parsed = ParseClaudeResponse(rawText, supportedComponentTypes);
 
         var totalTokensThisCall = promptTokens + completionTokens;
         var newDailyTotal = await _quotaStore.AddTodayUsageAsync(userId, totalTokensThisCall, cancellationToken);
@@ -118,61 +127,6 @@ public class LabAiAssistHandler
                 IsEstimated = false
             }
         };
-    }
-
-    // ── Gọi Claude Messages API ──────────────────────────────────────────────
-
-    private async Task<(string Text, int PromptTokens, int CompletionTokens)> CallClaudeAsync(
-        LabAiAssistRequest request,
-        string apiKey,
-        CancellationToken cancellationToken)
-    {
-        var httpClient = _httpClientFactory.CreateClient("Anthropic");
-
-        var userContent = BuildUserMessage(request);
-
-        var requestBody = new
-        {
-            model = ClaudeModel,
-            max_tokens = MaxTokens,
-            system = SystemPrompt,
-            messages = new[]
-            {
-                new { role = "user", content = userContent }
-            }
-        };
-
-        using var httpRequest = new HttpRequestMessage(HttpMethod.Post, "/v1/messages");
-        httpRequest.Headers.Add("x-api-key", apiKey);
-        httpRequest.Content = new StringContent(
-            JsonSerializer.Serialize(requestBody), Encoding.UTF8, "application/json");
-        httpRequest.Content.Headers.ContentType = new MediaTypeHeaderValue("application/json");
-
-        var httpResponse = await httpClient.SendAsync(httpRequest, cancellationToken);
-
-        var rawJson = await httpResponse.Content.ReadAsStringAsync(cancellationToken);
-
-        if (!httpResponse.IsSuccessStatusCode)
-        {
-            throw new InvalidOperationException(
-                $"Claude API trả về lỗi {(int)httpResponse.StatusCode}: {rawJson}");
-        }
-
-        using var doc = JsonDocument.Parse(rawJson);
-        var root = doc.RootElement;
-
-        var text = root.GetProperty("content")[0].GetProperty("text").GetString()
-            ?? throw new InvalidOperationException("Claude API trả về content rỗng.");
-
-        var promptTokens = 0;
-        var completionTokens = 0;
-        if (root.TryGetProperty("usage", out var usageEl))
-        {
-            if (usageEl.TryGetProperty("input_tokens", out var inTok)) promptTokens = inTok.GetInt32();
-            if (usageEl.TryGetProperty("output_tokens", out var outTok)) completionTokens = outTok.GetInt32();
-        }
-
-        return (text, promptTokens, completionTokens);
     }
 
     private static string BuildUserMessage(LabAiAssistRequest request)
@@ -245,9 +199,9 @@ public class LabAiAssistHandler
         Nếu không có đề xuất thay đổi nào (chỉ trả lời câu hỏi), proposedChanges phải là mảng rỗng [].
         """;
 
-    // ── Parse JSON từ Claude ──────────────────────────────────────────────────
+    // ── Parse JSON từ provider AI ────────────────────────────────────────────
 
-    private static LabAiAssistResponse ParseClaudeResponse(string jsonText)
+    private static LabAiAssistResponse ParseClaudeResponse(string jsonText, IReadOnlySet<string> supportedComponentTypes)
     {
         var cleaned = jsonText.Trim();
         if (cleaned.StartsWith("```"))
@@ -276,7 +230,7 @@ public class LabAiAssistHandler
             {
                 foreach (var item in changesEl.EnumerateArray())
                 {
-                    var change = ParseProposedChange(item);
+                    var change = ParseProposedChange(item, supportedComponentTypes);
                     if (change != null) changes.Add(change);
                 }
             }
@@ -314,12 +268,26 @@ public class LabAiAssistHandler
         }
     }
 
-    private static ProposedChangeDto? ParseProposedChange(JsonElement item)
+    private static ProposedChangeDto? ParseProposedChange(JsonElement item, IReadOnlySet<string> supportedComponentTypes)
     {
         if (item.ValueKind != JsonValueKind.Object) return null;
 
         var type = item.TryGetProperty("type", out var t) ? t.GetString() ?? string.Empty : string.Empty;
         if (!ProposedChangeTypes.All.Contains(type)) return null;
+
+        if (type == ProposedChangeTypes.AddComponent)
+        {
+            // AI không được phép bịa ra linh kiện ngoài ComponentGlueRegistry — nếu type không có
+            // trong registry thật, loại bỏ đề xuất này thay vì để FE chèn linh kiện không hỗ trợ.
+            var componentType = item.TryGetProperty("component", out var compCheck) && compCheck.ValueKind == JsonValueKind.Object
+                && compCheck.TryGetProperty("type", out var ctCheck)
+                ? ctCheck.GetString()
+                : null;
+            if (string.IsNullOrWhiteSpace(componentType) || !supportedComponentTypes.Contains(componentType))
+            {
+                return null;
+            }
+        }
 
         var dto = new ProposedChangeDto
         {
