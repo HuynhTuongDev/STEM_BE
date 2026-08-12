@@ -69,12 +69,14 @@ public class GetAssignmentsHandler
             studentId,
             cancellationToken);
 
+        var revealAnswers = roleName != RoleNames.Student;
+
         return new PagedAssignmentResponse
         {
             TotalCount = totalCount,
             PageNumber = pageNumber,
             PageSize = pageSize,
-            Items = assignments.Select(AssignmentResponseMapper.Map).ToList()
+            Items = assignments.Select(assignment => AssignmentResponseMapper.Map(assignment, revealAnswers)).ToList()
         };
     }
 }

@@ -686,10 +686,17 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasColumnType("jsonb");
 
         var componentSeedTime = new DateTime(2026, 7, 9, 0, 0, 0, DateTimeKind.Utc);
+        // ComponentType values below use the "wokwi-*" prefix to match
+        // VirtualLabDiagramService.Analyze()'s SupportedPins convention and the
+        // real DB state (see SQLScripts/FixVirtualLabComponentTypeMismatch.sql —
+        // this seed previously used short-form values "led"/"buzzer"/"servo"/
+        // "push_button"/"potentiometer", which a fresh/local DB setup would still
+        // reseed with today; a real EF migration now captures the rename so it's
+        // no longer only a manually-applied SQL patch on the live DB).
         modelBuilder.Entity<ComponentGlueRegistry>().HasData(
             new ComponentGlueRegistry
             {
-                ComponentType = "led",
+                ComponentType = "wokwi-led",
                 Label = "LED",
                 Supported = true,
                 PinRequirementsJson = """{"pins":[{"name":"pin","kind":"digital_output"}]}""",
@@ -698,7 +705,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             },
             new ComponentGlueRegistry
             {
-                ComponentType = "push_button",
+                ComponentType = "wokwi-pushbutton",
                 Label = "Push Button",
                 Supported = true,
                 PinRequirementsJson = """{"pins":[{"name":"pin","kind":"digital_input"}]}""",
@@ -707,7 +714,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             },
             new ComponentGlueRegistry
             {
-                ComponentType = "buzzer",
+                ComponentType = "wokwi-buzzer",
                 Label = "Buzzer",
                 Supported = true,
                 PinRequirementsJson = """{"pins":[{"name":"pin","kind":"pwm_output"}]}""",
@@ -716,7 +723,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             },
             new ComponentGlueRegistry
             {
-                ComponentType = "potentiometer",
+                ComponentType = "wokwi-potentiometer",
                 Label = "Potentiometer",
                 Supported = true,
                 PinRequirementsJson = """{"pins":[{"name":"pin","kind":"analog_input"}]}""",
@@ -725,7 +732,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             },
             new ComponentGlueRegistry
             {
-                ComponentType = "servo",
+                ComponentType = "wokwi-servo",
                 Label = "Servo",
                 Supported = true,
                 PinRequirementsJson = """{"pins":[{"name":"pin","kind":"pwm_output"}]}""",
@@ -742,12 +749,11 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
                 UpdatedAt = componentSeedTime
             });
 
-        // Robot giao hàng mini — additive, không sửa/xoá 6 dòng seed cũ ở trên
-        // (những dòng đó vẫn giữ type ngắn "led"/"buzzer"/... đã lệch so với DB
-        // thật, được vá tay qua SQLScripts/FixVirtualLabComponentTypeMismatch.sql
-        // — không thuộc phạm vi task này). Dùng tiền tố "wokwi-" khớp đúng quy
-        // ước SupportedPins trong VirtualLabDiagramService.cs và dữ liệu DB thật
-        // hiện tại, tránh lặp lại đúng lỗi lệch type đã xảy ra trước đó.
+        // Robot giao hàng mini — additive, không sửa/xoá seed cũ ở trên (6 dòng
+        // "led"/"buzzer"/... đã được đổi sang tiền tố "wokwi-" ở trên, dht22 giữ
+        // nguyên short-form theo quyết định đã có). Dùng tiền tố "wokwi-" khớp
+        // đúng quy ước SupportedPins trong VirtualLabDiagramService.cs và dữ liệu
+        // DB thật hiện tại, tránh lặp lại đúng lỗi lệch type đã xảy ra trước đó.
         //
         // Cả 10 type đều Supported=true — ComponentGlueRegistry chỉ quyết định
         // "có xuất hiện trong palette giáo viên + qua được

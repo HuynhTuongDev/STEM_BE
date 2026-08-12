@@ -64,7 +64,14 @@ public class UpdateAssignmentHandler
             throw new UnauthorizedAccessException("You are not allowed to move this assignment to the selected class.");
         }
 
-        assignment.Class = targetClass;
+        // ApplyBase already sets the scalar assignment.ClassId FK below — do NOT also
+        // assign assignment.Class = targetClass here. targetClass comes from an
+        // AsNoTracking() query that constructs fresh School/Course/Teacher POCOs with
+        // the same PKs as entities the DbContext may already be tracking (e.g. School,
+        // via _userRepository.GetByIdAsync's .Include(u => u.School)); attaching that
+        // graph before SaveChangesAsync makes EF's change tracker throw
+        // "The instance of entity type 'X' cannot be tracked because another instance
+        // with the same key value is already being tracked."
         var now = DateTime.UtcNow;
         AssignmentRequestMapper.ApplyBase(assignment, request, now);
         await _assignmentRepository.DeleteDetailsAsync(assignment.Id, cancellationToken);
@@ -73,6 +80,9 @@ public class UpdateAssignmentHandler
         _assignmentRepository.Update(assignment);
         await _assignmentRepository.SaveChangesAsync(cancellationToken);
 
+        // Safe to attach here now — purely shapes the response DTO, no further
+        // SaveChanges/DetectChanges call will walk this graph.
+        assignment.Class = targetClass;
         return AssignmentResponseMapper.Map(assignment);
     }
 }
