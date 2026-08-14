@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using Npgsql;
 using STEM.Application.Dtos.Labs;
 using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Simulation.Abstractions;
@@ -187,7 +188,38 @@ public class LabService : ILabService
         var currentUser = await GetCurrentUserAsync(currentUserId, cancellationToken);
         EnsureCanManageLabs(currentUser);
 
+        // Retry logic for optimistic concurrency
+        const int maxRetries = 3;
+        for (int attempt = 0; attempt < maxRetries; attempt++)
+        {
+            try
+            {
+                return await UpdateLabInternalAsync(id, request, currentUser, cancellationToken);
+            }
+            catch (DbUpdateConcurrencyException ex)
+            {
+                _logger.LogWarning(ex, "Concurrency conflict on lab {LabId}, attempt {Attempt}", id, attempt + 1);
+                if (attempt == maxRetries - 1)
+                {
+                    throw new InvalidOperationException(
+                        "Lab was modified by another user. Please refresh and try again.", ex);
+                }
+                // Detach all entries to clear EF tracking cache
+                _context.ChangeTracker.Clear();
+                await Task.Delay(100 * (attempt + 1), cancellationToken);
+            }
+        }
+        throw new InvalidOperationException("Failed to update lab after retries.");
+    }
+
+    private async Task<LabResponse> UpdateLabInternalAsync(
+        Guid id,
+        UpdateLabRequest request,
+        User currentUser,
+        CancellationToken cancellationToken)
+    {
         var lab = await BuildLabQuery(asNoTracking: false)
+            .Include(l => l.ClassAssignments)
             .FirstOrDefaultAsync(item => item.Id == id, cancellationToken);
         if (lab == null)
         {
@@ -339,6 +371,27 @@ public class LabService : ILabService
                 OpenCount = 1
             };
             _context.LabProgresses.Add(progress);
+
+            try
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+                return MapProgress(progress);
+            }
+            catch (DbUpdateException ex) when (IsDuplicateKey(ex))
+            {
+                // Race: a concurrent progress/start call for the same (LabId, StudentId)
+                // (e.g. React StrictMode's double-invoked effect) already inserted the
+                // row first — the unique index on (LabId, StudentId) rejects this insert.
+                // Fall back to updating the row the other request just created instead
+                // of surfacing the raw 500.
+                _context.Entry(progress).State = EntityState.Detached;
+                progress = await _context.LabProgresses
+                    .FirstOrDefaultAsync(item => item.LabId == id && item.StudentId == currentUser.Id, cancellationToken)
+                    ?? throw new InvalidOperationException(
+                        "LabProgress not found after a duplicate-key conflict on create.");
+                progress.LastOpenedAt = now;
+                progress.OpenCount += 1;
+            }
         }
         else
         {
@@ -349,6 +402,9 @@ public class LabService : ILabService
         await _context.SaveChangesAsync(cancellationToken);
         return MapProgress(progress);
     }
+
+    private static bool IsDuplicateKey(DbUpdateException ex) =>
+        ex.InnerException is PostgresException { SqlState: "23505" };
 
     public async Task<LabProgressResponse> CompleteProgressAsync(
         Guid id,
@@ -402,6 +458,28 @@ public class LabService : ILabService
 
         await _context.SaveChangesAsync(cancellationToken);
         return MapProgress(progress);
+    }
+
+    public async Task<IReadOnlyCollection<LabProgressResponse>> GetMyProgressAsync(
+        int? classId,
+        int currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUser = await GetCurrentUserAsync(currentUserId, cancellationToken);
+        EnsureStudent(currentUser);
+
+        var query = _context.LabProgresses
+            .AsNoTracking()
+            .Where(item => item.StudentId == currentUser.Id);
+
+        if (classId.HasValue)
+        {
+            query = query.Where(item =>
+                item.Lab!.ClassAssignments.Any(assignment => assignment.ClassId == classId.Value));
+        }
+
+        var progresses = await query.ToListAsync(cancellationToken);
+        return progresses.Select(MapProgress).ToList();
     }
 
     public async Task<LabStatsResponse> GetStatsAsync(
@@ -641,9 +719,10 @@ public class LabService : ILabService
         }
 
         if (assignment.AssignmentType != AssignmentTypes.Quiz &&
-            assignment.AssignmentType != AssignmentTypes.TextReport)
+            assignment.AssignmentType != AssignmentTypes.TextReport &&
+            assignment.AssignmentType != AssignmentTypes.PracticalSimulation)
         {
-            throw new ArgumentException("Linked assignment must be a quiz or text report assignment.");
+            throw new ArgumentException("Linked assignment must be a quiz, text report, or practical simulation assignment.");
         }
     }
 

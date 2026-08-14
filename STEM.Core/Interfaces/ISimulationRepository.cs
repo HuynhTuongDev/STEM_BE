@@ -20,6 +20,10 @@ public interface ISimulationRepository : IRepository<SimulationTemplate>
         int? studentId,
         CancellationToken cancellationToken = default);
 
+    Task<IEnumerable<Enrollment>> GetStudentEnrollmentsAsync(int studentId, CancellationToken cancellationToken = default);
+
+    Task<IEnumerable<SimulationSession>> GetStudentSubmissionsAsync(int studentId, CancellationToken cancellationToken = default);
+
     Task AddSimulationAsync(SimulationEntity simulation, CancellationToken cancellationToken = default);
 
     void DeleteSimulation(SimulationEntity simulation);

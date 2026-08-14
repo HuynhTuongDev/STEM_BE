@@ -38,6 +38,6 @@ public class GetSubmissionDetailHandler
             throw new UnauthorizedAccessException("You are not allowed to view this submission.");
         }
 
-        return SubmissionResponseMapper.Map(submission);
+        return SubmissionResponseMapper.MapWithAssignmentDetails(submission);
     }
 }

@@ -1,3 +1,5 @@
+using STEM.Application.Dtos.Assignments;
+
 namespace STEM.Application.Dtos.Grading;
 
 public class GetSubmissionsRequest
@@ -40,6 +42,11 @@ public class SubmissionResponse
     public DateTime? GradedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    // Assignment details
+    public decimal MaxScore { get; set; }
+    public string AssignmentType { get; set; } = string.Empty;
+    public List<RubricCriterionResponse>? RubricCriteria { get; set; }
 }
 
 public class PagedSubmissionResponse
@@ -49,4 +56,21 @@ public class PagedSubmissionResponse
     public int PageSize { get; set; }
     public int TotalPages => PageSize == 0 ? 0 : (int)Math.Ceiling((double)TotalCount / PageSize);
     public IReadOnlyCollection<SubmissionResponse> Items { get; set; } = Array.Empty<SubmissionResponse>();
+}
+
+public class SubmissionCommentRequest
+{
+    public string Body { get; set; } = string.Empty;
+}
+
+public class SubmissionCommentResponse
+{
+    public int Id { get; set; }
+    public int SubmissionId { get; set; }
+    public int AuthorId { get; set; }
+    public string AuthorName { get; set; } = string.Empty;
+    public string AuthorRole { get; set; } = string.Empty;
+    public string Body { get; set; } = string.Empty;
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }

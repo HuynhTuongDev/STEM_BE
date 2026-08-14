@@ -13,17 +13,20 @@ public class AssignStudentsToClassHandler
     private readonly IUserRepository _userRepository;
     private readonly IRepository<Enrollment> _enrollmentRepository;
     private readonly IEnrollmentRepository _enrollmentFullRepository;
+    private readonly IAttendanceRepository _attendanceRepository;
 
     public AssignStudentsToClassHandler(
         IClassRepository classRepository,
         IUserRepository userRepository,
         IRepository<Enrollment> enrollmentRepository,
-        IEnrollmentRepository enrollmentFullRepository)
+        IEnrollmentRepository enrollmentFullRepository,
+        IAttendanceRepository attendanceRepository)
     {
         _classRepository = classRepository;
         _userRepository = userRepository;
         _enrollmentRepository = enrollmentRepository;
         _enrollmentFullRepository = enrollmentFullRepository;
+        _attendanceRepository = attendanceRepository;
     }
 
     public async Task<AssignStudentsResponse> Handle(int classId, AssignStudentsRequest request, int currentUserId)
@@ -118,6 +121,27 @@ public class AssignStudentsToClassHandler
 
             await _enrollmentRepository.AddRangeAsync(enrollments);
             await _enrollmentRepository.SaveChangesAsync();
+
+            // Create attendance records for all existing schedules in this class
+            var schedules = classEntity.Schedules.ToList();
+            if (schedules.Any())
+            {
+                var nowForAttendance = DateTime.UtcNow;
+                var attendanceRecords = newStudentIds
+                    .SelectMany(studentId => schedules.Select(schedule => new AttendanceRecord
+                    {
+                        ClassId = classId,
+                        ScheduleId = schedule.Id,
+                        StudentId = studentId,
+                        AttendanceDate = DateOnly.FromDateTime(schedule.StartTime),
+                        Status = null,
+                        CreatedAt = nowForAttendance,
+                        UpdatedAt = nowForAttendance
+                    }))
+                    .ToList();
+
+                await _attendanceRepository.AddRangeAsync(attendanceRecords);
+            }
         }
 
         // Get full student info for response

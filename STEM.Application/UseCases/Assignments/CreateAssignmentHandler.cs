@@ -1,4 +1,6 @@
+using System.Text.Json;
 using STEM.Application.Dtos.Assignments;
+using STEM.Core.Entities.Assessments;
 using STEM.Core.Entities.Projects;
 using STEM.Core.Repository;
 
@@ -53,6 +55,20 @@ public class CreateAssignmentHandler
         var assignment = new Assignment();
         AssignmentRequestMapper.ApplyBase(assignment, request, currentUser.Id, now);
         AssignmentRequestMapper.ApplyDetails(assignment, request, now);
+
+        // Create Rubric if rubric criteria are provided
+        Rubric? rubric = null;
+        if (request.RubricCriteria != null && request.RubricCriteria.Count > 0)
+        {
+            rubric = new Rubric
+            {
+                Criteria = JsonSerializer.Serialize(request.RubricCriteria),
+                MaxScore = request.RubricCriteria.Sum(c => c.MaxPoints),
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+            assignment.Rubric = rubric;
+        }
 
         await _assignmentRepository.AddAsync(assignment, cancellationToken);
         await _assignmentRepository.SaveChangesAsync(cancellationToken);

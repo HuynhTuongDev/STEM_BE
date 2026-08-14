@@ -55,6 +55,7 @@ public static class ServiceCollectionExtensions
         // Simulation Handlers
         services.AddScoped<SimulationHandler>();
         services.AddScoped<AiSuggestHandler>();
+        services.AddScoped<LabAiAssistHandler>();
         services.AddSingleton<VirtualLabDiagramService>();
         services.AddSingleton<EducationalProgramAnalyzer>();
         services.AddSingleton<EducationalEventGenerator>();
@@ -89,8 +90,18 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CreateAssignmentHandler>();
         services.AddScoped<GetAssignmentsHandler>();
         services.AddScoped<GetAssignmentDetailHandler>();
-        services.AddScoped<UpdateAssignmentHandler>();
+        services.AddScoped<UpdateAssignmentHandler>(sp => new UpdateAssignmentHandler(
+            sp.GetRequiredService<IAssignmentRepository>(),
+            sp.GetRequiredService<IClassRepository>(),
+            sp.GetRequiredService<IUserRepository>(),
+            sp.GetRequiredService<IRubricRepository>()
+        ));
         services.AddScoped<DeleteAssignmentHandler>();
+        services.AddScoped<SubmitQuizAssignmentHandler>();
+        services.AddScoped<SubmitReportAssignmentHandler>();
+        services.AddScoped<SubmitSimulationAssignmentHandler>();
+        services.AddScoped<GetMySubmissionHandler>();
+        services.AddScoped<GetMySubmissionsHandler>();
 
         // Quiz Handlers
         services.AddScoped<CreateQuizHandler>();
@@ -104,6 +115,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetSubmissionDetailHandler>();
         services.AddScoped<GradeSubmissionHandler>();
         services.AddScoped<UpdateSubmissionGradeHandler>();
+        services.AddScoped<GetSubmissionCommentsHandler>();
+        services.AddScoped<CreateSubmissionCommentHandler>();
+        services.AddScoped<UpdateSubmissionCommentHandler>();
+        services.AddScoped<DeleteSubmissionCommentHandler>();
+        services.AddScoped<CreateResubmitRequestHandler>();
+        services.AddScoped<GetResubmitRequestsHandler>();
+        services.AddScoped<ApproveResubmitRequestHandler>();
+        services.AddScoped<RejectResubmitRequestHandler>();
 
         // Virtual Lab Handlers
         services.AddScoped<CreateVirtualLabHandler>();

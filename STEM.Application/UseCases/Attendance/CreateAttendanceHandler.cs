@@ -1,5 +1,7 @@
 using STEM.Application.Dtos.Attendance;
+using STEM.Application.Interfaces;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Attendance;
@@ -9,15 +11,18 @@ public class CreateAttendanceHandler
     private readonly IAttendanceRepository _attendanceRepository;
     private readonly IClassRepository _classRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public CreateAttendanceHandler(
         IAttendanceRepository attendanceRepository,
         IClassRepository classRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IDateTimeProvider dateTimeProvider)
     {
         _attendanceRepository = attendanceRepository;
         _classRepository = classRepository;
         _userRepository = userRepository;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     public async Task<CreateAttendanceResponse> Handle(
@@ -57,6 +62,17 @@ public class CreateAttendanceHandler
             throw new UnauthorizedAccessException("You are not allowed to create attendance for this class.");
         }
 
+        // Teachers may only take attendance on the day the class session actually happens.
+        // SchoolAdministrator is not restricted by this rule (their edit rights follow separate business needs).
+        if (currentUser.Role?.Name == RoleNames.Teacher)
+        {
+            var today = DateOnly.FromDateTime(_dateTimeProvider.UtcNow);
+            if (request.AttendanceDate != today)
+            {
+                throw new ArgumentException("Attendance can only be created on the scheduled class date.");
+            }
+        }
+
         var duplicatedStudentIds = request.Records
             .GroupBy(record => record.StudentId)
             .Where(group => group.Count() > 1)
@@ -71,6 +87,7 @@ public class CreateAttendanceHandler
         var existingRecords = await _attendanceRepository.GetByClassDateAsync(
             request.ClassId,
             request.AttendanceDate,
+            request.ScheduleId,
             cancellationToken);
         var existingStudentIds = existingRecords.Select(record => record.StudentId).ToHashSet();
 
@@ -84,7 +101,7 @@ public class CreateAttendanceHandler
 
             if (existingStudentIds.Contains(item.StudentId))
             {
-                throw new ArgumentException($"Attendance for student {item.StudentId} on this date already exists.");
+                throw new ArgumentException($"Attendance for student {item.StudentId} on this schedule already exists.");
             }
 
             var status = AttendanceStatuses.Normalize(item.Status);
@@ -94,9 +111,11 @@ public class CreateAttendanceHandler
             }
 
             var now = DateTime.UtcNow;
+            var scheduleId = request.ScheduleId ?? 0;
             var attendanceRecord = new AttendanceRecord
             {
                 ClassId = request.ClassId,
+                ScheduleId = scheduleId,
                 StudentId = item.StudentId,
                 AttendanceDate = request.AttendanceDate,
                 Status = status,

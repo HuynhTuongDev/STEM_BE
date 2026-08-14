@@ -19,7 +19,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<StemDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+            options.UseNpgsql(
+                configuration.GetConnectionString("DefaultConnection"),
+                npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null)));
 
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddHttpContextAccessor();
@@ -34,8 +39,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IClassRepository, ClassRepository>();
         services.AddScoped<IAttendanceRepository, AttendanceRepository>();
         services.AddScoped<IAssignmentRepository, AssignmentRepository>();
+        services.AddScoped<IRubricRepository, RubricRepository>();
         services.AddScoped<IQuizRepository, QuizRepository>();
         services.AddScoped<ISubmissionRepository, SubmissionRepository>();
+        services.AddScoped<ISubmissionCommentRepository, SubmissionCommentRepository>();
+        services.AddScoped<IResubmitRequestRepository, ResubmitRequestRepository>();
         services.AddScoped<ISchoolRepository, SchoolRepository>();
         services.AddScoped<IScheduleRepository, ScheduleRepository>();
         services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
@@ -53,11 +61,20 @@ public static class ServiceCollectionExtensions
         
         services.AddScoped<IVirtualLabProjectService, VirtualLabProjectService>();
         services.AddHttpClient<ILabService, LabService>();
+        services.AddHttpClient<ILabAiProvider, BeeknoeeLabAiProvider>(client =>
+        {
+            var baseUrl = configuration["Beeknoee:BaseUrl"];
+            if (string.IsNullOrWhiteSpace(baseUrl)) baseUrl = "https://platform.beeknoee.com/api/v1";
+            if (!baseUrl.EndsWith('/')) baseUrl += "/";
+            client.BaseAddress = new Uri(baseUrl);
+        });
         services.AddScoped<ISimulationCompileService, SimulationCompileService>();
         services.AddScoped<IVirtualLabRuntimeService, VirtualLabRuntimeService>();
         services.AddScoped<ISimulationEventStore, SimulationEventStore>();
         services.AddScoped<IFirmwareCacheService, FirmwareCacheService>();
         services.AddSingleton<IPrecompileTriggerService, PrecompileTriggerService>();
+        services.AddScoped<IAiQuotaUsageStore, AiQuotaUsageStore>();
+        services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 
         // Supabase Configuration
         var supabaseUrl = configuration["Supabase:Url"];
@@ -73,6 +90,7 @@ public static class ServiceCollectionExtensions
             services.AddScoped<Supabase.Client>(_ => new Supabase.Client(supabaseUrl, supabaseKey, options));
         }
 
+        services.AddScoped<IFileRepository, FileEntityRepository>();
         services.AddScoped<IFileService, SupabaseStorageService>();
 
         return services;

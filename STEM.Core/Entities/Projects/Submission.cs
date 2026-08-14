@@ -21,6 +21,6 @@ public class Submission : BaseEntity
 
     public Assignment? Assignment { get; set; }
     public User? Student { get; set; }
-    public FileEntity? File { get; set; }
+    public SubmissionFile? File { get; set; }
     public User? GradedBy { get; set; }
 }

@@ -7,8 +7,10 @@ using STEM.Application.Dtos.Simulation;
 using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Simulation;
 using STEM.Application.UseCases.Simulation.Abstractions;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Simulations;
+using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 
 namespace STEM.Infrastructure.Services;
@@ -31,6 +33,8 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
     private readonly IConfiguration _configuration;
     private readonly IRunningSimulationRegistry _runningSimulationRegistry;
     private readonly IPrecompileTriggerService _precompileTrigger;
+    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly INotificationRepository _notificationRepository;
 
     public VirtualLabRuntimeService(
         StemDbContext context,
@@ -39,7 +43,9 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         ISimulationCompileService compileService,
         IConfiguration configuration,
         IRunningSimulationRegistry runningSimulationRegistry,
-        IPrecompileTriggerService precompileTrigger)
+        IPrecompileTriggerService precompileTrigger,
+        IDateTimeProvider dateTimeProvider,
+        INotificationRepository notificationRepository)
     {
         _context = context;
         _diagramService = diagramService;
@@ -48,6 +54,8 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         _configuration = configuration;
         _runningSimulationRegistry = runningSimulationRegistry;
         _precompileTrigger = precompileTrigger;
+        _dateTimeProvider = dateTimeProvider;
+        _notificationRepository = notificationRepository;
     }
 
     public async Task<DiagramSessionResponse?> GetDiagramAsync(
@@ -461,6 +469,7 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
 
         var assignment = await _context.Assignments
             .Include(item => item.SimulationDetail)
+            .Include(item => item.Class)
             .FirstOrDefaultAsync(item => item.Id == request.AssignmentId, cancellationToken)
             ?? throw new KeyNotFoundException("Assignment not found.");
 
@@ -469,14 +478,23 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         var existingCount = await _context.Submissions
             .CountAsync(item => item.AssignmentId == assignment.Id && item.StudentId == studentId, cancellationToken);
 
-        if (existingCount >= 1 && !assignment.AllowResubmit)
-        {
-            throw new InvalidOperationException("Assignment này không cho phép nộp lại.");
-        }
+        // Cộng dồn các ResubmitRequest đã Approved của CHÍNH student này — xem
+        // ResubmitEligibility.cs. Không đổi Assignment.DueDate/ResubmitLimit gốc
+        // (không ảnh hưởng các học sinh khác).
+        var approvedResubmitRequests = await _context.ResubmitRequests
+            .AsNoTracking()
+            .Where(item =>
+                item.AssignmentId == assignment.Id &&
+                item.StudentId == studentId &&
+                item.Status == ResubmitRequestStatuses.Approved)
+            .ToListAsync(cancellationToken);
 
-        if (assignment.ResubmitLimit.HasValue && existingCount >= assignment.ResubmitLimit.Value)
+        if (STEM.Application.UseCases.Grading.ResubmitEligibility.IsBlocked(
+                assignment, existingCount, approvedResubmitRequests, _dateTimeProvider.UtcNow, out var blockReason))
         {
-            throw new InvalidOperationException($"Đã đạt giới hạn số lần nộp lại ({assignment.ResubmitLimit.Value}).");
+            throw new InvalidOperationException(blockReason == "past_due_date"
+                ? "Đã quá hạn nộp bài cho assignment này."
+                : "Đã đạt giới hạn số lần nộp lại cho assignment này.");
         }
 
         // Chặn Submit trong lúc simulation vẫn đang chạy nền — SimulationEventsJson
@@ -550,6 +568,24 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             // exhausted).
             throw new InvalidOperationException(
                 "Có yêu cầu nộp bài khác đang xử lý cùng lúc, vui lòng thử lại.");
+        }
+
+        if (assignment.Class != null)
+        {
+            var studentName = await _context.Users
+                .AsNoTracking()
+                .Where(item => item.Id == studentId)
+                .Select(item => item.FullName)
+                .FirstOrDefaultAsync(cancellationToken) ?? "Học sinh";
+
+            await _notificationRepository.AddAsync(new Notification
+            {
+                UserId = assignment.Class.TeacherId,
+                Title = "Bài nộp mới",
+                Content = $"{studentName} đã nộp bài \"{assignment.Title}\".",
+                Type = "SubmissionReceived"
+            }, cancellationToken);
+            await _notificationRepository.SaveChangesAsync(cancellationToken);
         }
 
         return new VirtualLabSubmissionResponse
@@ -697,9 +733,16 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
             .FirstOrDefaultAsync(cancellationToken)
             ?? throw new KeyNotFoundException("Lab not found.");
 
-        return new ProjectPlatform(
-            SimulationCompileService.NormalizeBoard(lab.BoardType),
-            DefaultLanguage);
+        // Do NOT NormalizeBoard() here — the resolved value (e.g.
+        // "esp32:esp32:esp32:FlashMode=dio") gets stored as VirtualLabProject.Board
+        // and later re-used as CompileSimulationRequest.Board, which
+        // SimulationCompileService.ValidateRequestAsync checks against SupportedBoards
+        // by KEY (raw aliases like "esp32_devkit_v1"), not by the normalized FQBN value.
+        // CompileCoreAsync already calls NormalizeBoard exactly once, right before the
+        // actual docker/arduino-cli invocation — normalizing here too was a double
+        // resolution that made every newly-created project fail to compile/run with
+        // "Unsupported board '<already-normalized-fqbn>'".
+        return new ProjectPlatform(lab.BoardType, DefaultLanguage);
     }
 
     /// <summary>

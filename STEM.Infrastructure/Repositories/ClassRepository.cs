@@ -3,6 +3,8 @@ using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Users;
+using STEM.Core.Entities.Projects;
+using STEM.Core.Entities.Quizzes;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 
@@ -27,6 +29,63 @@ public class ClassRepository : Repository<Class>, IClassRepository
     public async Task<IEnumerable<Class>> GetByTeacherIdAsync(int teacherId, CancellationToken cancellationToken = default)
     {
         return await GetClassesByTeacherIdAsync(teacherId, cancellationToken);
+    }
+
+    public async Task<IEnumerable<Enrollment>> GetStudentEnrollmentsAsync(int studentId, CancellationToken cancellationToken = default)
+    {
+        // Use projection to avoid cycle with Enrollments
+        var enrollments = await _context.Enrollments
+            .AsNoTracking()
+            .Where(e => e.StudentId == studentId)
+            .Select(e => new Enrollment
+            {
+                Id = e.Id,
+                StudentId = e.StudentId,
+                ClassId = e.ClassId,
+                EnrolledAt = e.EnrolledAt,
+                CreatedAt = e.CreatedAt,
+                UpdatedAt = e.UpdatedAt,
+                Class = e.Class == null ? null : new Class
+                {
+                    Id = e.Class.Id,
+                    ClassCode = e.Class.ClassCode,
+                    SchoolId = e.Class.SchoolId,
+                    CourseId = e.Class.CourseId,
+                    TeacherId = e.Class.TeacherId,
+                    StartDate = e.Class.StartDate,
+                    EndDate = e.Class.EndDate,
+                    CreatedAt = e.Class.CreatedAt,
+                    UpdatedAt = e.Class.UpdatedAt,
+                    School = e.Class.School == null ? null : new School
+                    {
+                        Id = e.Class.School.Id,
+                        Name = e.Class.School.Name
+                    },
+                    Course = e.Class.Course == null ? null : new Course
+                    {
+                        Id = e.Class.Course.Id,
+                        Title = e.Class.Course.Title
+                    },
+                    Teacher = e.Class.Teacher == null ? null : new User
+                    {
+                        Id = e.Class.Teacher.Id,
+                        FullName = e.Class.Teacher.FullName
+                    },
+                    Enrollments = new List<Enrollment>(), // Empty to avoid cycle
+                    Schedules = e.Class.Schedules == null ? new List<Schedule>() : e.Class.Schedules
+                        .Select(s => new Schedule
+                        {
+                            Id = s.Id,
+                            ClassId = s.ClassId,
+                            StartTime = s.StartTime,
+                            EndTime = s.EndTime
+                        }).ToList()
+                }
+            })
+            .OrderByDescending(e => e.CreatedAt)
+            .ToListAsync(cancellationToken);
+
+        return enrollments;
     }
 
     public async Task<IEnumerable<Class>> GetClassesByTeacherIdAsync(int teacherId, CancellationToken cancellationToken = default)
@@ -168,17 +227,21 @@ public class ClassRepository : Repository<Class>, IClassRepository
 
     public async Task<IEnumerable<Schedule>> GetSchedulesByTeacherAsync(int teacherId, DateTime? fromDate, DateTime? toDate, CancellationToken cancellationToken = default)
     {
+        // Convert dates to UTC if they have Kind=Unspecified
+        var fromDateUtc = fromDate.HasValue ? DateTime.SpecifyKind(fromDate.Value, DateTimeKind.Utc) : (DateTime?)null;
+        var toDateUtc = toDate.HasValue ? DateTime.SpecifyKind(toDate.Value, DateTimeKind.Utc) : (DateTime?)null;
+
         var query = _context.Schedules
             .Include(s => s.Class)
                 .ThenInclude(c => c.Course)
             .Where(s => s.Class.TeacherId == teacherId)
             .AsQueryable();
 
-        if (fromDate.HasValue)
-            query = query.Where(s => s.StartTime >= fromDate.Value);
+        if (fromDateUtc.HasValue)
+            query = query.Where(s => s.StartTime >= fromDateUtc.Value);
 
-        if (toDate.HasValue)
-            query = query.Where(s => s.EndTime <= toDate.Value);
+        if (toDateUtc.HasValue)
+            query = query.Where(s => s.EndTime <= toDateUtc.Value);
 
         return await query
             .OrderBy(s => s.StartTime)
@@ -250,6 +313,15 @@ public class ClassRepository : Repository<Class>, IClassRepository
         }
 
         return availableTeachers;
+    }
+
+    public async Task<IEnumerable<Assignment>> GetClassAssignmentsAsync(int classId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Assignments
+            .AsNoTracking()
+            .Where(a => a.ClassId == classId)
+            .OrderByDescending(a => a.DueDate)
+            .ToListAsync(cancellationToken);
     }
 
 }

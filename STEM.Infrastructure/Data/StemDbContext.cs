@@ -1,18 +1,20 @@
-namespace STEM.Infrastructure.Data;
-
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using MimeKit;
 using STEM.Core.Entities;
-using STEM.Core.Entities.Participants;
-using STEM.Core.Entities.Projects;
-using STEM.Core.Entities.Users;
-using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Assessments;
 using STEM.Core.Entities.Classes;
-using STEM.Core.Entities.Quizzes;
 using STEM.Core.Entities.Common;
+using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Participants;
+using STEM.Core.Entities.Payments;
+using STEM.Core.Entities.Projects;
+using STEM.Core.Entities.Quizzes;
 using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Simulations;
-using STEM.Core.Entities.Assessments;
-using STEM.Core.Entities.Payments;
-using Microsoft.EntityFrameworkCore;
+using STEM.Core.Entities.Users;
+using System.Text.Json;
 
 public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(options)
 {
@@ -27,7 +29,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Module> Modules => Set<Module>();
     public DbSet<Lesson> Lessons => Set<Lesson>();
     public DbSet<Material> Materials => Set<Material>();
-    public DbSet<File> Files => Set<File>();
+    public DbSet<STEM.Core.Entities.Courses.File> Files => Set<STEM.Core.Entities.Courses.File>();
 
     public DbSet<Class> Classes => Set<Class>();
     public DbSet<Enrollment> Enrollments => Set<Enrollment>();
@@ -43,9 +45,10 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<AssignmentReportDetail> AssignmentReportDetails => Set<AssignmentReportDetail>();
     public DbSet<AssignmentSimulationDetail> AssignmentSimulationDetails => Set<AssignmentSimulationDetail>();
     public DbSet<Submission> Submissions => Set<Submission>();
+    public DbSet<SubmissionFile> FileEntity => Set<SubmissionFile>();
     public DbSet<Metric> Metrics => Set<Metric>();
-    public DbSet<FileEntity> FileEntities => Set<FileEntity>();
-
+    public DbSet<SubmissionComment> SubmissionComments => Set<SubmissionComment>();
+    public DbSet<ResubmitRequest> ResubmitRequests => Set<ResubmitRequest>();
     public DbSet<SimulationEntity> Simulations => Set<SimulationEntity>();
     public DbSet<SimulationTemplate> SimulationTemplates => Set<SimulationTemplate>();
     public DbSet<SimulationSession> SimulationSessions => Set<SimulationSession>();
@@ -57,6 +60,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<LabClassAssignment> LabClassAssignments => Set<LabClassAssignment>();
     public DbSet<LabProgress> LabProgresses => Set<LabProgress>();
     public DbSet<ComponentGlueRegistry> ComponentGlueRegistry => Set<ComponentGlueRegistry>();
+    public DbSet<AiQuotaUsage> AiQuotaUsages => Set<AiQuotaUsage>();
 
     public DbSet<Quiz> Quizzes => Set<Quiz>();
     public DbSet<QuizQuestion> QuizQuestions => Set<QuizQuestion>();
@@ -174,11 +178,24 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .OnDelete(DeleteBehavior.Cascade);
 
         // File -> Material
-        modelBuilder.Entity<File>()
+        modelBuilder.Entity<STEM.Core.Entities.Courses.File>()
+            .ToTable("Files")
             .HasOne(f => f.Material)
             .WithMany()
             .HasForeignKey(f => f.MaterialId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // SubmissionFile
+        modelBuilder.Entity<SubmissionFile>()
+            .ToTable("FileEntity");
+
+        // Submission -> File
+        modelBuilder.Entity<Submission>()
+            .HasOne(s => s.File)
+            .WithMany()
+            .HasForeignKey(s => s.FileId)
+            .OnDelete(DeleteBehavior.Cascade)
+            .HasConstraintName("FK_Submissions_Files_FileId");
 
         // Enrollment
         modelBuilder.Entity<Enrollment>()
@@ -344,6 +361,14 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasColumnType("numeric(5,2)");
 
         modelBuilder.Entity<Submission>()
+            .Property(s => s.ContentJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.AutoGradeResultJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<Submission>()
             .Property(s => s.Feedback)
             .HasMaxLength(1000);
 
@@ -363,6 +388,56 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasOne(s => s.GradedBy)
             .WithMany()
             .HasForeignKey(s => s.GradedById)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.AutoGradeResultJson)
+            .HasColumnType("jsonb")
+            .HasConversion(new ValueConverter<string?, string?>(
+                v => v ?? (string?)null,
+                v => v ?? (string?)null));
+
+        modelBuilder.Entity<SubmissionComment>()
+            .Property(c => c.Body)
+            .HasMaxLength(2000);
+
+        modelBuilder.Entity<SubmissionComment>()
+            .HasOne(c => c.Submission)
+            .WithMany()
+            .HasForeignKey(c => c.SubmissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SubmissionComment>()
+            .HasOne(c => c.Author)
+            .WithMany()
+            .HasForeignKey(c => c.AuthorId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // ResubmitRequest -> Assignment / Student / ReviewedBy
+        modelBuilder.Entity<ResubmitRequest>()
+            .Property(r => r.Reason)
+            .HasMaxLength(1000);
+
+        modelBuilder.Entity<ResubmitRequest>()
+            .Property(r => r.ReviewNote)
+            .HasMaxLength(1000);
+
+        modelBuilder.Entity<ResubmitRequest>()
+            .HasOne(r => r.Assignment)
+            .WithMany()
+            .HasForeignKey(r => r.AssignmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ResubmitRequest>()
+            .HasOne(r => r.Student)
+            .WithMany()
+            .HasForeignKey(r => r.StudentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ResubmitRequest>()
+            .HasOne(r => r.ReviewedBy)
+            .WithMany()
+            .HasForeignKey(r => r.ReviewedById)
             .OnDelete(DeleteBehavior.Restrict);
 
         // Metric -> Assignment
@@ -389,8 +464,8 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         // Rubric -> Assignment
         modelBuilder.Entity<Rubric>()
             .HasOne(r => r.Assignment)
-            .WithMany()
-            .HasForeignKey(r => r.AssignmentId)
+            .WithOne(a => a.Rubric)
+            .HasForeignKey<Rubric>(r => r.AssignmentId)
             .OnDelete(DeleteBehavior.Cascade);
 
         // Notification -> User
@@ -558,6 +633,10 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             }
         );
 
+        modelBuilder.Entity<AiQuotaUsage>()
+            .HasIndex(usage => new { usage.UserId, usage.UsageDate })
+            .IsUnique();
+
         modelBuilder.Entity<VirtualLabProject>()
             .Property(project => project.Status)
             .HasMaxLength(20);
@@ -681,10 +760,17 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasColumnType("jsonb");
 
         var componentSeedTime = new DateTime(2026, 7, 9, 0, 0, 0, DateTimeKind.Utc);
+        // ComponentType values below use the "wokwi-*" prefix to match
+        // VirtualLabDiagramService.Analyze()'s SupportedPins convention and the
+        // real DB state (see SQLScripts/FixVirtualLabComponentTypeMismatch.sql —
+        // this seed previously used short-form values "led"/"buzzer"/"servo"/
+        // "push_button"/"potentiometer", which a fresh/local DB setup would still
+        // reseed with today; a real EF migration now captures the rename so it's
+        // no longer only a manually-applied SQL patch on the live DB).
         modelBuilder.Entity<ComponentGlueRegistry>().HasData(
             new ComponentGlueRegistry
             {
-                ComponentType = "led",
+                ComponentType = "wokwi-led",
                 Label = "LED",
                 Supported = true,
                 PinRequirementsJson = """{"pins":[{"name":"pin","kind":"digital_output"}]}""",
@@ -693,7 +779,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             },
             new ComponentGlueRegistry
             {
-                ComponentType = "push_button",
+                ComponentType = "wokwi-pushbutton",
                 Label = "Push Button",
                 Supported = true,
                 PinRequirementsJson = """{"pins":[{"name":"pin","kind":"digital_input"}]}""",
@@ -702,7 +788,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             },
             new ComponentGlueRegistry
             {
-                ComponentType = "buzzer",
+                ComponentType = "wokwi-buzzer",
                 Label = "Buzzer",
                 Supported = true,
                 PinRequirementsJson = """{"pins":[{"name":"pin","kind":"pwm_output"}]}""",
@@ -711,7 +797,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             },
             new ComponentGlueRegistry
             {
-                ComponentType = "potentiometer",
+                ComponentType = "wokwi-potentiometer",
                 Label = "Potentiometer",
                 Supported = true,
                 PinRequirementsJson = """{"pins":[{"name":"pin","kind":"analog_input"}]}""",
@@ -720,7 +806,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             },
             new ComponentGlueRegistry
             {
-                ComponentType = "servo",
+                ComponentType = "wokwi-servo",
                 Label = "Servo",
                 Supported = true,
                 PinRequirementsJson = """{"pins":[{"name":"pin","kind":"pwm_output"}]}""",
@@ -737,12 +823,11 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
                 UpdatedAt = componentSeedTime
             });
 
-        // Robot giao hàng mini — additive, không sửa/xoá 6 dòng seed cũ ở trên
-        // (những dòng đó vẫn giữ type ngắn "led"/"buzzer"/... đã lệch so với DB
-        // thật, được vá tay qua SQLScripts/FixVirtualLabComponentTypeMismatch.sql
-        // — không thuộc phạm vi task này). Dùng tiền tố "wokwi-" khớp đúng quy
-        // ước SupportedPins trong VirtualLabDiagramService.cs và dữ liệu DB thật
-        // hiện tại, tránh lặp lại đúng lỗi lệch type đã xảy ra trước đó.
+        // Robot giao hàng mini — additive, không sửa/xoá seed cũ ở trên (6 dòng
+        // "led"/"buzzer"/... đã được đổi sang tiền tố "wokwi-" ở trên, dht22 giữ
+        // nguyên short-form theo quyết định đã có). Dùng tiền tố "wokwi-" khớp
+        // đúng quy ước SupportedPins trong VirtualLabDiagramService.cs và dữ liệu
+        // DB thật hiện tại, tránh lặp lại đúng lỗi lệch type đã xảy ra trước đó.
         //
         // Cả 10 type đều Supported=true — ComponentGlueRegistry chỉ quyết định
         // "có xuất hiện trong palette giáo viên + qua được

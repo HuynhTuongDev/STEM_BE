@@ -1,3 +1,4 @@
+using System.Text.Json;
 using STEM.Application.Dtos.Grading;
 using STEM.Core.Entities.Projects;
 
@@ -38,5 +39,34 @@ internal static class SubmissionResponseMapper
             CreatedAt = submission.CreatedAt,
             UpdatedAt = submission.UpdatedAt
         };
+    }
+
+    public static SubmissionResponse MapWithAssignmentDetails(Submission submission)
+    {
+        var response = Map(submission);
+        var assignment = submission.Assignment;
+
+        if (assignment != null)
+        {
+            response.MaxScore = assignment.MaxScore;
+            response.AssignmentType = assignment.AssignmentType;
+
+            if (assignment.Rubric != null && !string.IsNullOrEmpty(assignment.Rubric.Criteria))
+            {
+                try
+                {
+                    var criteria = JsonSerializer.Deserialize<List<Application.Dtos.Assignments.RubricCriterionResponse>>(
+                        assignment.Rubric.Criteria,
+                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                    );
+                    response.RubricCriteria = criteria;
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        return response;
     }
 }

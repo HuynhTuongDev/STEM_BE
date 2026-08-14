@@ -15,17 +15,29 @@ public class GradingController : ControllerBase
     private readonly GetSubmissionDetailHandler _getSubmissionDetailHandler;
     private readonly GradeSubmissionHandler _gradeSubmissionHandler;
     private readonly UpdateSubmissionGradeHandler _updateSubmissionGradeHandler;
+    private readonly GetSubmissionCommentsHandler _getSubmissionCommentsHandler;
+    private readonly CreateSubmissionCommentHandler _createSubmissionCommentHandler;
+    private readonly UpdateSubmissionCommentHandler _updateSubmissionCommentHandler;
+    private readonly DeleteSubmissionCommentHandler _deleteSubmissionCommentHandler;
 
     public GradingController(
         GetSubmissionsHandler getSubmissionsHandler,
         GetSubmissionDetailHandler getSubmissionDetailHandler,
         GradeSubmissionHandler gradeSubmissionHandler,
-        UpdateSubmissionGradeHandler updateSubmissionGradeHandler)
+        UpdateSubmissionGradeHandler updateSubmissionGradeHandler,
+        GetSubmissionCommentsHandler getSubmissionCommentsHandler,
+        CreateSubmissionCommentHandler createSubmissionCommentHandler,
+        UpdateSubmissionCommentHandler updateSubmissionCommentHandler,
+        DeleteSubmissionCommentHandler deleteSubmissionCommentHandler)
     {
         _getSubmissionsHandler = getSubmissionsHandler;
         _getSubmissionDetailHandler = getSubmissionDetailHandler;
         _gradeSubmissionHandler = gradeSubmissionHandler;
         _updateSubmissionGradeHandler = updateSubmissionGradeHandler;
+        _getSubmissionCommentsHandler = getSubmissionCommentsHandler;
+        _createSubmissionCommentHandler = createSubmissionCommentHandler;
+        _updateSubmissionCommentHandler = updateSubmissionCommentHandler;
+        _deleteSubmissionCommentHandler = deleteSubmissionCommentHandler;
     }
 
     [HttpGet("submissions")]
@@ -131,6 +143,114 @@ public class GradingController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "Failed to update submission grade.", error = ex.Message });
+        }
+    }
+
+    [HttpGet("submissions/{submissionId:int}/comments")]
+    public async Task<IActionResult> GetComments(
+        int submissionId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _getSubmissionCommentsHandler.Handle(submissionId, GetCurrentUserId(), cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to get comments.", error = ex.Message });
+        }
+    }
+
+    [HttpPost("submissions/{submissionId:int}/comments")]
+    public async Task<IActionResult> CreateComment(
+        int submissionId,
+        [FromBody] SubmissionCommentRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _createSubmissionCommentHandler.Handle(submissionId, request, GetCurrentUserId(), cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to create comment.", error = ex.Message });
+        }
+    }
+
+    [HttpPut("submissions/{submissionId:int}/comments/{commentId:int}")]
+    public async Task<IActionResult> UpdateComment(
+        int submissionId,
+        int commentId,
+        [FromBody] SubmissionCommentRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _updateSubmissionCommentHandler.Handle(submissionId, commentId, request, GetCurrentUserId(), cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to update comment.", error = ex.Message });
+        }
+    }
+
+    [HttpDelete("submissions/{submissionId:int}/comments/{commentId:int}")]
+    public async Task<IActionResult> DeleteComment(
+        int submissionId,
+        int commentId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await _deleteSubmissionCommentHandler.Handle(submissionId, commentId, GetCurrentUserId(), cancellationToken);
+            return Ok(new { success = true });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to delete comment.", error = ex.Message });
         }
     }
 

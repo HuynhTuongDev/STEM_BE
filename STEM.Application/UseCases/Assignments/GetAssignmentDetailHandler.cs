@@ -1,4 +1,5 @@
 using STEM.Application.Dtos.Assignments;
+using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Assignments;
@@ -38,6 +39,7 @@ public class GetAssignmentDetailHandler
             throw new UnauthorizedAccessException("You are not allowed to view this assignment.");
         }
 
-        return AssignmentResponseMapper.Map(assignment);
+        var revealAnswers = currentUser.Role?.Name != RoleNames.Student;
+        return AssignmentResponseMapper.Map(assignment, revealAnswers);
     }
 }

@@ -49,6 +49,14 @@ public interface ILabService
         int currentUserId,
         CancellationToken cancellationToken = default);
 
+    // Đọc thuần (không mutate) — khác StartProgressAsync (side-effect: tạo/OpenCount++).
+    // Dùng để render danh sách nhiều lab cùng lúc (vd. tab Phòng Lab Ảo trong Class
+    // Detail) mà không âm thầm "start" progress cho lab học sinh chưa từng mở.
+    Task<IReadOnlyCollection<LabProgressResponse>> GetMyProgressAsync(
+        int? classId,
+        int currentUserId,
+        CancellationToken cancellationToken = default);
+
     Task<LabStatsResponse> GetStatsAsync(
         Guid id,
         int currentUserId,

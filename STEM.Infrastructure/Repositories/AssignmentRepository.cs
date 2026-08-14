@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore;
+using STEM.Core.Entities.Assessments;
 using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Projects;
@@ -14,6 +15,13 @@ public class AssignmentRepository : Repository<Assignment>, IAssignmentRepositor
 {
     public AssignmentRepository(StemDbContext context) : base(context)
     {
+    }
+
+    public override async Task<Assignment?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(a => a.Rubric)
+            .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
     }
 
     public async Task<IEnumerable<Assignment>> GetByCourseIdAsync(
@@ -55,6 +63,15 @@ public class AssignmentRepository : Repository<Assignment>, IAssignmentRepositor
         _context.AssignmentSimulationDetails.RemoveRange(simulationDetails);
     }
 
+    public async Task<AssignmentQuizDetail?> GetQuizDetailAsync(
+        int assignmentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _context.AssignmentQuizDetails
+            .AsNoTracking()
+            .FirstOrDefaultAsync(q => q.AssignmentId == assignmentId, cancellationToken);
+    }
+
     public async Task<(IEnumerable<Assignment> Assignments, int TotalCount)> GetPagedAsync(
         int pageNumber,
         int pageSize,
@@ -69,6 +86,16 @@ public class AssignmentRepository : Repository<Assignment>, IAssignmentRepositor
         var query = _dbSet
             .AsNoTracking()
             .AsQueryable();
+
+        // Include Enrollments, Submissions and Rubric
+        if (studentId.HasValue)
+        {
+            query = query.Include(a => a.Class)
+                .ThenInclude(c => c!.Enrollments)
+                .Include(a => a.Submissions);
+        }
+
+        query = query.Include(a => a.Rubric);
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
@@ -173,7 +200,13 @@ public class AssignmentRepository : Repository<Assignment>, IAssignmentRepositor
                 .Select(submission => new Submission
                 {
                     Id = submission.Id,
-                    AssignmentId = submission.AssignmentId
+                    AssignmentId = submission.AssignmentId,
+                    StudentId = submission.StudentId,
+                    AttemptNumber = submission.AttemptNumber,
+                    FinalScore = submission.FinalScore,
+                    Score = submission.Score,
+                    AutoScore = submission.AutoScore,
+                    Status = submission.Status
                 })
                 .ToList(),
             Metrics = assignment.Metrics
@@ -218,6 +251,15 @@ public class AssignmentRepository : Repository<Assignment>, IAssignmentRepositor
                 AutoGradingWeight = assignment.SimulationDetail.AutoGradingWeight,
                 CreatedAt = assignment.SimulationDetail.CreatedAt,
                 UpdatedAt = assignment.SimulationDetail.UpdatedAt
+            },
+            Rubric = assignment.Rubric == null ? null : new Rubric
+            {
+                Id = assignment.Rubric.Id,
+                AssignmentId = assignment.Rubric.AssignmentId,
+                Criteria = assignment.Rubric.Criteria,
+                MaxScore = assignment.Rubric.MaxScore,
+                CreatedAt = assignment.Rubric.CreatedAt,
+                UpdatedAt = assignment.Rubric.UpdatedAt
             }
         };
     }

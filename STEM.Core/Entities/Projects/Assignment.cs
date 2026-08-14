@@ -1,3 +1,4 @@
+using STEM.Core.Entities.Assessments;
 using STEM.Core.Entities.Classes;
 
 namespace STEM.Core.Entities.Projects;
@@ -17,6 +18,7 @@ public class Assignment : BaseEntity
     public int? CreatedById { get; set; }
 
     public Class? Class { get; set; }
+    public Rubric? Rubric { get; set; }
     public AssignmentQuizDetail? QuizDetail { get; set; }
     public AssignmentReportDetail? ReportDetail { get; set; }
     public AssignmentSimulationDetail? SimulationDetail { get; set; }

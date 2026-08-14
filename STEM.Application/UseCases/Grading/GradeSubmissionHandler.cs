@@ -1,4 +1,5 @@
 using STEM.Application.Dtos.Grading;
+using STEM.Core.Entities.Common;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Grading;
@@ -7,13 +8,16 @@ public class GradeSubmissionHandler
 {
     private readonly ISubmissionRepository _submissionRepository;
     private readonly IUserRepository _userRepository;
+    private readonly INotificationRepository _notificationRepository;
 
     public GradeSubmissionHandler(
         ISubmissionRepository submissionRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        INotificationRepository notificationRepository)
     {
         _submissionRepository = submissionRepository;
         _userRepository = userRepository;
+        _notificationRepository = notificationRepository;
     }
 
     public async Task<SubmissionResponse> Handle(
@@ -52,6 +56,18 @@ public class GradeSubmissionHandler
         _submissionRepository.Update(submission);
         await _submissionRepository.SaveChangesAsync(cancellationToken);
 
+        if (submission.StudentId.HasValue)
+        {
+            await _notificationRepository.AddAsync(new Notification
+            {
+                UserId = submission.StudentId.Value,
+                Title = "Bài đã được chấm",
+                Content = $"\"{submission.Assignment?.Title}\" đã được chấm — {submission.Score} điểm.",
+                Type = "GradeReport"
+            }, cancellationToken);
+            await _notificationRepository.SaveChangesAsync(cancellationToken);
+        }
+
         return SubmissionResponseMapper.Map(submission);
     }
 
@@ -73,5 +89,6 @@ public class GradeSubmissionHandler
         submission.GradedById = gradedById;
         submission.GradedAt = DateTime.UtcNow;
         submission.UpdatedAt = DateTime.UtcNow;
+        submission.Status = "graded";
     }
 }

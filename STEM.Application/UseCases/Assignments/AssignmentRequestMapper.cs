@@ -28,7 +28,18 @@ internal static class AssignmentRequestMapper
     {
         assignment.ClassId = request.ClassId;
         assignment.Title = request.Title.Trim();
-        assignment.Description = request.Description.Trim();
+
+        // For text_report, use default template if description is empty
+        if (request.AssignmentType.Equals(AssignmentTypes.TextReport, StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(request.Description))
+        {
+            assignment.Description = DefaultAssignmentInstructions.IoTReport;
+        }
+        else
+        {
+            assignment.Description = request.Description.Trim();
+        }
+
         assignment.AssignmentType = request.AssignmentType.Trim();
         assignment.DueDate = request.DueDate;
         assignment.MaxScore = request.MaxScore;
@@ -45,7 +56,18 @@ internal static class AssignmentRequestMapper
     {
         assignment.ClassId = request.ClassId;
         assignment.Title = request.Title.Trim();
-        assignment.Description = request.Description.Trim();
+
+        // For text_report, use default template if description is empty
+        if (request.AssignmentType.Equals(AssignmentTypes.TextReport, StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(request.Description))
+        {
+            assignment.Description = DefaultAssignmentInstructions.IoTReport;
+        }
+        else
+        {
+            assignment.Description = request.Description.Trim();
+        }
+
         assignment.AssignmentType = request.AssignmentType.Trim();
         assignment.DueDate = request.DueDate;
         assignment.MaxScore = request.MaxScore;
@@ -77,9 +99,12 @@ internal static class AssignmentRequestMapper
         if (request.AssignmentType.Equals(AssignmentTypes.TextReport, StringComparison.OrdinalIgnoreCase))
         {
             var detail = request.ReportDetail ?? throw new ArgumentException("ReportDetail is required for text_report assignments.");
+            var instructions = string.IsNullOrWhiteSpace(detail.Instructions)
+                ? DefaultAssignmentInstructions.DefaultReport
+                : detail.Instructions;
             assignment.ReportDetail = new AssignmentReportDetail
             {
-                Instructions = detail.Instructions.Trim(),
+                Instructions = instructions.Trim(),
                 AllowedSubmissionTypesJson = JsonSerializer.Serialize(detail.AllowedSubmissionTypes),
                 AllowedFileExtensionsJson = JsonSerializer.Serialize(detail.AllowedFileExtensions),
                 MaxFileSizeMb = detail.MaxFileSizeMb,
