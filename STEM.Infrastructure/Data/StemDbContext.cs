@@ -1,19 +1,20 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using MimeKit;
 using STEM.Core.Entities;
-using STEM.Core.Entities.Participants;
-using STEM.Core.Entities.Projects;
-using STEM.Core.Entities.Users;
-using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Assessments;
 using STEM.Core.Entities.Classes;
-using STEM.Core.Entities.Quizzes;
 using STEM.Core.Entities.Common;
+using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Participants;
+using STEM.Core.Entities.Payments;
+using STEM.Core.Entities.Projects;
+using STEM.Core.Entities.Quizzes;
 using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Simulations;
-using STEM.Core.Entities.Assessments;
-using STEM.Core.Entities.Payments;
+using STEM.Core.Entities.Users;
+using System.Text.Json;
 
 public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(options)
 {
@@ -44,17 +45,10 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<AssignmentReportDetail> AssignmentReportDetails => Set<AssignmentReportDetail>();
     public DbSet<AssignmentSimulationDetail> AssignmentSimulationDetails => Set<AssignmentSimulationDetail>();
     public DbSet<Submission> Submissions => Set<Submission>();
-<<<<<<< HEAD
     public DbSet<SubmissionFile> FileEntity => Set<SubmissionFile>();
     public DbSet<Metric> Metrics => Set<Metric>();
-=======
     public DbSet<SubmissionComment> SubmissionComments => Set<SubmissionComment>();
     public DbSet<ResubmitRequest> ResubmitRequests => Set<ResubmitRequest>();
-    public DbSet<Metric> Metrics => Set<Metric>();
-    public DbSet<FileEntity> FileEntities => Set<FileEntity>();
-    // Real DB table is "FileEntity" (singular) — EF's default plural "FileEntities" has never existed.
->>>>>>> fa9dbc9 (save)
-
     public DbSet<SimulationEntity> Simulations => Set<SimulationEntity>();
     public DbSet<SimulationTemplate> SimulationTemplates => Set<SimulationTemplate>();
     public DbSet<SimulationSession> SimulationSessions => Set<SimulationSession>();
@@ -362,9 +356,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(s => s.AssignmentId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        modelBuilder.Entity<FileEntity>()
-            .ToTable("FileEntity");
-
         modelBuilder.Entity<Submission>()
             .Property(s => s.Score)
             .HasColumnType("numeric(5,2)");
@@ -399,7 +390,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(s => s.GradedById)
             .OnDelete(DeleteBehavior.Restrict);
 
-<<<<<<< HEAD
         modelBuilder.Entity<Submission>()
             .Property(s => s.AutoGradeResultJson)
             .HasColumnType("jsonb")
@@ -407,14 +397,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
                 v => v ?? (string?)null,
                 v => v ?? (string?)null));
 
-        modelBuilder.Entity<Submission>()
-            .Property(s => s.ContentJson)
-            .HasColumnType("jsonb")
-            .HasConversion(new ValueConverter<string?, string?>(
-                v => v ?? (string?)null,
-                v => v ?? (string?)null));
-=======
-        // SubmissionComment -> Submission / Author
         modelBuilder.Entity<SubmissionComment>()
             .Property(c => c.Body)
             .HasMaxLength(2000);
@@ -457,7 +439,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany()
             .HasForeignKey(r => r.ReviewedById)
             .OnDelete(DeleteBehavior.Restrict);
->>>>>>> fa9dbc9 (save)
 
         // Metric -> Assignment
         modelBuilder.Entity<Metric>()
