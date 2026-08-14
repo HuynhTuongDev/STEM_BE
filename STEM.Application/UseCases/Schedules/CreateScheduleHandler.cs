@@ -9,15 +9,18 @@ public class CreateScheduleHandler
     private readonly IScheduleRepository _scheduleRepository;
     private readonly IClassRepository _classRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IAttendanceRepository _attendanceRepository;
 
     public CreateScheduleHandler(
         IScheduleRepository scheduleRepository,
         IClassRepository classRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IAttendanceRepository attendanceRepository)
     {
         _scheduleRepository = scheduleRepository;
         _classRepository = classRepository;
         _userRepository = userRepository;
+        _attendanceRepository = attendanceRepository;
     }
 
     public async Task<CreateScheduleResponse> Handle(CreateScheduleRequest request, int currentUserId, CancellationToken cancellationToken = default)
@@ -80,6 +83,24 @@ public class CreateScheduleHandler
 
         await _scheduleRepository.AddAsync(schedule, cancellationToken);
         await _scheduleRepository.SaveChangesAsync(cancellationToken);
+
+        // Tạo attendance records cho tất cả học sinh trong lớp
+        var students = classEntity.Enrollments?.Select(e => e.StudentId).ToList() ?? new List<int>();
+        if (students.Any())
+        {
+            var attendanceRecords = students.Select(studentId => new AttendanceRecord
+            {
+                ClassId = schedule.ClassId,
+                ScheduleId = schedule.Id,
+                StudentId = studentId,
+                AttendanceDate = DateOnly.FromDateTime(schedule.StartTime),
+                Status = null, // Chưa điểm danh
+                CreatedAt = DateTime.UtcNow,
+                UpdatedAt = DateTime.UtcNow
+            });
+
+            await _attendanceRepository.AddRangeAsync(attendanceRecords, cancellationToken);
+        }
 
         var response = new CreateScheduleResponse
         {

@@ -90,8 +90,18 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CreateAssignmentHandler>();
         services.AddScoped<GetAssignmentsHandler>();
         services.AddScoped<GetAssignmentDetailHandler>();
-        services.AddScoped<UpdateAssignmentHandler>();
+        services.AddScoped<UpdateAssignmentHandler>(sp => new UpdateAssignmentHandler(
+            sp.GetRequiredService<IAssignmentRepository>(),
+            sp.GetRequiredService<IClassRepository>(),
+            sp.GetRequiredService<IUserRepository>(),
+            sp.GetRequiredService<IRubricRepository>()
+        ));
         services.AddScoped<DeleteAssignmentHandler>();
+        services.AddScoped<SubmitQuizAssignmentHandler>();
+        services.AddScoped<SubmitReportAssignmentHandler>();
+        services.AddScoped<SubmitSimulationAssignmentHandler>();
+        services.AddScoped<GetMySubmissionHandler>();
+        services.AddScoped<GetMySubmissionsHandler>();
 
         // Quiz Handlers
         services.AddScoped<CreateQuizHandler>();

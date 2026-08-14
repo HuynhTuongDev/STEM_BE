@@ -24,9 +24,17 @@ public class CreateAssignmentRequest
     public bool AllowResubmit { get; set; }
     public int? ResubmitLimit { get; set; }
     public string Status { get; set; } = "draft";
+    public List<RubricCriterionRequest>? RubricCriteria { get; set; }
     public AssignmentQuizDetailRequest? QuizDetail { get; set; }
     public AssignmentReportDetailRequest? ReportDetail { get; set; }
     public AssignmentSimulationDetailRequest? SimulationDetail { get; set; }
+}
+
+public class RubricCriterionRequest
+{
+    public string Name { get; set; } = string.Empty;
+    public int MaxPoints { get; set; }
+    public string? Description { get; set; }
 }
 
 public class UpdateAssignmentRequest
@@ -41,6 +49,7 @@ public class UpdateAssignmentRequest
     public bool AllowResubmit { get; set; }
     public int? ResubmitLimit { get; set; }
     public string Status { get; set; } = "draft";
+    public List<RubricCriterionRequest>? RubricCriteria { get; set; }
     public AssignmentQuizDetailRequest? QuizDetail { get; set; }
     public AssignmentReportDetailRequest? ReportDetail { get; set; }
     public AssignmentSimulationDetailRequest? SimulationDetail { get; set; }
@@ -90,6 +99,7 @@ public class AssignmentResponse
     public DateTime? DueDate { get; set; }
     public decimal MaxScore { get; set; }
     public int? RubricId { get; set; }
+    public List<RubricCriterionResponse>? RubricCriteria { get; set; }
     public bool AllowResubmit { get; set; }
     public int? ResubmitLimit { get; set; }
     public string Status { get; set; } = string.Empty;
@@ -101,6 +111,19 @@ public class AssignmentResponse
     public int MetricCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    // Student submission info
+    public bool HasSubmitted { get; set; }
+    public decimal? HighestScore { get; set; }
+    public int? LastAttemptNumber { get; set; }
+    public bool CanResubmit { get; set; }
+}
+
+public class RubricCriterionResponse
+{
+    public string Name { get; set; } = string.Empty;
+    public int MaxPoints { get; set; }
+    public string? Description { get; set; }
 }
 
 public class AssignmentQuizDetailResponse

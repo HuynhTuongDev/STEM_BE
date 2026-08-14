@@ -18,4 +18,16 @@ public interface ISubmissionRepository : IRepository<Submission>
         int? schoolId,
         int? teacherId,
         CancellationToken cancellationToken = default);
+
+    Task<Submission?> GetByAssignmentAndStudentAsync(int assignmentId, int studentId, CancellationToken cancellationToken = default);
+
+    Task<int> GetAttemptCountAsync(int assignmentId, int studentId, CancellationToken cancellationToken = default);
+
+    Task<IEnumerable<Submission>> GetByStudentIdPagedAsync(
+        int studentId,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default);
+
+    Task<IEnumerable<Submission>> GetGradedByStudentIdAsync(int studentId, CancellationToken cancellationToken = default);
 }

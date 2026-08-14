@@ -17,19 +17,34 @@ public class AssignmentsController : ControllerBase
     private readonly GetAssignmentDetailHandler _getAssignmentDetailHandler;
     private readonly UpdateAssignmentHandler _updateAssignmentHandler;
     private readonly DeleteAssignmentHandler _deleteAssignmentHandler;
+    private readonly SubmitQuizAssignmentHandler _submitQuizAssignmentHandler;
+    private readonly SubmitReportAssignmentHandler _submitReportAssignmentHandler;
+    private readonly SubmitSimulationAssignmentHandler _submitSimulationAssignmentHandler;
+    private readonly GetMySubmissionHandler _getMySubmissionHandler;
+    private readonly GetMySubmissionsHandler _getMySubmissionsHandler;
 
     public AssignmentsController(
         CreateAssignmentHandler createAssignmentHandler,
         GetAssignmentsHandler getAssignmentsHandler,
         GetAssignmentDetailHandler getAssignmentDetailHandler,
         UpdateAssignmentHandler updateAssignmentHandler,
-        DeleteAssignmentHandler deleteAssignmentHandler)
+        DeleteAssignmentHandler deleteAssignmentHandler,
+        SubmitQuizAssignmentHandler submitQuizAssignmentHandler,
+        SubmitReportAssignmentHandler submitReportAssignmentHandler,
+        SubmitSimulationAssignmentHandler submitSimulationAssignmentHandler,
+        GetMySubmissionHandler getMySubmissionHandler,
+        GetMySubmissionsHandler getMySubmissionsHandler)
     {
         _createAssignmentHandler = createAssignmentHandler;
         _getAssignmentsHandler = getAssignmentsHandler;
         _getAssignmentDetailHandler = getAssignmentDetailHandler;
         _updateAssignmentHandler = updateAssignmentHandler;
         _deleteAssignmentHandler = deleteAssignmentHandler;
+        _submitQuizAssignmentHandler = submitQuizAssignmentHandler;
+        _submitReportAssignmentHandler = submitReportAssignmentHandler;
+        _submitSimulationAssignmentHandler = submitSimulationAssignmentHandler;
+        _getMySubmissionHandler = getMySubmissionHandler;
+        _getMySubmissionsHandler = getMySubmissionsHandler;
     }
 
     [HttpGet]
@@ -252,6 +267,159 @@ public class AssignmentsController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "Failed to validate simulation circuit.", error = ex.Message });
+        }
+    }
+
+    [HttpPost("{id:int}/submit-quiz")]
+    public async Task<IActionResult> SubmitQuiz(
+        int id,
+        [FromBody] SubmitQuizRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _submitQuizAssignmentHandler.Handle(id, request, GetCurrentUserId(), cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            var innerException = ex.InnerException?.Message ?? ex.Message;
+            var stackTrace = ex.StackTrace;
+            Console.WriteLine($"[ERROR] SubmitQuiz failed: {ex.Message}");
+            Console.WriteLine($"[ERROR] Inner Exception: {innerException}");
+            Console.WriteLine($"[ERROR] Stack Trace: {stackTrace}");
+            return StatusCode(500, new { success = false, message = "Failed to submit quiz.", error = innerException, stackTrace = stackTrace });
+        }
+    }
+
+    [HttpPost("{id:int}/submit-report")]
+    public async Task<IActionResult> SubmitReport(
+        int id,
+        [FromBody] SubmitReportRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _submitReportAssignmentHandler.Handle(id, request, GetCurrentUserId(), cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to submit report.", error = ex.Message });
+        }
+    }
+
+    [HttpPost("{id:int}/submit-simulation")]
+    public async Task<IActionResult> SubmitSimulation(
+        int id,
+        [FromBody] SubmitSimulationRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _submitSimulationAssignmentHandler.Handle(id, request, GetCurrentUserId(), cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to submit simulation.", error = ex.Message });
+        }
+    }
+
+    [HttpGet("{id:int}/my-submission")]
+    public async Task<IActionResult> GetMySubmission(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _getMySubmissionHandler.Handle(id, GetCurrentUserId(), cancellationToken);
+            if (response == null)
+                return NotFound(new { success = false, message = "You have not submitted this assignment yet." });
+
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to get submission.", error = ex.Message });
+        }
+    }
+
+    [HttpGet("my-submissions")]
+    public async Task<IActionResult> GetMySubmissions(
+        [FromQuery] int pageNumber = 1,
+        [FromQuery] int pageSize = 20,
+        [FromQuery] int? assignmentId = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _getMySubmissionsHandler.Handle(GetCurrentUserId(), pageNumber, pageSize, assignmentId, cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to get submissions.", error = ex.Message });
         }
     }
 

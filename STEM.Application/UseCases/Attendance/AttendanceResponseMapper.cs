@@ -11,6 +11,7 @@ internal static class AttendanceResponseMapper
         {
             Id = record.Id,
             ClassId = record.ClassId,
+            ScheduleId = record.ScheduleId,
             ClassCode = record.Class?.ClassCode ?? string.Empty,
             StudentId = record.StudentId,
             StudentName = record.Student?.FullName ?? string.Empty,
@@ -19,7 +20,7 @@ internal static class AttendanceResponseMapper
             Status = record.Status,
             Note = record.Note,
             MarkedById = record.MarkedById,
-            MarkedByName = record.MarkedBy?.FullName ?? string.Empty,
+            MarkedByName = record.MarkedBy?.FullName,
             CreatedAt = record.CreatedAt,
             UpdatedAt = record.UpdatedAt
         };

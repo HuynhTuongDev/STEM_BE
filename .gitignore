@@ -54,6 +54,7 @@ appsettings.*.json
 # Ngoai le: file MAU khong chua secret that (chi placeholder), can duoc
 # commit de team co san khi setup lan dau -- xem STEM_BE/README_DOCKER.md.
 !appsettings.Example.json
+!appsettings.Production.example.json
 
 # Environment variables and local secrets
 .env

@@ -23,12 +23,19 @@ public class AttendanceRepository : Repository<AttendanceRecord>, IAttendanceRep
     public async Task<IReadOnlyCollection<AttendanceRecord>> GetByClassDateAsync(
         int classId,
         DateOnly attendanceDate,
+        int? scheduleId = null,
         CancellationToken cancellationToken = default)
     {
-        return await _context.AttendanceRecords
+        var query = _context.AttendanceRecords
             .Include(record => record.Student)
-            .Where(record => record.ClassId == classId && record.AttendanceDate == attendanceDate)
-            .ToListAsync(cancellationToken);
+            .Where(record => record.ClassId == classId && record.AttendanceDate == attendanceDate);
+
+        if (scheduleId.HasValue)
+        {
+            query = query.Where(record => record.ScheduleId == scheduleId.Value);
+        }
+
+        return await query.ToListAsync(cancellationToken);
     }
 
     public async Task<(IEnumerable<AttendanceRecord> Records, int TotalCount)> GetPagedAsync(
@@ -43,6 +50,7 @@ public class AttendanceRepository : Repository<AttendanceRecord>, IAttendanceRep
     {
         var query = _context.AttendanceRecords
             .Include(record => record.Class)
+            .Include(record => record.Schedule)
             .Include(record => record.Student)
             .Include(record => record.MarkedBy)
             .AsQueryable();
@@ -83,5 +91,21 @@ public class AttendanceRepository : Repository<AttendanceRecord>, IAttendanceRep
             .ToListAsync(cancellationToken);
 
         return (records, totalCount);
+    }
+
+    public async Task AddRangeAsync(IEnumerable<AttendanceRecord> records, CancellationToken cancellationToken = default)
+    {
+        await _context.AttendanceRecords.AddRangeAsync(records, cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task DeleteByScheduleIdAsync(int scheduleId, CancellationToken cancellationToken = default)
+    {
+        var records = await _context.AttendanceRecords
+            .Where(r => r.ScheduleId == scheduleId)
+            .ToListAsync(cancellationToken);
+
+        _context.AttendanceRecords.RemoveRange(records);
+        await _context.SaveChangesAsync(cancellationToken);
     }
 }

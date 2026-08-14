@@ -1,3 +1,5 @@
+using STEM.Application.Dtos.Assignments;
+
 namespace STEM.Application.Dtos.Grading;
 
 public class GetSubmissionsRequest
@@ -40,6 +42,11 @@ public class SubmissionResponse
     public DateTime? GradedAt { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
+
+    // Assignment details
+    public decimal MaxScore { get; set; }
+    public string AssignmentType { get; set; } = string.Empty;
+    public List<RubricCriterionResponse>? RubricCriteria { get; set; }
 }
 
 public class PagedSubmissionResponse

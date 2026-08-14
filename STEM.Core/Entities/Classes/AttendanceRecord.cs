@@ -1,17 +1,21 @@
+using Microsoft.EntityFrameworkCore;
 using STEM.Core.Entities.Users;
 
 namespace STEM.Core.Entities.Classes;
 
+[Index(nameof(ScheduleId), nameof(StudentId), IsUnique = true)]
 public class AttendanceRecord : BaseEntity
 {
     public int ClassId { get; set; }
+    public int? ScheduleId { get; set; }
     public int StudentId { get; set; }
     public DateOnly AttendanceDate { get; set; }
-    public string Status { get; set; } = AttendanceStatuses.Present;
+    public string? Status { get; set; }
     public string? Note { get; set; }
-    public int MarkedById { get; set; }
+    public int? MarkedById { get; set; }
 
     public Class? Class { get; set; }
+    public Schedule? Schedule { get; set; }
     public User? Student { get; set; }
     public User? MarkedBy { get; set; }
 }
@@ -20,8 +24,6 @@ public static class AttendanceStatuses
 {
     public const string Present = "Present";
     public const string Absent = "Absent";
-    public const string Late = "Late";
-    public const string Excused = "Excused";
 
     public static bool IsValid(string? status)
     {
@@ -45,16 +47,6 @@ public static class AttendanceStatuses
         if (normalized.Equals(Absent, StringComparison.OrdinalIgnoreCase))
         {
             return Absent;
-        }
-
-        if (normalized.Equals(Late, StringComparison.OrdinalIgnoreCase))
-        {
-            return Late;
-        }
-
-        if (normalized.Equals(Excused, StringComparison.OrdinalIgnoreCase))
-        {
-            return Excused;
         }
 
         return null;

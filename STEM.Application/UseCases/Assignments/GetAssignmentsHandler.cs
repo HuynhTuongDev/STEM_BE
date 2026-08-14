@@ -79,7 +79,7 @@ public class GetAssignmentsHandler
             TotalCount = totalCount,
             PageNumber = pageNumber,
             PageSize = pageSize,
-            Items = assignments.Select(assignment => AssignmentResponseMapper.Map(assignment, revealAnswers)).ToList()
+            Items = assignments.Select(assignment => AssignmentResponseMapper.Map(assignment, revealAnswers, studentId)).ToList()
         };
     }
 }

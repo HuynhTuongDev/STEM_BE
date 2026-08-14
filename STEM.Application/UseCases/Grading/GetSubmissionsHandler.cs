@@ -73,7 +73,7 @@ public class GetSubmissionsHandler
             TotalCount = totalCount,
             PageNumber = pageNumber,
             PageSize = pageSize,
-            Items = submissions.Select(SubmissionResponseMapper.Map).ToList()
+            Items = submissions.Select(SubmissionResponseMapper.MapWithAssignmentDetails).ToList()
         };
     }
 }

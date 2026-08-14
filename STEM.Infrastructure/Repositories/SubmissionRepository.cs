@@ -11,6 +11,28 @@ public class SubmissionRepository : Repository<Submission>, ISubmissionRepositor
     {
     }
 
+    public async Task<Submission?> GetByAssignmentAndStudentAsync(
+        int assignmentId,
+        int studentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await BuildDetailsQuery()
+            .FirstOrDefaultAsync(
+                submission => submission.AssignmentId == assignmentId && submission.StudentId == studentId,
+                cancellationToken);
+    }
+
+    public async Task<int> GetAttemptCountAsync(
+        int assignmentId,
+        int studentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .CountAsync(
+                submission => submission.AssignmentId == assignmentId && submission.StudentId == studentId,
+                cancellationToken);
+    }
+
     public async Task<IEnumerable<Submission>> GetByAssignmentIdAsync(
         int assignmentId,
         CancellationToken cancellationToken = default)
@@ -92,6 +114,35 @@ public class SubmissionRepository : Repository<Submission>, ISubmissionRepositor
         return (submissions, totalCount);
     }
 
+    public async Task<IEnumerable<Submission>> GetByStudentIdPagedAsync(
+        int studentId,
+        int pageNumber,
+        int pageSize,
+        CancellationToken cancellationToken = default)
+    {
+        return await BuildDetailsQuery()
+            .Where(submission => submission.StudentId == studentId)
+            .OrderByDescending(submission => submission.CreatedAt)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IEnumerable<Submission>> GetGradedByStudentIdAsync(
+        int studentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await BuildDetailsQuery()
+            .Where(submission =>
+                submission.StudentId == studentId &&
+                submission.Status == SubmissionStatuses.Graded &&
+                submission.FinalScore.HasValue &&
+                submission.Assignment != null &&
+                (submission.Assignment.AssignmentType == AssignmentTypes.TextReport ||
+                 submission.Assignment.AssignmentType == AssignmentTypes.PracticalSimulation))
+            .ToListAsync(cancellationToken);
+    }
+
     private IQueryable<Submission> BuildDetailsQuery()
     {
         return _dbSet
@@ -107,6 +158,8 @@ public class SubmissionRepository : Repository<Submission>, ISubmissionRepositor
             .Include(submission => submission.Assignment)
                 .ThenInclude(assignment => assignment!.Class)
                     .ThenInclude(classEntity => classEntity!.Enrollments)
+            .Include(submission => submission.Assignment)
+                .ThenInclude(assignment => assignment!.Rubric)
             .Include(submission => submission.Student)
             .Include(submission => submission.File)
             .Include(submission => submission.GradedBy)

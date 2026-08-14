@@ -87,6 +87,7 @@ public class CreateAttendanceHandler
         var existingRecords = await _attendanceRepository.GetByClassDateAsync(
             request.ClassId,
             request.AttendanceDate,
+            request.ScheduleId,
             cancellationToken);
         var existingStudentIds = existingRecords.Select(record => record.StudentId).ToHashSet();
 
@@ -100,7 +101,7 @@ public class CreateAttendanceHandler
 
             if (existingStudentIds.Contains(item.StudentId))
             {
-                throw new ArgumentException($"Attendance for student {item.StudentId} on this date already exists.");
+                throw new ArgumentException($"Attendance for student {item.StudentId} on this schedule already exists.");
             }
 
             var status = AttendanceStatuses.Normalize(item.Status);
@@ -110,9 +111,11 @@ public class CreateAttendanceHandler
             }
 
             var now = DateTime.UtcNow;
+            var scheduleId = request.ScheduleId ?? 0;
             var attendanceRecord = new AttendanceRecord
             {
                 ClassId = request.ClassId,
+                ScheduleId = scheduleId,
                 StudentId = item.StudentId,
                 AttendanceDate = request.AttendanceDate,
                 Status = status,

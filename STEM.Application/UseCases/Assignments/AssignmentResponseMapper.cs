@@ -13,12 +13,44 @@ internal static class AssignmentResponseMapper
     /// and Quiz options[].isCorrect / fill_blank correctAnswer / Simulation AnswerKeyJson
     /// are graded-answer data that must not reach a Student before/while they can still submit.
     /// </summary>
-    public static AssignmentResponse Map(Assignment assignment, bool revealAnswers = true)
+    public static AssignmentResponse Map(Assignment assignment, bool revealAnswers = true, int? currentStudentId = null)
     {
         var classEntity = assignment.Class;
         var course = classEntity?.Course;
         var teacher = classEntity?.Teacher;
         var school = classEntity?.School;
+
+        // Calculate submission info for students
+        bool hasSubmitted = false;
+        decimal? highestScore = null;
+        int? lastAttemptNumber = null;
+        bool canResubmit = true;
+
+        if (currentStudentId.HasValue && assignment.Submissions != null)
+        {
+            var studentSubmissions = assignment.Submissions
+                .Where(s => s.StudentId == currentStudentId.Value)
+                .ToList();
+
+            if (studentSubmissions.Any())
+            {
+                hasSubmitted = true;
+                lastAttemptNumber = studentSubmissions.Max(s => s.AttemptNumber);
+                highestScore = studentSubmissions
+                    .Where(s => s.FinalScore.HasValue || s.Score.HasValue || s.AutoScore.HasValue)
+                    .Select(s => s.FinalScore ?? s.Score ?? s.AutoScore)
+                    .Max();
+
+                if (!assignment.AllowResubmit)
+                {
+                    canResubmit = false;
+                }
+                else if (assignment.ResubmitLimit.HasValue)
+                {
+                    canResubmit = studentSubmissions.Count < assignment.ResubmitLimit.Value;
+                }
+            }
+        }
 
         return new AssignmentResponse
         {
@@ -37,6 +69,7 @@ internal static class AssignmentResponseMapper
             DueDate = assignment.DueDate,
             MaxScore = assignment.MaxScore,
             RubricId = assignment.RubricId,
+            RubricCriteria = assignment.Rubric == null ? null : ParseRubricCriteria(assignment.Rubric.Criteria),
             AllowResubmit = assignment.AllowResubmit,
             ResubmitLimit = assignment.ResubmitLimit,
             Status = assignment.Status,
@@ -72,7 +105,11 @@ internal static class AssignmentResponseMapper
             SubmissionCount = assignment.Submissions.Count,
             MetricCount = assignment.Metrics.Count,
             CreatedAt = assignment.CreatedAt,
-            UpdatedAt = assignment.UpdatedAt
+            UpdatedAt = assignment.UpdatedAt,
+            HasSubmitted = hasSubmitted,
+            HighestScore = highestScore,
+            LastAttemptNumber = lastAttemptNumber,
+            CanResubmit = canResubmit
         };
     }
 
@@ -112,5 +149,21 @@ internal static class AssignmentResponseMapper
         }
 
         return JsonSerializer.Deserialize<JsonElement>(node?.ToJsonString() ?? "[]");
+    }
+
+    private static List<RubricCriterionResponse>? ParseRubricCriteria(string? criteriaJson)
+    {
+        if (string.IsNullOrWhiteSpace(criteriaJson))
+            return null;
+
+        try
+        {
+            var criteria = JsonSerializer.Deserialize<List<RubricCriterionResponse>>(criteriaJson);
+            return criteria;
+        }
+        catch
+        {
+            return null;
+        }
     }
 }

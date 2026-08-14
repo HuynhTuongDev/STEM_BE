@@ -9,6 +9,7 @@ public interface IAttendanceRepository : IRepository<AttendanceRecord>
     Task<IReadOnlyCollection<AttendanceRecord>> GetByClassDateAsync(
         int classId,
         DateOnly attendanceDate,
+        int? scheduleId = null,
         CancellationToken cancellationToken = default);
 
     Task<(IEnumerable<AttendanceRecord> Records, int TotalCount)> GetPagedAsync(
@@ -20,4 +21,6 @@ public interface IAttendanceRepository : IRepository<AttendanceRecord>
         int? schoolId,
         int? teacherId,
         CancellationToken cancellationToken = default);
+
+    Task DeleteByScheduleIdAsync(int scheduleId, CancellationToken cancellationToken = default);
 }

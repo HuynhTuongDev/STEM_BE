@@ -25,6 +25,7 @@ public class GetStudentLearningProgressHandler
     private readonly IRepository<Assignment> _assignmentRepository;
     private readonly IRepository<ProjectMember> _projectMemberRepository;
     private readonly IRepository<SimulationSession> _simulationSessionRepository;
+    private readonly ISubmissionRepository _submissionRepository;
 
     public GetStudentLearningProgressHandler(
         IUserRepository userRepository,
@@ -36,7 +37,8 @@ public class GetStudentLearningProgressHandler
         IRepository<Lesson> lessonRepository,
         IRepository<Assignment> assignmentRepository,
         IRepository<ProjectMember> projectMemberRepository,
-        IRepository<SimulationSession> simulationSessionRepository)
+        IRepository<SimulationSession> simulationSessionRepository,
+        ISubmissionRepository submissionRepository)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
@@ -48,6 +50,7 @@ public class GetStudentLearningProgressHandler
         _assignmentRepository = assignmentRepository;
         _projectMemberRepository = projectMemberRepository;
         _simulationSessionRepository = simulationSessionRepository;
+        _submissionRepository = submissionRepository;
     }
 
     public async Task<StudentLearningProgressResponse> Handle(int studentId, CancellationToken cancellationToken = default)
@@ -129,6 +132,26 @@ public class GetStudentLearningProgressHandler
             })
             .ToList();
 
+        // Calculate grades and average (only Report and Lab)
+        var gradedSubmissions = await _submissionRepository.GetGradedByStudentIdAsync(studentId, cancellationToken);
+        var recentGrades = gradedSubmissions
+            .OrderByDescending(s => s.GradedAt)
+            .Take(5)
+            .Select(s => new StudentGradeResponse
+            {
+                AssignmentId = s.AssignmentId,
+                AssignmentTitle = s.Assignment?.Title ?? string.Empty,
+                Score = s.FinalScore ?? 0,
+                MaxScore = s.Assignment?.MaxScore ?? 100,
+                GradedAt = s.GradedAt ?? DateTime.UtcNow
+            })
+            .ToList();
+
+        var totalGrades = gradedSubmissions.Count();
+        var averageScore = totalGrades > 0
+            ? Math.Round((double)gradedSubmissions.Average(s => s.FinalScore ?? 0), 2)
+            : (double?)null;
+
         return new StudentLearningProgressResponse
         {
             StudentId = student.Id,
@@ -143,14 +166,14 @@ public class GetStudentLearningProgressHandler
             TotalAssignments = assignments.Count,
             TotalProjects = projectMembers.Select(projectMember => projectMember.ProjectId).Distinct().Count(),
             TotalSimulationSessions = simulationSessions.Count,
-            TotalGrades = 0,
-            AverageScore = null,
+            TotalGrades = totalGrades,
+            AverageScore = averageScore,
             CertificatesEarned = 0,
             TotalAttendanceRecords = 0,
             PresentAttendanceRecords = 0,
             AttendanceRate = 0,
             Classes = classProgress,
-            RecentGrades = Array.Empty<StudentGradeResponse>()
+            RecentGrades = recentGrades
         };
     }
 

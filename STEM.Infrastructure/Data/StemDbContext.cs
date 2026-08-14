@@ -1,5 +1,7 @@
-namespace STEM.Infrastructure.Data;
-
+using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using STEM.Core.Entities;
 using STEM.Core.Entities.Participants;
 using STEM.Core.Entities.Projects;
@@ -12,7 +14,6 @@ using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Simulations;
 using STEM.Core.Entities.Assessments;
 using STEM.Core.Entities.Payments;
-using Microsoft.EntityFrameworkCore;
 
 public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(options)
 {
@@ -27,7 +28,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Module> Modules => Set<Module>();
     public DbSet<Lesson> Lessons => Set<Lesson>();
     public DbSet<Material> Materials => Set<Material>();
-    public DbSet<File> Files => Set<File>();
+    public DbSet<STEM.Core.Entities.Courses.File> Files => Set<STEM.Core.Entities.Courses.File>();
 
     public DbSet<Class> Classes => Set<Class>();
     public DbSet<Enrollment> Enrollments => Set<Enrollment>();
@@ -43,8 +44,8 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<AssignmentReportDetail> AssignmentReportDetails => Set<AssignmentReportDetail>();
     public DbSet<AssignmentSimulationDetail> AssignmentSimulationDetails => Set<AssignmentSimulationDetail>();
     public DbSet<Submission> Submissions => Set<Submission>();
+    public DbSet<SubmissionFile> FileEntity => Set<SubmissionFile>();
     public DbSet<Metric> Metrics => Set<Metric>();
-    public DbSet<FileEntity> FileEntities => Set<FileEntity>();
 
     public DbSet<SimulationEntity> Simulations => Set<SimulationEntity>();
     public DbSet<SimulationTemplate> SimulationTemplates => Set<SimulationTemplate>();
@@ -175,11 +176,24 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .OnDelete(DeleteBehavior.Cascade);
 
         // File -> Material
-        modelBuilder.Entity<File>()
+        modelBuilder.Entity<STEM.Core.Entities.Courses.File>()
+            .ToTable("Files")
             .HasOne(f => f.Material)
             .WithMany()
             .HasForeignKey(f => f.MaterialId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // SubmissionFile
+        modelBuilder.Entity<SubmissionFile>()
+            .ToTable("FileEntity");
+
+        // Submission -> File
+        modelBuilder.Entity<Submission>()
+            .HasOne(s => s.File)
+            .WithMany()
+            .HasForeignKey(s => s.FileId)
+            .OnDelete(DeleteBehavior.Cascade)
+            .HasConstraintName("FK_Submissions_Files_FileId");
 
         // Enrollment
         modelBuilder.Entity<Enrollment>()
@@ -366,6 +380,20 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(s => s.GradedById)
             .OnDelete(DeleteBehavior.Restrict);
 
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.AutoGradeResultJson)
+            .HasColumnType("jsonb")
+            .HasConversion(new ValueConverter<string?, string?>(
+                v => v ?? (string?)null,
+                v => v ?? (string?)null));
+
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.ContentJson)
+            .HasColumnType("jsonb")
+            .HasConversion(new ValueConverter<string?, string?>(
+                v => v ?? (string?)null,
+                v => v ?? (string?)null));
+
         // Metric -> Assignment
         modelBuilder.Entity<Metric>()
             .HasOne(m => m.Assignment)
@@ -390,8 +418,8 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         // Rubric -> Assignment
         modelBuilder.Entity<Rubric>()
             .HasOne(r => r.Assignment)
-            .WithMany()
-            .HasForeignKey(r => r.AssignmentId)
+            .WithOne(a => a.Rubric)
+            .HasForeignKey<Rubric>(r => r.AssignmentId)
             .OnDelete(DeleteBehavior.Cascade);
 
         // Notification -> User

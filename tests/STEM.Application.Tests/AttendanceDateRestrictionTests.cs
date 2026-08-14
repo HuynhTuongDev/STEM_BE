@@ -3,6 +3,7 @@ using STEM.Application.Dtos.Attendance;
 using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Attendance;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
@@ -66,6 +67,8 @@ file sealed class FakeClassRepository : IClassRepository
     public Task<Class?> GetByIdSummaryAsync(int id, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<IEnumerable<Schedule>> GetSchedulesAsync(int classId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<List<int>> GetAvailableTeacherIdsForClassAsync(int classId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task<IEnumerable<Enrollment>> GetStudentEnrollmentsAsync(int studentId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task<IEnumerable<Assignment>> GetClassAssignmentsAsync(int classId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 }
 
 file sealed class FakeAttendanceRepository : IAttendanceRepository
@@ -76,9 +79,9 @@ file sealed class FakeAttendanceRepository : IAttendanceRepository
     public Task<AttendanceRecord?> GetByIdWithDetailsAsync(int id, CancellationToken cancellationToken = default) =>
         Task.FromResult(_records.FirstOrDefault(r => r.Id == id));
 
-    public Task<IReadOnlyCollection<AttendanceRecord>> GetByClassDateAsync(int classId, DateOnly attendanceDate, CancellationToken cancellationToken = default) =>
+    public Task<IReadOnlyCollection<AttendanceRecord>> GetByClassDateAsync(int classId, DateOnly attendanceDate, int? scheduleId = null, CancellationToken cancellationToken = default) =>
         Task.FromResult<IReadOnlyCollection<AttendanceRecord>>(
-            _records.Where(r => r.ClassId == classId && r.AttendanceDate == attendanceDate).ToList());
+            _records.Where(r => r.ClassId == classId && r.AttendanceDate == attendanceDate && (scheduleId == null || r.ScheduleId == scheduleId)).ToList());
 
     public Task<(IEnumerable<AttendanceRecord> Records, int TotalCount)> GetPagedAsync(int pageNumber, int pageSize, int? classId, int? studentId, DateOnly? attendanceDate, int? schoolId, int? teacherId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<AttendanceRecord?> GetByIdAsync(int id, CancellationToken cancellationToken = default) => throw new NotImplementedException();
@@ -91,6 +94,7 @@ file sealed class FakeAttendanceRepository : IAttendanceRepository
     public Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task SaveChangesAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task DeleteAsync(AttendanceRecord entity, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task DeleteByScheduleIdAsync(int scheduleId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 }
 
 public class AttendanceDateRestrictionTests

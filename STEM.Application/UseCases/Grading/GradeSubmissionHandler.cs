@@ -73,5 +73,6 @@ public class GradeSubmissionHandler
         submission.GradedById = gradedById;
         submission.GradedAt = DateTime.UtcNow;
         submission.UpdatedAt = DateTime.UtcNow;
+        submission.Status = "graded";
     }
 }
