@@ -19,7 +19,12 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddDbContext<StemDbContext>(options =>
-            options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+            options.UseNpgsql(
+                configuration.GetConnectionString("DefaultConnection"),
+                npgsqlOptions => npgsqlOptions.EnableRetryOnFailure(
+                    maxRetryCount: 3,
+                    maxRetryDelay: TimeSpan.FromSeconds(5),
+                    errorCodesToAdd: null)));
 
         services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
         services.AddHttpContextAccessor();
@@ -37,6 +42,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IRubricRepository, RubricRepository>();
         services.AddScoped<IQuizRepository, QuizRepository>();
         services.AddScoped<ISubmissionRepository, SubmissionRepository>();
+        services.AddScoped<ISubmissionCommentRepository, SubmissionCommentRepository>();
+        services.AddScoped<IResubmitRequestRepository, ResubmitRequestRepository>();
         services.AddScoped<ISchoolRepository, SchoolRepository>();
         services.AddScoped<IScheduleRepository, ScheduleRepository>();
         services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();

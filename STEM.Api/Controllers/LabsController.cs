@@ -259,6 +259,29 @@ public class LabsController : ControllerBase
         }
     }
 
+    // Đọc thuần progress của CHÍNH Student hiện tại — không mutate, khác
+    // progress/start. Dùng để render danh sách nhiều lab (vd. tab Phòng Lab
+    // Ảo trong Class Detail) mà không âm thầm "start" progress cho lab chưa mở.
+    [HttpGet("my-progress")]
+    public async Task<IActionResult> GetMyProgress(
+        [FromQuery] int? classId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _labService.GetMyProgressAsync(classId, GetCurrentUserId(), cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to get lab progress.", error = ex.Message });
+        }
+    }
+
     [HttpGet("{id:guid}/stats")]
     public async Task<IActionResult> GetStats(
         Guid id,

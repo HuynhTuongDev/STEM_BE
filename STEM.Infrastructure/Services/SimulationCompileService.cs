@@ -516,7 +516,15 @@ public class SimulationCompileService : ISimulationCompileService
     {
         var errors = new List<CompileSimulationError>();
 
-        if (!SupportedBoards.ContainsKey(request.Board))
+        // Accept both raw aliases ("esp32_devkit_v1") AND already-normalized FQBNs
+        // ("esp32:esp32:esp32:FlashMode=dio") as valid. Some VirtualLabProject rows
+        // were persisted with the normalized value already baked into Board (created
+        // via POST /api/virtual-lab/projects with the FQBN passed directly, bypassing
+        // the alias-only path used by the real Sandbox auto-create flow) — rejecting
+        // those here blocks compile for every request that re-uses project.Board as-is.
+        var isSupported = SupportedBoards.ContainsKey(request.Board)
+            || SupportedBoards.Values.Contains(request.Board, StringComparer.OrdinalIgnoreCase);
+        if (!isSupported)
         {
             errors.Add(new CompileSimulationError
             {

@@ -2,17 +2,21 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using STEM.Infrastructure.Data;
 
 #nullable disable
 
 namespace STEM.Infrastructure.Migrations
 {
     [DbContext(typeof(StemDbContext))]
-    partial class StemDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260814014727_AddSubmissionComments")]
+    partial class AddSubmissionComments
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -101,17 +105,15 @@ namespace STEM.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int?>("MarkedById")
+                    b.Property<int>("MarkedById")
                         .HasColumnType("integer");
 
                     b.Property<string>("Note")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)");
 
-                    b.Property<int?>("ScheduleId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Status")
+                        .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
 
@@ -126,9 +128,6 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("MarkedById");
 
                     b.HasIndex("StudentId");
-
-                    b.HasIndex("ScheduleId", "StudentId")
-                        .IsUnique();
 
                     b.HasIndex("ClassId", "StudentId", "AttendanceDate")
                         .IsUnique();
@@ -386,7 +385,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("MaterialId");
 
-                    b.ToTable("Files", (string)null);
+                    b.ToTable("Files");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Courses.Lesson", b =>
@@ -1001,7 +1000,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("FileEntity");
+                    b.ToTable("FileEntities");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.Metric", b =>
@@ -1060,61 +1059,6 @@ namespace STEM.Infrastructure.Migrations
                     b.ToTable("Projects");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Projects.ResubmitRequest", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<int>("AssignmentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("GrantedExtraAttempts")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime?>("GrantedNewDueDate")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Reason")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<string>("ReviewNote")
-                        .HasMaxLength(1000)
-                        .HasColumnType("character varying(1000)");
-
-                    b.Property<DateTime?>("ReviewedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<int?>("ReviewedById")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<int>("StudentId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AssignmentId");
-
-                    b.HasIndex("ReviewedById");
-
-                    b.HasIndex("StudentId");
-
-                    b.ToTable("ResubmitRequests");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Projects.Submission", b =>
                 {
                     b.Property<int>("Id")
@@ -1130,14 +1074,14 @@ namespace STEM.Infrastructure.Migrations
                         .HasColumnType("integer");
 
                     b.Property<string>("AutoGradeResultJson")
-                        .HasColumnType("jsonb");
+                        .HasColumnType("text");
 
                     b.Property<decimal?>("AutoScore")
                         .HasColumnType("numeric");
 
                     b.Property<string>("ContentJson")
                         .IsRequired()
-                        .HasColumnType("jsonb");
+                        .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
@@ -2634,11 +2578,8 @@ namespace STEM.Infrastructure.Migrations
                     b.HasOne("STEM.Core.Entities.Users.User", "MarkedBy")
                         .WithMany()
                         .HasForeignKey("MarkedById")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("STEM.Core.Entities.Classes.Schedule", "Schedule")
-                        .WithMany()
-                        .HasForeignKey("ScheduleId");
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
 
                     b.HasOne("STEM.Core.Entities.Users.User", "Student")
                         .WithMany()
@@ -2649,8 +2590,6 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("Class");
 
                     b.Navigation("MarkedBy");
-
-                    b.Navigation("Schedule");
 
                     b.Navigation("Student");
                 });
@@ -2919,32 +2858,6 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("Class");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Projects.ResubmitRequest", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Projects.Assignment", "Assignment")
-                        .WithMany()
-                        .HasForeignKey("AssignmentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "ReviewedBy")
-                        .WithMany()
-                        .HasForeignKey("ReviewedById")
-                        .OnDelete(DeleteBehavior.Restrict);
-
-                    b.HasOne("STEM.Core.Entities.Users.User", "Student")
-                        .WithMany()
-                        .HasForeignKey("StudentId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Assignment");
-
-                    b.Navigation("ReviewedBy");
-
-                    b.Navigation("Student");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Projects.Submission", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Projects.Assignment", "Assignment")
@@ -2956,8 +2869,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasOne("STEM.Core.Entities.Projects.FileEntity", "File")
                         .WithMany()
                         .HasForeignKey("FileId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .HasConstraintName("FK_Submissions_Files_FileId");
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.HasOne("STEM.Core.Entities.Users.User", "GradedBy")
                         .WithMany()

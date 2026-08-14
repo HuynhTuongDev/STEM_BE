@@ -44,8 +44,16 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<AssignmentReportDetail> AssignmentReportDetails => Set<AssignmentReportDetail>();
     public DbSet<AssignmentSimulationDetail> AssignmentSimulationDetails => Set<AssignmentSimulationDetail>();
     public DbSet<Submission> Submissions => Set<Submission>();
+<<<<<<< HEAD
     public DbSet<SubmissionFile> FileEntity => Set<SubmissionFile>();
     public DbSet<Metric> Metrics => Set<Metric>();
+=======
+    public DbSet<SubmissionComment> SubmissionComments => Set<SubmissionComment>();
+    public DbSet<ResubmitRequest> ResubmitRequests => Set<ResubmitRequest>();
+    public DbSet<Metric> Metrics => Set<Metric>();
+    public DbSet<FileEntity> FileEntities => Set<FileEntity>();
+    // Real DB table is "FileEntity" (singular) — EF's default plural "FileEntities" has never existed.
+>>>>>>> fa9dbc9 (save)
 
     public DbSet<SimulationEntity> Simulations => Set<SimulationEntity>();
     public DbSet<SimulationTemplate> SimulationTemplates => Set<SimulationTemplate>();
@@ -354,9 +362,20 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(s => s.AssignmentId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        modelBuilder.Entity<FileEntity>()
+            .ToTable("FileEntity");
+
         modelBuilder.Entity<Submission>()
             .Property(s => s.Score)
             .HasColumnType("numeric(5,2)");
+
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.ContentJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<Submission>()
+            .Property(s => s.AutoGradeResultJson)
+            .HasColumnType("jsonb");
 
         modelBuilder.Entity<Submission>()
             .Property(s => s.Feedback)
@@ -380,6 +399,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(s => s.GradedById)
             .OnDelete(DeleteBehavior.Restrict);
 
+<<<<<<< HEAD
         modelBuilder.Entity<Submission>()
             .Property(s => s.AutoGradeResultJson)
             .HasColumnType("jsonb")
@@ -393,6 +413,51 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasConversion(new ValueConverter<string?, string?>(
                 v => v ?? (string?)null,
                 v => v ?? (string?)null));
+=======
+        // SubmissionComment -> Submission / Author
+        modelBuilder.Entity<SubmissionComment>()
+            .Property(c => c.Body)
+            .HasMaxLength(2000);
+
+        modelBuilder.Entity<SubmissionComment>()
+            .HasOne(c => c.Submission)
+            .WithMany()
+            .HasForeignKey(c => c.SubmissionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<SubmissionComment>()
+            .HasOne(c => c.Author)
+            .WithMany()
+            .HasForeignKey(c => c.AuthorId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // ResubmitRequest -> Assignment / Student / ReviewedBy
+        modelBuilder.Entity<ResubmitRequest>()
+            .Property(r => r.Reason)
+            .HasMaxLength(1000);
+
+        modelBuilder.Entity<ResubmitRequest>()
+            .Property(r => r.ReviewNote)
+            .HasMaxLength(1000);
+
+        modelBuilder.Entity<ResubmitRequest>()
+            .HasOne(r => r.Assignment)
+            .WithMany()
+            .HasForeignKey(r => r.AssignmentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ResubmitRequest>()
+            .HasOne(r => r.Student)
+            .WithMany()
+            .HasForeignKey(r => r.StudentId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        modelBuilder.Entity<ResubmitRequest>()
+            .HasOne(r => r.ReviewedBy)
+            .WithMany()
+            .HasForeignKey(r => r.ReviewedById)
+            .OnDelete(DeleteBehavior.Restrict);
+>>>>>>> fa9dbc9 (save)
 
         // Metric -> Assignment
         modelBuilder.Entity<Metric>()

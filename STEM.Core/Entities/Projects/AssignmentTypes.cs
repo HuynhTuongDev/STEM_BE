@@ -41,3 +41,17 @@ public static class SubmissionStatuses
         Graded
     };
 }
+
+public static class ResubmitRequestStatuses
+{
+    public const string Pending = "pending";
+    public const string Approved = "approved";
+    public const string Rejected = "rejected";
+
+    public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
+    {
+        Pending,
+        Approved,
+        Rejected
+    };
+}

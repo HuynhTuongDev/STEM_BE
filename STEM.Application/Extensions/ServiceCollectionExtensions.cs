@@ -115,6 +115,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetSubmissionDetailHandler>();
         services.AddScoped<GradeSubmissionHandler>();
         services.AddScoped<UpdateSubmissionGradeHandler>();
+        services.AddScoped<GetSubmissionCommentsHandler>();
+        services.AddScoped<CreateSubmissionCommentHandler>();
+        services.AddScoped<UpdateSubmissionCommentHandler>();
+        services.AddScoped<DeleteSubmissionCommentHandler>();
+        services.AddScoped<CreateResubmitRequestHandler>();
+        services.AddScoped<GetResubmitRequestsHandler>();
+        services.AddScoped<ApproveResubmitRequestHandler>();
+        services.AddScoped<RejectResubmitRequestHandler>();
 
         // Virtual Lab Handlers
         services.AddScoped<CreateVirtualLabHandler>();
