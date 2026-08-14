@@ -44,6 +44,7 @@ file sealed class FakeLabService : ILabService
     public Task<LabProgressResponse> StartProgressAsync(Guid id, int currentUserId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<LabProgressResponse> CompleteProgressAsync(Guid id, int currentUserId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<LabStatsResponse> GetStatsAsync(Guid id, int currentUserId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task<IReadOnlyCollection<LabProgressResponse>> GetMyProgressAsync(int? classId, int currentUserId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 }
 
 /// <summary>Fake ILabAiProvider — không gọi Beeknoee/Anthropic thật. Trả response đã cấu hình sẵn
