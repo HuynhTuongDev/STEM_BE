@@ -33,14 +33,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
-        services.AddScoped<ISimulationRepository, SimulationRepository>();
-        services.AddScoped<ISimulationSessionRepository, SimulationSessionRepository>();
         services.AddScoped<ICourseRepository, CourseRepository>();
         services.AddScoped<IClassRepository, ClassRepository>();
         services.AddScoped<IAttendanceRepository, AttendanceRepository>();
         services.AddScoped<IAssignmentRepository, AssignmentRepository>();
         services.AddScoped<IRubricRepository, RubricRepository>();
-        services.AddScoped<IQuizRepository, QuizRepository>();
         services.AddScoped<ISubmissionRepository, SubmissionRepository>();
         services.AddScoped<ISubmissionCommentRepository, SubmissionCommentRepository>();
         services.AddScoped<IResubmitRequestRepository, ResubmitRequestRepository>();

@@ -10,7 +10,6 @@ using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Participants;
 using STEM.Core.Entities.Payments;
 using STEM.Core.Entities.Projects;
-using STEM.Core.Entities.Quizzes;
 using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Simulations;
 using STEM.Core.Entities.Users;
@@ -36,7 +35,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<Schedule> Schedules => Set<Schedule>();
-    public DbSet<Room> Rooms => Set<Room>();
 
     public DbSet<Project> Projects => Set<Project>();
     public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
@@ -49,11 +47,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Metric> Metrics => Set<Metric>();
     public DbSet<SubmissionComment> SubmissionComments => Set<SubmissionComment>();
     public DbSet<ResubmitRequest> ResubmitRequests => Set<ResubmitRequest>();
-    public DbSet<SimulationEntity> Simulations => Set<SimulationEntity>();
-    public DbSet<SimulationTemplate> SimulationTemplates => Set<SimulationTemplate>();
-    public DbSet<SimulationSession> SimulationSessions => Set<SimulationSession>();
-    public DbSet<ExperimentLog> ExperimentLogs => Set<ExperimentLog>();
-    public DbSet<LiveMonitoring> LiveMonitorings => Set<LiveMonitoring>();
 
     public DbSet<VirtualLabProject> VirtualLabProjects => Set<VirtualLabProject>();
     public DbSet<Lab> Labs => Set<Lab>();
@@ -61,10 +54,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<LabProgress> LabProgresses => Set<LabProgress>();
     public DbSet<ComponentGlueRegistry> ComponentGlueRegistry => Set<ComponentGlueRegistry>();
     public DbSet<AiQuotaUsage> AiQuotaUsages => Set<AiQuotaUsage>();
-
-    public DbSet<Quiz> Quizzes => Set<Quiz>();
-    public DbSet<QuizQuestion> QuizQuestions => Set<QuizQuestion>();
-    public DbSet<QuizAnswer> QuizAnswers => Set<QuizAnswer>();
 
     public DbSet<Rubric> Rubrics => Set<Rubric>();
 
@@ -144,19 +133,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(c => c.SchoolId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        // Quiz -> Class (thay vì Course)
-        modelBuilder.Entity<Quiz>()
-            .HasOne(q => q.Class)
-            .WithMany(c => c.Quizzes)
-            .HasForeignKey(q => q.ClassId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // SimulationEntity -> Class (thay vì Lesson)
-        modelBuilder.Entity<SimulationEntity>()
-            .HasOne(s => s.Class)
-            .WithMany(c => c.VirtualLabs)
-            .HasForeignKey(s => s.ClassId)
-            .OnDelete(DeleteBehavior.Cascade);
         modelBuilder.Entity<Module>()
             .HasOne(m => m.Course)
             .WithMany(c => c.Modules)
@@ -254,11 +230,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany(c => c.Schedules)
             .HasForeignKey(s => s.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
-
-        // Room configuration
-        modelBuilder.Entity<Room>()
-            .HasIndex(r => r.RoomCode)
-            .IsUnique();
 
         // Project -> Class
         modelBuilder.Entity<Project>()
@@ -447,20 +418,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(m => m.AssignmentId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // QuizQuestion -> Quiz
-        modelBuilder.Entity<QuizQuestion>()
-            .HasOne(q => q.Quiz)
-            .WithMany(q => q.QuizQuestions)
-            .HasForeignKey(q => q.QuizId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // QuizAnswer -> QuizQuestion
-        modelBuilder.Entity<QuizAnswer>()
-            .HasOne(a => a.Question)
-            .WithMany(q => q.QuizAnswers)
-            .HasForeignKey(a => a.QuestionId)
-            .OnDelete(DeleteBehavior.Cascade);
-
         // Rubric -> Assignment
         modelBuilder.Entity<Rubric>()
             .HasOne(r => r.Assignment)
@@ -474,48 +431,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany()
             .HasForeignKey(n => n.UserId)
             .OnDelete(DeleteBehavior.Cascade);
-
-        // SimulationTemplate -> SimulationEntity
-        modelBuilder.Entity<SimulationTemplate>()
-            .HasOne(t => t.Simulation)
-            .WithMany(s => s.SimulationTemplates)
-            .HasForeignKey(t => t.SimulationId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // SimulationSession -> Student
-        modelBuilder.Entity<SimulationSession>()
-            .HasOne(s => s.Student)
-            .WithMany()
-            .HasForeignKey(s => s.StudentId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // SimulationSession -> Template
-        modelBuilder.Entity<SimulationSession>()
-            .HasOne(s => s.Template)
-            .WithMany(t => t.SimulationSessions)
-            .HasForeignKey(s => s.TemplateId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // ExperimentLog -> Session
-        modelBuilder.Entity<ExperimentLog>()
-            .HasOne(e => e.Session)
-            .WithMany(s => s.ExperimentLogs)
-            .HasForeignKey(e => e.SessionId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // LiveMonitoring -> Session
-        modelBuilder.Entity<LiveMonitoring>()
-            .HasOne(l => l.Session)
-            .WithMany(s => s.LiveMonitorings)
-            .HasForeignKey(l => l.SessionId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // LiveMonitoring -> Teacher
-        modelBuilder.Entity<LiveMonitoring>()
-            .HasOne(l => l.Teacher)
-            .WithMany()
-            .HasForeignKey(l => l.TeacherId)
-            .OnDelete(DeleteBehavior.Restrict);
 
         // Payment -> Buyer (User)
         modelBuilder.Entity<Payment>()

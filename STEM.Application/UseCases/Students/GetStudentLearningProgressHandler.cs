@@ -3,7 +3,6 @@ using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Participants;
 using STEM.Core.Entities.Projects;
-using STEM.Core.Entities.Simulations;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 using ClassEntity = STEM.Core.Entities.Classes.Class;
@@ -24,7 +23,6 @@ public class GetStudentLearningProgressHandler
     private readonly IRepository<Lesson> _lessonRepository;
     private readonly IRepository<Assignment> _assignmentRepository;
     private readonly IRepository<ProjectMember> _projectMemberRepository;
-    private readonly IRepository<SimulationSession> _simulationSessionRepository;
     private readonly ISubmissionRepository _submissionRepository;
 
     public GetStudentLearningProgressHandler(
@@ -37,7 +35,6 @@ public class GetStudentLearningProgressHandler
         IRepository<Lesson> lessonRepository,
         IRepository<Assignment> assignmentRepository,
         IRepository<ProjectMember> projectMemberRepository,
-        IRepository<SimulationSession> simulationSessionRepository,
         ISubmissionRepository submissionRepository)
     {
         _userRepository = userRepository;
@@ -49,7 +46,6 @@ public class GetStudentLearningProgressHandler
         _lessonRepository = lessonRepository;
         _assignmentRepository = assignmentRepository;
         _projectMemberRepository = projectMemberRepository;
-        _simulationSessionRepository = simulationSessionRepository;
         _submissionRepository = submissionRepository;
     }
 
@@ -88,8 +84,6 @@ public class GetStudentLearningProgressHandler
             ? new List<Assignment>()
             : (await _assignmentRepository.FindAsync(assignment => classIds.Contains(assignment.ClassId), cancellationToken)).ToList();
         var projectMembers = (await _projectMemberRepository.FindAsync(projectMember => projectMember.StudentId == studentId, cancellationToken))
-            .ToList();
-        var simulationSessions = (await _simulationSessionRepository.FindAsync(session => session.StudentId == studentId, cancellationToken))
             .ToList();
 
         var courseById = courses.ToDictionary(course => course.Id);
@@ -132,7 +126,6 @@ public class GetStudentLearningProgressHandler
             })
             .ToList();
 
-        // Calculate grades and average (only Report and Lab)
         var gradedSubmissions = await _submissionRepository.GetGradedByStudentIdAsync(studentId, cancellationToken);
         var recentGrades = gradedSubmissions
             .OrderByDescending(s => s.GradedAt)
@@ -165,7 +158,7 @@ public class GetStudentLearningProgressHandler
             TotalLessons = lessons.Count,
             TotalAssignments = assignments.Count,
             TotalProjects = projectMembers.Select(projectMember => projectMember.ProjectId).Distinct().Count(),
-            TotalSimulationSessions = simulationSessions.Count,
+            TotalSimulationSessions = 0,
             TotalGrades = totalGrades,
             AverageScore = averageScore,
             CertificatesEarned = 0,
@@ -175,11 +168,6 @@ public class GetStudentLearningProgressHandler
             Classes = classProgress,
             RecentGrades = recentGrades
         };
-    }
-
-    private static decimal CalculateRate(int value, int total)
-    {
-        return total == 0 ? 0 : Math.Round(value * 100m / total, 2);
     }
 
     private static string GetClassStatus(ClassEntity classEntity, DateTime now)

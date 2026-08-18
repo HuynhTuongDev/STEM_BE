@@ -36,19 +36,6 @@ public class ScheduleRepository : Repository<Schedule>, IScheduleRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<Room?> GetRoomByIdAsync(int roomId, CancellationToken cancellationToken = default)
-    {
-        return await _context.Rooms.FindAsync(new object[] { roomId }, cancellationToken);
-    }
-
-    public async Task<IEnumerable<Room>> GetAllRoomsAsync(CancellationToken cancellationToken = default)
-    {
-        return await _context.Rooms
-            .Where(r => r.Status == "Available")
-            .OrderBy(r => r.RoomCode)
-            .ToListAsync(cancellationToken);
-    }
-
     public async Task<IEnumerable<StudentScheduleConflict>> GetStudentScheduleConflictsAsync(
         int classId,
         DateTime startTime,

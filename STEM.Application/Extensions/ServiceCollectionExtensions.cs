@@ -10,9 +10,7 @@ using STEM.Application.UseCases.Users;
 using STEM.Application.UseCases.Teachers;
 using STEM.Application.UseCases.Attendance;
 using STEM.Application.UseCases.Assignments;
-using STEM.Application.UseCases.Quizzes;
 using STEM.Application.UseCases.Grading;
-using STEM.Application.UseCases.VirtualLabs;
 using STEM.Application.UseCases.Students;
 using STEM.Application.UseCases.Schedules;
 using STEM.Application.UseCases.Simulation.Abstractions;
@@ -53,7 +51,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<NotificationHandler>();
 
         // Simulation Handlers
-        services.AddScoped<SimulationHandler>();
         services.AddScoped<AiSuggestHandler>();
         services.AddScoped<LabAiAssistHandler>();
         services.AddSingleton<VirtualLabDiagramService>();
@@ -103,13 +100,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetMySubmissionHandler>();
         services.AddScoped<GetMySubmissionsHandler>();
 
-        // Quiz Handlers
-        services.AddScoped<CreateQuizHandler>();
-        services.AddScoped<GetQuizzesHandler>();
-        services.AddScoped<GetQuizDetailHandler>();
-        services.AddScoped<UpdateQuizHandler>();
-        services.AddScoped<DeleteQuizHandler>();
-
         // Grading Handlers
         services.AddScoped<GetSubmissionsHandler>();
         services.AddScoped<GetSubmissionDetailHandler>();
@@ -123,13 +113,6 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetResubmitRequestsHandler>();
         services.AddScoped<ApproveResubmitRequestHandler>();
         services.AddScoped<RejectResubmitRequestHandler>();
-
-        // Virtual Lab Handlers
-        services.AddScoped<CreateVirtualLabHandler>();
-        services.AddScoped<GetVirtualLabsHandler>();
-        services.AddScoped<GetVirtualLabDetailHandler>();
-        services.AddScoped<UpdateVirtualLabHandler>();
-        services.AddScoped<DeleteVirtualLabHandler>();
 
         // Student Handlers
         services.AddScoped<GetStudentsHandler>();
