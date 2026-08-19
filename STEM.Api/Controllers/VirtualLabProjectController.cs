@@ -21,15 +21,18 @@ public class VirtualLabProjectController : ControllerBase
     private readonly IVirtualLabProjectService _service;
     private readonly IVirtualLabRuntimeService _runtimeService;
     private readonly LabAiAssistHandler _aiAssistHandler;
+    private readonly GetUserAiQuotaHandler _aiQuotaHandler;
 
     public VirtualLabProjectController(
         IVirtualLabProjectService service,
         IVirtualLabRuntimeService runtimeService,
-        LabAiAssistHandler aiAssistHandler)
+        LabAiAssistHandler aiAssistHandler,
+        GetUserAiQuotaHandler aiQuotaHandler)
     {
         _service = service;
         _runtimeService = runtimeService;
         _aiAssistHandler = aiAssistHandler;
+        _aiQuotaHandler = aiQuotaHandler;
     }
 
     [HttpPost]
@@ -205,6 +208,21 @@ public class VirtualLabProjectController : ControllerBase
 
         var response = await _aiAssistHandler.Handle(request, GetCurrentUserId(), cancellationToken);
         return Ok(response);
+    }
+
+    // Lấy thông tin AI quota của user hiện tại
+    [HttpGet("ai-quota")]
+    public async Task<IActionResult> GetAiQuota(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _aiQuotaHandler.Handle(GetCurrentUserId(), cancellationToken);
+            return Ok(response);
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
     }
 
     private int GetCurrentUserId()

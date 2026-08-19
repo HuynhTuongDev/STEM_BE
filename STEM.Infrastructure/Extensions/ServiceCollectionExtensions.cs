@@ -3,11 +3,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Simulation.Abstractions;
-using STEM.Application.Interfaces;
+using STEM.Core.Interfaces;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Repositories;
 using STEM.Infrastructure.Services;
 using STEM.Infrastructure.Services.Authentication;
+using STEM.Infrastructure.Services.Payments;
 using STEM.Infrastructure.Services.Simulation;
 using STEM.Infrastructure.Services.Wokwi;
 using Supabase;
@@ -64,8 +65,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ISimulationEventStore, SimulationEventStore>();
         services.AddScoped<IFirmwareCacheService, FirmwareCacheService>();
         services.AddSingleton<IPrecompileTriggerService, PrecompileTriggerService>();
+        services.AddHostedService<TokenExpirationBackgroundService>();
         services.AddScoped<IAiQuotaUsageStore, AiQuotaUsageStore>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
+
+        // AI Quota Handlers
+        services.AddScoped<STEM.Application.UseCases.Simulation.GetUserAiQuotaHandler>();
+        services.AddScoped<STEM.Application.UseCases.Simulation.LabAiAssistHandler>();
 
         // Supabase Configuration
         var supabaseUrl = configuration["Supabase:Url"];
@@ -83,6 +89,33 @@ public static class ServiceCollectionExtensions
 
         services.AddScoped<IFileRepository, FileEntityRepository>();
         services.AddScoped<IFileService, SupabaseStorageService>();
+
+        // Payment Repositories
+        services.AddScoped<IPaymentPackageRepository, PaymentPackageRepository>();
+        services.AddScoped<IPaymentRepository, PaymentRepository>();
+        services.AddScoped<ITokenAccountRepository, TokenAccountRepository>();
+        services.AddScoped<ITokenTransactionRepository, TokenTransactionRepository>();
+        services.AddScoped<ITokenAllocationRepository, TokenAllocationRepository>();
+
+        // PayOS Service
+        services.AddScoped<IPayOSService, PayOSService>();
+
+        // Payment Handlers
+        services.AddScoped<STEM.Application.UseCases.Payments.GetPackagesHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.CreatePaymentHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.GetBalanceHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.GetPaymentsHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.GetAllocationsHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.GetTransactionsHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.AllocateTokensHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.RevokeAllocationHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.PaymentWebhookHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.GetUsersWithTokensHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.CreatePackageHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.UpdatePackageHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.DeletePackageHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.RevokeExpiredAllocationsHandler>();
+        services.AddScoped<STEM.Application.UseCases.Payments.BulkAllocateTokensByRoleHandler>();
 
         return services;
     }

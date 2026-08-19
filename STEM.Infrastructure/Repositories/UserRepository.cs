@@ -194,4 +194,15 @@ public class UserRepository : Repository<User>, IUserRepository
 
         return (users, totalCount);
     }
+
+    public async Task<IEnumerable<User>> GetBySchoolIdAsync(int schoolId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(u => u.Role)
+            .Include(u => u.School)
+            .Where(u => u.SchoolId == schoolId)
+            .OrderBy(u => u.RoleId)
+            .ThenBy(u => u.FullName)
+            .ToListAsync(cancellationToken);
+    }
 }

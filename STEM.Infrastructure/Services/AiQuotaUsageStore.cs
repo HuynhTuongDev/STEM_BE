@@ -51,4 +51,12 @@ public class AiQuotaUsageStore : IAiQuotaUsageStore
         await _context.SaveChangesAsync(cancellationToken);
         return row.TotalTokens;
     }
+
+    public async Task<int> GetTotalUsedByUserAsync(int userId, CancellationToken cancellationToken = default)
+    {
+        return await _context.AiQuotaUsages
+            .AsNoTracking()
+            .Where(u => u.UserId == userId)
+            .SumAsync(u => u.TotalTokens, cancellationToken);
+    }
 }

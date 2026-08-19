@@ -7,6 +7,7 @@ using STEM.Core.Entities.Assessments;
 using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Payments;
 using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Simulations;
@@ -54,6 +55,13 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Rubric> Rubrics => Set<Rubric>();
 
     public DbSet<Notification> Notifications => Set<Notification>();
+
+    // Payment entities
+    public DbSet<PaymentPackage> PaymentPackages => Set<PaymentPackage>();
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<TokenAccount> TokenAccounts => Set<TokenAccount>();
+    public DbSet<TokenTransaction> TokenTransactions => Set<TokenTransaction>();
+    public DbSet<TokenAllocation> TokenAllocations => Set<TokenAllocation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -754,5 +762,176 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             new ComponentGlueRegistry { ComponentType = "wokwi-line-tracking-3ch", Label = "Line Tracking Sensor (3 kênh)", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"OUT1","kind":"digital_input"},{"name":"OUT2","kind":"digital_input"},{"name":"OUT3","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
             new ComponentGlueRegistry { ComponentType = "wokwi-line-tracking-5ch", Label = "Line Tracking Sensor (5 kênh)", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"OUT1","kind":"digital_input"},{"name":"OUT2","kind":"digital_input"},{"name":"OUT3","kind":"digital_input"},{"name":"OUT4","kind":"digital_input"},{"name":"OUT5","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
             new ComponentGlueRegistry { ComponentType = "wokwi-lcd2004", Label = "LCD 20x4 I2C", Supported = true, PinRequirementsJson = """{"pins":[{"name":"GND","kind":"ground"},{"name":"VCC","kind":"power"},{"name":"SDA","kind":"i2c"},{"name":"SCL","kind":"i2c"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime });
+
+        // Payment Package configurations
+        modelBuilder.Entity<PaymentPackage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.Price).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Currency).HasMaxLength(10).HasDefaultValue("VND");
+            entity.Property(e => e.Features).HasColumnType("jsonb");
+        });
+
+        // Payment configurations
+        modelBuilder.Entity<Payment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.TransactionId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Currency).HasMaxLength(10).HasDefaultValue("VND");
+            entity.Property(e => e.GatewayTransactionId).HasMaxLength(100);
+            entity.Property(e => e.PaymentLinkId).HasMaxLength(100);
+            entity.Property(e => e.CheckoutUrl).HasMaxLength(500);
+            entity.Property(e => e.Metadata).HasColumnType("jsonb");
+            entity.HasIndex(e => e.TransactionId).IsUnique();
+            entity.HasIndex(e => e.PaymentLinkId);
+            entity.HasIndex(e => e.SchoolId);
+
+            entity.HasOne(e => e.Package)
+                .WithMany(p => p.Payments)
+                .HasForeignKey(e => e.PackageId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.School)
+                .WithMany()
+                .HasForeignKey(e => e.SchoolId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        // Token Account configurations
+        modelBuilder.Entity<TokenAccount>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.SchoolId).IsUnique();
+
+            entity.HasOne(e => e.School)
+                .WithMany()
+                .HasForeignKey(e => e.SchoolId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Token Transaction configurations
+        modelBuilder.Entity<TokenTransaction>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.ReferenceId).HasMaxLength(100);
+            entity.Property(e => e.Metadata).HasColumnType("jsonb");
+            entity.HasIndex(e => e.AccountId);
+            entity.HasIndex(e => e.PaymentId);
+
+            entity.HasOne(e => e.Payment)
+                .WithMany(p => p.Transactions)
+                .HasForeignKey(e => e.PaymentId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.Account)
+                .WithMany(a => a.Transactions)
+                .HasForeignKey(e => e.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // Token Allocation configurations
+        modelBuilder.Entity<TokenAllocation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Notes).HasMaxLength(500);
+            entity.Property(e => e.RevocationReason).HasMaxLength(500);
+            entity.HasIndex(e => new { e.AccountId, e.UserId });
+            entity.HasIndex(e => e.UserId);
+
+            entity.HasOne(e => e.Account)
+                .WithMany(a => a.Allocations)
+                .HasForeignKey(e => e.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.AllocatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.AllocatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Seed default payment packages - based on student limit
+        var now = DateTime.UtcNow;
+        var endOfMonth = new DateTime(now.Year, now.Month, DateTime.DaysInMonth(now.Year, now.Month), 23, 59, 59, DateTimeKind.Utc);
+        var packageSeedTime = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        modelBuilder.Entity<PaymentPackage>().HasData(
+            new PaymentPackage
+            {
+                Id = 1,
+                Name = "Starter",
+                Description = "Dành cho trường có quy mô nhỏ",
+                Price = 299000,
+                Currency = "VND",
+                TokenAmount = 4000000,
+                StudentLimit = 50,
+                IsActive = true,
+                IsFeatured = false,
+                Features = "[\"Hỗ trợ AI cơ bản\", \"Tối đa 50 học sinh\", \"Báo cáo hàng tháng\"]",
+                DisplayOrder = 1,
+                ExpiresAt = endOfMonth,
+                CreatedAt = packageSeedTime,
+                UpdatedAt = packageSeedTime
+            },
+            new PaymentPackage
+            {
+                Id = 2,
+                Name = "Professional",
+                Description = "Dành cho trường có quy mô trung bình",
+                Price = 499000,
+                Currency = "VND",
+                TokenAmount = 8000000,
+                StudentLimit = 200,
+                IsActive = true,
+                IsFeatured = true,
+                Features = "[\"Hỗ trợ AI nâng cao\", \"Tối đa 200 học sinh\", \"Báo cáo chi tiết\", \"Ưu tiên hỗ trợ kỹ thuật\"]",
+                DisplayOrder = 2,
+                ExpiresAt = endOfMonth,
+                CreatedAt = packageSeedTime,
+                UpdatedAt = packageSeedTime
+            },
+            new PaymentPackage
+            {
+                Id = 3,
+                Name = "Enterprise",
+                Description = "Dành cho trường có quy mô lớn",
+                Price = 899000,
+                Currency = "VND",
+                TokenAmount = 16000000,
+                StudentLimit = 500,
+                IsActive = true,
+                IsFeatured = false,
+                Features = "[\"Hỗ trợ AI toàn diện\", \"Tối đa 500 học sinh\", \"Báo cáo & phân tích nâng cao\", \"Hỗ trợ 24/7\"]",
+                DisplayOrder = 3,
+                ExpiresAt = endOfMonth,
+                CreatedAt = packageSeedTime,
+                UpdatedAt = packageSeedTime
+            },
+            new PaymentPackage
+            {
+                Id = 4,
+                Name = "Unlimited",
+                Description = "Không giới hạn học sinh",
+                Price = 1999000,
+                Currency = "VND",
+                TokenAmount = 50000000,
+                StudentLimit = 999999,
+                IsActive = true,
+                IsFeatured = false,
+                Features = "[\"Hỗ trợ AI toàn diện\", \"Không giới hạn học sinh\", \"Báo cáo & phân tích nâng cao\", \"Hỗ trợ 24/7\", \"API tùy chỉnh\"]",
+                DisplayOrder = 4,
+                ExpiresAt = endOfMonth,
+                CreatedAt = packageSeedTime,
+                UpdatedAt = packageSeedTime
+            }
+        );
     }
 }

@@ -2,6 +2,8 @@ using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using STEM.Application.Dtos.Simulation;
 using STEM.Application.Interfaces;
+using STEM.Core.Interfaces;
+using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Simulation;
 
@@ -13,6 +15,9 @@ namespace STEM.Application.UseCases.Simulation;
 ///
 /// Handler KHÔNG biết provider AI cụ thể là ai (Anthropic/Beeknoee/...), URL, hay API key —
 /// chỉ phụ thuộc <see cref="ILabAiProvider"/>. Provider cụ thể được chọn qua DI registration.
+///
+/// Token quota: mỗi user có TokenAllocation riêng từ school admin phân bổ.
+/// Khi gọi AI, trừ token từ allocation của user đó.
 /// </summary>
 public class LabAiAssistHandler
 {
@@ -20,19 +25,26 @@ public class LabAiAssistHandler
     private readonly IConfiguration _configuration;
     private readonly IAiQuotaUsageStore _quotaStore;
     private readonly ILabService _labService;
-
-    private const int DefaultDailyTokenLimit = 50000;
+    private readonly ITokenAllocationRepository _allocationRepository;
+    private readonly ITokenAccountRepository _accountRepository;
+    private readonly IUserRepository _userRepository;
 
     public LabAiAssistHandler(
         ILabAiProvider aiProvider,
         IConfiguration configuration,
         IAiQuotaUsageStore quotaStore,
-        ILabService labService)
+        ILabService labService,
+        ITokenAllocationRepository allocationRepository,
+        ITokenAccountRepository accountRepository,
+        IUserRepository userRepository)
     {
         _aiProvider = aiProvider;
         _configuration = configuration;
         _quotaStore = quotaStore;
         _labService = labService;
+        _allocationRepository = allocationRepository;
+        _accountRepository = accountRepository;
+        _userRepository = userRepository;
     }
 
     public async Task<LabAiAssistResponse> Handle(
@@ -40,14 +52,104 @@ public class LabAiAssistHandler
         int userId,
         CancellationToken cancellationToken = default)
     {
-        var dailyLimit = _configuration.GetValue<int?>("Anthropic:DailyTokenLimit") ?? DefaultDailyTokenLimit;
-        var usedSoFar = await _quotaStore.GetTodayUsedTokensAsync(userId, cancellationToken);
-
-        if (usedSoFar >= dailyLimit)
+        // 1. Lấy thông tin user để biết schoolId
+        var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+        if (user == null || user.SchoolId == null)
         {
-            return QuotaExceededResponse(usedSoFar, dailyLimit);
+            return new LabAiAssistResponse
+            {
+                Success = false,
+                Answer = "Không tìm thấy thông tin người dùng.",
+                RequiresConfirmation = false,
+                ProposedChanges = new List<ProposedChangeDto>(),
+                ErrorMessage = "user_not_found"
+            };
         }
 
+        // 2. Lấy TokenAccount của school
+        var account = await _accountRepository.GetBySchoolIdAsync(user.SchoolId.Value, cancellationToken);
+        if (account == null)
+        {
+            return new LabAiAssistResponse
+            {
+                Success = false,
+                Answer = "Trường của bạn chưa mua gói AI nào.",
+                RequiresConfirmation = false,
+                ProposedChanges = new List<ProposedChangeDto>(),
+                ErrorMessage = "no_token_account"
+            };
+        }
+
+        // 3. Lấy allocation của user hoặc check school quota
+        var allocation = await _allocationRepository.GetActiveAllocationAsync(account.Id, userId, cancellationToken);
+        
+        // 4. Tính quota còn lại (ưu tiên user allocation, không có thì dùng school quota)
+        int userQuotaRemaining;
+        int userAllocated;
+        DateTime? quotaExpiry;
+        
+        if (allocation != null)
+        {
+            userQuotaRemaining = allocation.AllocatedTokens - allocation.UsedTokens;
+            userAllocated = allocation.AllocatedTokens;
+            quotaExpiry = allocation.ExpiresAt;
+        }
+        else
+        {
+            // Không có allocation riêng, dùng school quota
+            var schoolUsedByUser = await _quotaStore.GetTotalUsedByUserAsync(userId, cancellationToken);
+            userQuotaRemaining = account.TokensRemaining;
+            userAllocated = account.TotalTokensPurchased;
+            quotaExpiry = account.ExpiresAt;
+        }
+
+        // 5. Kiểm tra quota
+        if (userQuotaRemaining <= 0)
+        {
+            return new LabAiAssistResponse
+            {
+                Success = false,
+                Answer = "Bạn đã hết quota AI. Vui lòng liên hệ quản trị viên trường để được cấp thêm.",
+                RequiresConfirmation = false,
+                ProposedChanges = new List<ProposedChangeDto>(),
+                ErrorMessage = "quota_exhausted",
+                Usage = new AiUsageDto
+                {
+                    PromptTokens = 0,
+                    CompletionTokens = 0,
+                    TotalTokens = 0,
+                    DailyUsedTokens = 0,
+                    DailyLimitTokens = userAllocated,
+                    RemainingDailyTokens = 0,
+                    IsEstimated = false
+                }
+            };
+        }
+
+        // 6. Kiểm tra hết hạn
+        if (quotaExpiry.HasValue && quotaExpiry.Value < DateTime.UtcNow)
+        {
+            return new LabAiAssistResponse
+            {
+                Success = false,
+                Answer = "Gói AI của bạn đã hết hạn. Vui lòng liên hệ quản trị viên trường.",
+                RequiresConfirmation = false,
+                ProposedChanges = new List<ProposedChangeDto>(),
+                ErrorMessage = "quota_expired",
+                Usage = new AiUsageDto
+                {
+                    PromptTokens = 0,
+                    CompletionTokens = 0,
+                    TotalTokens = 0,
+                    DailyUsedTokens = 0,
+                    DailyLimitTokens = userAllocated,
+                    RemainingDailyTokens = 0,
+                    IsEstimated = false
+                }
+            };
+        }
+
+        // 7. Kiểm tra AI provider configured
         if (!_aiProvider.IsConfigured)
         {
             return new LabAiAssistResponse
@@ -56,10 +158,21 @@ public class LabAiAssistHandler
                 Answer = "Tính năng AI Assistant chưa được cấu hình API key ở server. Vui lòng liên hệ quản trị viên.",
                 RequiresConfirmation = false,
                 ProposedChanges = new List<ProposedChangeDto>(),
-                ErrorMessage = "missing_api_key"
+                ErrorMessage = "missing_api_key",
+                Usage = new AiUsageDto
+                {
+                    PromptTokens = 0,
+                    CompletionTokens = 0,
+                    TotalTokens = 0,
+                    DailyUsedTokens = 0,
+                    DailyLimitTokens = userAllocated,
+                    RemainingDailyTokens = userQuotaRemaining,
+                    IsEstimated = false
+                }
             };
         }
 
+        // 8. Gọi AI provider
         string rawText;
         int promptTokens;
         int completionTokens;
@@ -79,18 +192,71 @@ public class LabAiAssistHandler
                 Answer = "Không thể kết nối tới AI lúc này, vui lòng thử lại sau.",
                 RequiresConfirmation = false,
                 ProposedChanges = new List<ProposedChangeDto>(),
-                ErrorMessage = ex.Message
+                ErrorMessage = ex.Message,
+                Usage = new AiUsageDto
+                {
+                    PromptTokens = 0,
+                    CompletionTokens = 0,
+                    TotalTokens = 0,
+                    DailyUsedTokens = 0,
+                    DailyLimitTokens = userAllocated,
+                    RemainingDailyTokens = userQuotaRemaining,
+                    IsEstimated = false
+                }
             };
         }
 
+        var totalTokensThisCall = promptTokens + completionTokens;
+
+        // 9. Kiểm tra quota sau khi biết số token thực tế
+        if (totalTokensThisCall > userQuotaRemaining)
+        {
+            return new LabAiAssistResponse
+            {
+                Success = false,
+                Answer = $"Yêu cầu này cần {totalTokensThisCall} tokens, nhưng bạn chỉ còn {userQuotaRemaining} tokens. Vui lòng liên hệ quản trị viên trường để được cấp thêm.",
+                RequiresConfirmation = false,
+                ProposedChanges = new List<ProposedChangeDto>(),
+                ErrorMessage = "insufficient_quota",
+                Usage = new AiUsageDto
+                {
+                    PromptTokens = promptTokens,
+                    CompletionTokens = completionTokens,
+                    TotalTokens = totalTokensThisCall,
+                    DailyUsedTokens = 0,
+                    DailyLimitTokens = userAllocated,
+                    RemainingDailyTokens = userQuotaRemaining,
+                    IsEstimated = false
+                }
+            };
+        }
+
+        // 10. Parse AI response
         var supportedComponentTypes = (await _labService.GetComponentGlueRegistryAsync(supportedOnly: true, cancellationToken))
             .Select(c => c.ComponentType)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var parsed = ParseClaudeResponse(rawText, supportedComponentTypes);
 
-        var totalTokensThisCall = promptTokens + completionTokens;
+        // 11. Trừ quota và lưu usage
+        account.TokensUsed += totalTokensThisCall;
+        if (allocation != null)
+        {
+            allocation.UsedTokens += totalTokensThisCall;
+            _allocationRepository.Update(allocation);
+        }
+        else
+        {
+            account.TokensRemaining -= totalTokensThisCall;
+        }
+        _accountRepository.Update(account);
+        await _accountRepository.SaveChangesAsync(cancellationToken);
+
+        // Lưu vào AiQuotaUsages để track theo ngày
         var newDailyTotal = await _quotaStore.AddTodayUsageAsync(userId, totalTokensThisCall, cancellationToken);
+
+        // Tính quota còn lại sau khi trừ
+        var quotaRemainingAfter = userQuotaRemaining - totalTokensThisCall;
 
         parsed.Success = true;
         parsed.Usage = new AiUsageDto
@@ -99,34 +265,12 @@ public class LabAiAssistHandler
             CompletionTokens = completionTokens,
             TotalTokens = totalTokensThisCall,
             DailyUsedTokens = newDailyTotal,
-            DailyLimitTokens = dailyLimit,
-            RemainingDailyTokens = Math.Max(0, dailyLimit - newDailyTotal),
+            DailyLimitTokens = userAllocated,
+            RemainingDailyTokens = Math.Max(0, quotaRemainingAfter),
             IsEstimated = false
         };
 
         return parsed;
-    }
-
-    private static LabAiAssistResponse QuotaExceededResponse(int usedSoFar, int dailyLimit)
-    {
-        return new LabAiAssistResponse
-        {
-            Success = false,
-            Answer = "Bạn đã dùng hết hạn mức token AI cho hôm nay. Vui lòng thử lại vào ngày mai.",
-            RequiresConfirmation = false,
-            ProposedChanges = new List<ProposedChangeDto>(),
-            ErrorMessage = "daily_quota_exceeded",
-            Usage = new AiUsageDto
-            {
-                PromptTokens = 0,
-                CompletionTokens = 0,
-                TotalTokens = 0,
-                DailyUsedTokens = usedSoFar,
-                DailyLimitTokens = dailyLimit,
-                RemainingDailyTokens = Math.Max(0, dailyLimit - usedSoFar),
-                IsEstimated = false
-            }
-        };
     }
 
     private static string BuildUserMessage(LabAiAssistRequest request)
