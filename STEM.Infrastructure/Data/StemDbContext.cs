@@ -6,6 +6,7 @@ using STEM.Core.Entities;
 using STEM.Core.Entities.Assessments;
 using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Common;
+using STEM.Core.Entities.Components;
 using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Schools;
@@ -50,6 +51,9 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<LabProgress> LabProgresses => Set<LabProgress>();
     public DbSet<ComponentGlueRegistry> ComponentGlueRegistry => Set<ComponentGlueRegistry>();
     public DbSet<AiQuotaUsage> AiQuotaUsages => Set<AiQuotaUsage>();
+
+    public DbSet<ComponentDefinition> ComponentDefinitions => Set<ComponentDefinition>();
+    public DbSet<ComponentSource> ComponentSources => Set<ComponentSource>();
 
     public DbSet<Rubric> Rubrics => Set<Rubric>();
 
@@ -754,5 +758,59 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             new ComponentGlueRegistry { ComponentType = "wokwi-line-tracking-3ch", Label = "Line Tracking Sensor (3 kênh)", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"OUT1","kind":"digital_input"},{"name":"OUT2","kind":"digital_input"},{"name":"OUT3","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
             new ComponentGlueRegistry { ComponentType = "wokwi-line-tracking-5ch", Label = "Line Tracking Sensor (5 kênh)", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"OUT1","kind":"digital_input"},{"name":"OUT2","kind":"digital_input"},{"name":"OUT3","kind":"digital_input"},{"name":"OUT4","kind":"digital_input"},{"name":"OUT5","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
             new ComponentGlueRegistry { ComponentType = "wokwi-lcd2004", Label = "LCD 20x4 I2C", Supported = true, PinRequirementsJson = """{"pins":[{"name":"GND","kind":"ground"},{"name":"VCC","kind":"power"},{"name":"SDA","kind":"i2c"},{"name":"SCL","kind":"i2c"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime });
+
+        // ComponentDefinition / ComponentSource — Multi-Provider Component
+        // Registry (acquisition side). Deliberately separate tables from
+        // ComponentGlueRegistry above (kept as-is, unrelated primary key
+        // shape — string canonical type vs Guid identity here).
+        modelBuilder.Entity<ComponentDefinition>()
+            .HasIndex(component => component.CanonicalKey)
+            .IsUnique();
+
+        modelBuilder.Entity<ComponentDefinition>()
+            .Property(component => component.CanonicalKey)
+            .HasMaxLength(120);
+
+        modelBuilder.Entity<ComponentDefinition>()
+            .Property(component => component.Name)
+            .HasMaxLength(200);
+
+        modelBuilder.Entity<ComponentDefinition>()
+            .Property(component => component.Status)
+            .HasMaxLength(30);
+
+        modelBuilder.Entity<ComponentDefinition>()
+            .Property(component => component.SimulationComponentType)
+            .HasMaxLength(80);
+
+        modelBuilder.Entity<ComponentDefinition>()
+            .Property(component => component.PinsJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<ComponentSource>()
+            .HasOne(source => source.Component)
+            .WithMany(component => component.Sources)
+            .HasForeignKey(source => source.ComponentId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<ComponentSource>()
+            .HasIndex(source => new { source.Provider, source.ExternalId })
+            .IsUnique();
+
+        modelBuilder.Entity<ComponentSource>()
+            .Property(source => source.Provider)
+            .HasMaxLength(60);
+
+        modelBuilder.Entity<ComponentSource>()
+            .Property(source => source.ExternalId)
+            .HasMaxLength(300);
+
+        modelBuilder.Entity<ComponentSource>()
+            .Property(source => source.LicenseStatus)
+            .HasMaxLength(30);
+
+        modelBuilder.Entity<ComponentSource>()
+            .Property(source => source.AssetsJson)
+            .HasColumnType("jsonb");
     }
 }
