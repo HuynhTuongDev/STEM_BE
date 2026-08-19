@@ -84,6 +84,22 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFileRepository, FileEntityRepository>();
         services.AddScoped<IFileService, SupabaseStorageService>();
 
+        // Multi-Provider Component Architecture (acquisition side only —
+        // never referenced by VirtualLabRuntimeService/ISimulationRunnerResolver).
+        services.Configure<STEM.Infrastructure.VirtualLab.Components.Providers.Fritzing.FritzingOptions>(
+            configuration.GetSection(STEM.Infrastructure.VirtualLab.Components.Providers.Fritzing.FritzingOptions.SectionName));
+        services.AddHttpClient(STEM.Application.UseCases.Components.Providers.Fritzing.FritzingConstants.ProviderName, client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("StemFlow-ComponentImporter/1.0");
+        });
+        services.AddSingleton<STEM.Application.UseCases.Components.Abstractions.IComponentProvider,
+            STEM.Infrastructure.VirtualLab.Components.Providers.Fritzing.FritzingComponentProvider>();
+        services.AddSingleton<STEM.Application.UseCases.Components.Abstractions.IComponentNormalizer,
+            STEM.Application.UseCases.Components.ComponentNormalizer>();
+        services.AddScoped<STEM.Application.UseCases.Components.Abstractions.IComponentRegistry,
+            STEM.Infrastructure.VirtualLab.Components.ComponentRegistryService>();
+
         return services;
     }
 }
