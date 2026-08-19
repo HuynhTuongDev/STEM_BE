@@ -3,8 +3,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Simulation.Abstractions;
+using STEM.Application.Interfaces;
 using STEM.Core.Repository;
-using STEM.Infrastructure.Data;
 using STEM.Infrastructure.Repositories;
 using STEM.Infrastructure.Services;
 using STEM.Infrastructure.Services.Authentication;
@@ -33,26 +33,17 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IUserRepository, UserRepository>();
         services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
-        services.AddScoped<ISimulationRepository, SimulationRepository>();
-        services.AddScoped<ISimulationSessionRepository, SimulationSessionRepository>();
         services.AddScoped<ICourseRepository, CourseRepository>();
         services.AddScoped<IClassRepository, ClassRepository>();
         services.AddScoped<IAttendanceRepository, AttendanceRepository>();
         services.AddScoped<IAssignmentRepository, AssignmentRepository>();
         services.AddScoped<IRubricRepository, RubricRepository>();
-        services.AddScoped<IQuizRepository, QuizRepository>();
         services.AddScoped<ISubmissionRepository, SubmissionRepository>();
         services.AddScoped<ISubmissionCommentRepository, SubmissionCommentRepository>();
         services.AddScoped<IResubmitRequestRepository, ResubmitRequestRepository>();
         services.AddScoped<ISchoolRepository, SchoolRepository>();
         services.AddScoped<IScheduleRepository, ScheduleRepository>();
         services.AddScoped<IEnrollmentRepository, EnrollmentRepository>();
-
-        // Payment Repositories
-        services.AddScoped<IPaymentRepository, PaymentRepository>();
-        services.AddScoped<IPaymentPackageRepository, PaymentPackageRepository>();
-        services.AddScoped<ITokenAccountRepository, TokenAccountRepository>();
-        services.AddScoped<ITokenTransactionRepository, TokenTransactionRepository>();
 
         services.AddScoped<IJwtProvider, JwtProvider>();
         services.AddScoped<ITokenService, TokenService>();

@@ -7,10 +7,7 @@ using STEM.Core.Entities.Assessments;
 using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Courses;
-using STEM.Core.Entities.Participants;
-using STEM.Core.Entities.Payments;
 using STEM.Core.Entities.Projects;
-using STEM.Core.Entities.Quizzes;
 using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Simulations;
 using STEM.Core.Entities.Users;
@@ -36,10 +33,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<AttendanceRecord> AttendanceRecords => Set<AttendanceRecord>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<Schedule> Schedules => Set<Schedule>();
-    public DbSet<Room> Rooms => Set<Room>();
 
-    public DbSet<Project> Projects => Set<Project>();
-    public DbSet<ProjectMember> ProjectMembers => Set<ProjectMember>();
     public DbSet<Assignment> Assignments => Set<Assignment>();
     public DbSet<AssignmentQuizDetail> AssignmentQuizDetails => Set<AssignmentQuizDetail>();
     public DbSet<AssignmentReportDetail> AssignmentReportDetails => Set<AssignmentReportDetail>();
@@ -49,11 +43,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Metric> Metrics => Set<Metric>();
     public DbSet<SubmissionComment> SubmissionComments => Set<SubmissionComment>();
     public DbSet<ResubmitRequest> ResubmitRequests => Set<ResubmitRequest>();
-    public DbSet<SimulationEntity> Simulations => Set<SimulationEntity>();
-    public DbSet<SimulationTemplate> SimulationTemplates => Set<SimulationTemplate>();
-    public DbSet<SimulationSession> SimulationSessions => Set<SimulationSession>();
-    public DbSet<ExperimentLog> ExperimentLogs => Set<ExperimentLog>();
-    public DbSet<LiveMonitoring> LiveMonitorings => Set<LiveMonitoring>();
 
     public DbSet<VirtualLabProject> VirtualLabProjects => Set<VirtualLabProject>();
     public DbSet<Lab> Labs => Set<Lab>();
@@ -62,19 +51,9 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<ComponentGlueRegistry> ComponentGlueRegistry => Set<ComponentGlueRegistry>();
     public DbSet<AiQuotaUsage> AiQuotaUsages => Set<AiQuotaUsage>();
 
-    public DbSet<Quiz> Quizzes => Set<Quiz>();
-    public DbSet<QuizQuestion> QuizQuestions => Set<QuizQuestion>();
-    public DbSet<QuizAnswer> QuizAnswers => Set<QuizAnswer>();
-
     public DbSet<Rubric> Rubrics => Set<Rubric>();
 
     public DbSet<Notification> Notifications => Set<Notification>();
-
-    // Payment
-    public DbSet<Payment> Payments => Set<Payment>();
-    public DbSet<PaymentPackage> PaymentPackages => Set<PaymentPackage>();
-    public DbSet<TokenAccount> TokenAccounts => Set<TokenAccount>();
-    public DbSet<TokenTransaction> TokenTransactions => Set<TokenTransaction>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -144,26 +123,14 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(c => c.SchoolId)
             .OnDelete(DeleteBehavior.SetNull);
 
-        // Quiz -> Class (thay vì Course)
-        modelBuilder.Entity<Quiz>()
-            .HasOne(q => q.Class)
-            .WithMany(c => c.Quizzes)
-            .HasForeignKey(q => q.ClassId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // SimulationEntity -> Class (thay vì Lesson)
-        modelBuilder.Entity<SimulationEntity>()
-            .HasOne(s => s.Class)
-            .WithMany(c => c.VirtualLabs)
-            .HasForeignKey(s => s.ClassId)
-            .OnDelete(DeleteBehavior.Cascade);
+        // Module -> Course
         modelBuilder.Entity<Module>()
             .HasOne(m => m.Course)
             .WithMany(c => c.Modules)
             .HasForeignKey(m => m.CourseId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Module -> Lessons
+        // Lesson -> Module
         modelBuilder.Entity<Lesson>()
             .HasOne(l => l.Module)
             .WithMany()
@@ -185,7 +152,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(f => f.MaterialId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // SubmissionFile
+        // SubmissionFile -> FileEntity
         modelBuilder.Entity<SubmissionFile>()
             .ToTable("FileEntity");
 
@@ -197,7 +164,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .OnDelete(DeleteBehavior.Cascade)
             .HasConstraintName("FK_Submissions_Files_FileId");
 
-        // Enrollment
+        // Enrollment -> Class
         modelBuilder.Entity<Enrollment>()
             .HasOne(e => e.Class)
             .WithMany(c => c.Enrollments)
@@ -255,31 +222,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(s => s.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Room configuration
-        modelBuilder.Entity<Room>()
-            .HasIndex(r => r.RoomCode)
-            .IsUnique();
-
-        // Project -> Class
-        modelBuilder.Entity<Project>()
-            .HasOne(p => p.Class)
-            .WithMany()
-            .HasForeignKey(p => p.ClassId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // ProjectMember
-        modelBuilder.Entity<ProjectMember>()
-            .HasOne(pm => pm.Project)
-            .WithMany(p => p.Members)
-            .HasForeignKey(pm => pm.ProjectId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        modelBuilder.Entity<ProjectMember>()
-            .HasOne(pm => pm.Student)
-            .WithMany()
-            .HasForeignKey(pm => pm.StudentId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         // Assignment -> Class
         modelBuilder.Entity<Assignment>()
             .HasOne(a => a.Class)
@@ -299,6 +241,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .Property(a => a.MaxScore)
             .HasColumnType("numeric(6,2)");
 
+        // AssignmentQuizDetail
         modelBuilder.Entity<AssignmentQuizDetail>()
             .HasOne(d => d.Assignment)
             .WithOne(a => a.QuizDetail)
@@ -309,6 +252,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .Property(d => d.QuestionsJson)
             .HasColumnType("jsonb");
 
+        // AssignmentReportDetail
         modelBuilder.Entity<AssignmentReportDetail>()
             .HasOne(d => d.Assignment)
             .WithOne(a => a.ReportDetail)
@@ -323,6 +267,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .Property(d => d.AllowedFileExtensionsJson)
             .HasColumnType("jsonb");
 
+        // AssignmentSimulationDetail
         modelBuilder.Entity<AssignmentSimulationDetail>()
             .HasOne(d => d.Assignment)
             .WithOne(a => a.SimulationDetail)
@@ -397,6 +342,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
                 v => v ?? (string?)null,
                 v => v ?? (string?)null));
 
+        // SubmissionComment
         modelBuilder.Entity<SubmissionComment>()
             .Property(c => c.Body)
             .HasMaxLength(2000);
@@ -413,7 +359,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(c => c.AuthorId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // ResubmitRequest -> Assignment / Student / ReviewedBy
+        // ResubmitRequest
         modelBuilder.Entity<ResubmitRequest>()
             .Property(r => r.Reason)
             .HasMaxLength(1000);
@@ -447,20 +393,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(m => m.AssignmentId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // QuizQuestion -> Quiz
-        modelBuilder.Entity<QuizQuestion>()
-            .HasOne(q => q.Quiz)
-            .WithMany(q => q.QuizQuestions)
-            .HasForeignKey(q => q.QuizId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // QuizAnswer -> QuizQuestion
-        modelBuilder.Entity<QuizAnswer>()
-            .HasOne(a => a.Question)
-            .WithMany(q => q.QuizAnswers)
-            .HasForeignKey(a => a.QuestionId)
-            .OnDelete(DeleteBehavior.Cascade);
-
         // Rubric -> Assignment
         modelBuilder.Entity<Rubric>()
             .HasOne(r => r.Assignment)
@@ -475,168 +407,12 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(n => n.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // SimulationTemplate -> SimulationEntity
-        modelBuilder.Entity<SimulationTemplate>()
-            .HasOne(t => t.Simulation)
-            .WithMany(s => s.SimulationTemplates)
-            .HasForeignKey(t => t.SimulationId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // SimulationSession -> Student
-        modelBuilder.Entity<SimulationSession>()
-            .HasOne(s => s.Student)
-            .WithMany()
-            .HasForeignKey(s => s.StudentId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // SimulationSession -> Template
-        modelBuilder.Entity<SimulationSession>()
-            .HasOne(s => s.Template)
-            .WithMany(t => t.SimulationSessions)
-            .HasForeignKey(s => s.TemplateId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // ExperimentLog -> Session
-        modelBuilder.Entity<ExperimentLog>()
-            .HasOne(e => e.Session)
-            .WithMany(s => s.ExperimentLogs)
-            .HasForeignKey(e => e.SessionId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // LiveMonitoring -> Session
-        modelBuilder.Entity<LiveMonitoring>()
-            .HasOne(l => l.Session)
-            .WithMany(s => s.LiveMonitorings)
-            .HasForeignKey(l => l.SessionId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // LiveMonitoring -> Teacher
-        modelBuilder.Entity<LiveMonitoring>()
-            .HasOne(l => l.Teacher)
-            .WithMany()
-            .HasForeignKey(l => l.TeacherId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // Payment -> Buyer (User)
-        modelBuilder.Entity<Payment>()
-            .HasOne(p => p.Buyer)
-            .WithMany(u => u.BuyerPayments)
-            .HasForeignKey(p => p.BuyerId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // Payment -> Seller (User)
-        modelBuilder.Entity<Payment>()
-            .HasOne(p => p.Seller)
-            .WithMany(u => u.SellerPayments)
-            .HasForeignKey(p => p.SellerId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // Payment -> Package
-        modelBuilder.Entity<Payment>()
-            .HasOne(p => p.Package)
-            .WithMany(pkg => pkg.Payments)
-            .HasForeignKey(p => p.PackageId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // TokenAccount -> School
-        modelBuilder.Entity<TokenAccount>()
-            .HasOne(t => t.School)
-            .WithMany(s => s.TokenAccounts)
-            .HasForeignKey(t => t.SchoolId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // TokenTransaction -> School
-        modelBuilder.Entity<TokenTransaction>()
-            .HasOne(t => t.School)
-            .WithMany(s => s.TokenTransactions)
-            .HasForeignKey(t => t.SchoolId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // TokenTransaction -> Payment
-        modelBuilder.Entity<TokenTransaction>()
-            .HasOne(t => t.Payment)
-            .WithMany()
-            .HasForeignKey(t => t.PaymentId)
-            .OnDelete(DeleteBehavior.Restrict);
-
-        // Seed Payment Packages
-        modelBuilder.Entity<PaymentPackage>().HasData(
-            new PaymentPackage 
-            { 
-                Id = 1, 
-                Name = "1 Tháng", 
-                Description = "Gói token sử dụng Virtual Lab trong 1 tháng", 
-                DurationMonths = 1, 
-                Price = 9.99m, 
-                TokenAmount = 100, 
-                IsActive = true, 
-                IsFeatured = false, 
-                SortOrder = 1,
-                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            },
-            new PaymentPackage 
-            { 
-                Id = 2, 
-                Name = "3 Tháng", 
-                Description = "Gói token sử dụng Virtual Lab trong 3 tháng - Tiết kiệm 10%", 
-                DurationMonths = 3, 
-                Price = 26.99m, 
-                TokenAmount = 350, 
-                IsActive = true, 
-                IsFeatured = true, 
-                SortOrder = 2,
-                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            },
-            new PaymentPackage 
-            { 
-                Id = 3, 
-                Name = "6 Tháng", 
-                Description = "Gói token sử dụng Virtual Lab trong 6 tháng - Tiết kiệm 20%", 
-                DurationMonths = 6, 
-                Price = 49.99m, 
-                TokenAmount = 800, 
-                IsActive = true, 
-                IsFeatured = true, 
-                SortOrder = 3,
-                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            },
-            new PaymentPackage 
-            { 
-                Id = 4, 
-                Name = "9 Tháng", 
-                Description = "Gói token sử dụng Virtual Lab trong 9 tháng - Tiết kiệm 25%", 
-                DurationMonths = 9, 
-                Price = 69.99m, 
-                TokenAmount = 1350, 
-                IsActive = true, 
-                IsFeatured = false, 
-                SortOrder = 4,
-                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            },
-            new PaymentPackage 
-            { 
-                Id = 5, 
-                Name = "1 Năm", 
-                Description = "Gói token sử dụng Virtual Lab trong 12 tháng - Tiết kiệm 30%", 
-                DurationMonths = 12, 
-                Price = 89.99m, 
-                TokenAmount = 2000, 
-                IsActive = true, 
-                IsFeatured = true, 
-                SortOrder = 5,
-                CreatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-                UpdatedAt = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc)
-            }
-        );
-
+        // AiQuotaUsage
         modelBuilder.Entity<AiQuotaUsage>()
             .HasIndex(usage => new { usage.UserId, usage.UsageDate })
             .IsUnique();
 
+        // VirtualLabProject
         modelBuilder.Entity<VirtualLabProject>()
             .Property(project => project.Status)
             .HasMaxLength(20);
@@ -654,6 +430,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(project => project.LabId)
             .OnDelete(DeleteBehavior.SetNull);
 
+        // Lab
         modelBuilder.Entity<Lab>()
             .HasOne(l => l.CreatedBy)
             .WithMany()
@@ -712,6 +489,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         modelBuilder.Entity<Lab>()
             .HasIndex(l => l.Category);
 
+        // LabClassAssignment
         modelBuilder.Entity<LabClassAssignment>()
             .HasOne(assignment => assignment.Lab)
             .WithMany(lab => lab.ClassAssignments)
@@ -728,6 +506,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasIndex(assignment => new { assignment.LabId, assignment.ClassId })
             .IsUnique();
 
+        // LabProgress
         modelBuilder.Entity<LabProgress>()
             .HasOne(progress => progress.Lab)
             .WithMany(lab => lab.Progresses)
@@ -744,6 +523,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasIndex(progress => new { progress.LabId, progress.StudentId })
             .IsUnique();
 
+        // ComponentGlueRegistry
         modelBuilder.Entity<ComponentGlueRegistry>()
             .HasKey(component => component.ComponentType);
 
@@ -760,13 +540,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasColumnType("jsonb");
 
         var componentSeedTime = new DateTime(2026, 7, 9, 0, 0, 0, DateTimeKind.Utc);
-        // ComponentType values below use the "wokwi-*" prefix to match
-        // VirtualLabDiagramService.Analyze()'s SupportedPins convention and the
-        // real DB state (see SQLScripts/FixVirtualLabComponentTypeMismatch.sql —
-        // this seed previously used short-form values "led"/"buzzer"/"servo"/
-        // "push_button"/"potentiometer", which a fresh/local DB setup would still
-        // reseed with today; a real EF migration now captures the rename so it's
-        // no longer only a manually-applied SQL patch on the live DB).
         modelBuilder.Entity<ComponentGlueRegistry>().HasData(
             new ComponentGlueRegistry
             {
@@ -823,25 +596,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
                 UpdatedAt = componentSeedTime
             });
 
-        // Robot giao hàng mini — additive, không sửa/xoá seed cũ ở trên (6 dòng
-        // "led"/"buzzer"/... đã được đổi sang tiền tố "wokwi-" ở trên, dht22 giữ
-        // nguyên short-form theo quyết định đã có). Dùng tiền tố "wokwi-" khớp
-        // đúng quy ước SupportedPins trong VirtualLabDiagramService.cs và dữ liệu
-        // DB thật hiện tại, tránh lặp lại đúng lỗi lệch type đã xảy ra trước đó.
-        //
-        // Cả 10 type đều Supported=true — ComponentGlueRegistry chỉ quyết định
-        // "có xuất hiện trong palette giáo viên + qua được
-        // EnsureAllowedComponentsSupportedAsync lúc lưu Lab" hay không, KHÔNG
-        // quyết định có tham gia wiring/netlist hay không (việc đó do
-        // SupportedPins trong VirtualLabDiagramService.cs quyết định). 4 linh
-        // kiện có điện (hc-sr04/l298n/dc-motor/battery-pack/power-switch — riêng
-        // power-switch xem SupportedPins) có entry trong SupportedPins nên được
-        // validate wiring thật; 5 linh kiện cơ khí/hiển thị thuần (wheel/caster
-        // wheel/chassis/breadboard/delivery-box) CỐ TÌNH KHÔNG có trong
-        // SupportedPins — parse thành part bình thường (chỉ warning "not modeled
-        // by MVP validator", không error) nhưng không tham gia netlist/wiring,
-        // không có pin-dot ở FE (pinMaps.ts không có entry). PinRequirementsJson
-        // "visualOnly":true chỉ là ghi chú, chưa có code nào đọc field này.
         var robotKitSeedTime = new DateTime(2026, 7, 26, 0, 0, 0, DateTimeKind.Utc);
         modelBuilder.Entity<ComponentGlueRegistry>().HasData(
             new ComponentGlueRegistry
@@ -935,9 +689,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
                 UpdatedAt = robotKitSeedTime
             });
 
-        // Ngoài Robot giao hàng mini — bằng chứng nhóm "output-easy" (chỉ cần
-        // digitalWrite, giống LED/Buzzer/L298N) có thể mở rộng an toàn theo
-        // đúng pattern cũ, không cần khả năng runtime mới nào.
         var nextTierSeedTime = new DateTime(2026, 7, 27, 0, 0, 0, DateTimeKind.Utc);
         modelBuilder.Entity<ComponentGlueRegistry>().HasData(
             new ComponentGlueRegistry
@@ -950,15 +701,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
                 UpdatedAt = nextTierSeedTime
             });
 
-        // Thư viện linh kiện mở rộng (Component Library, 2026-07-27) — phục vụ
-        // các bài demo ngoài Robot giao hàng mini (sensor/actuator/display/
-        // communication/robot cơ khí). TẤT CẢ đều Supported=true (điều kiện
-        // DUY NHẤT để xuất hiện trong palette) kể cả item visual-only — visual-
-        // only chỉ khác ở chỗ KHÔNG có entry tương ứng trong SupportedPins (BE)
-        // nên không tham gia netlist/wiring, giống Robot Wheel/Chassis/... đã
-        // có từ trước. wokwi-dht11/wokwi-lcd1602 đã có sẵn SupportedPins nhưng
-        // CHƯA từng có dòng ComponentGlueRegistry — bổ sung ở đây để lần đầu
-        // xuất hiện trong palette.
         var libSeedTime = new DateTime(2026, 7, 27, 12, 0, 0, DateTimeKind.Utc);
         modelBuilder.Entity<ComponentGlueRegistry>().HasData(
             new ComponentGlueRegistry { ComponentType = "wokwi-flame-sensor", Label = "Flame Sensor", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"DOUT","kind":"digital_input"},{"name":"AOUT","kind":"analog"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },

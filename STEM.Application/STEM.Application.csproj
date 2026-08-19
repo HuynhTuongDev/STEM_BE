@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <Folder Include="Dtos\" />
+    <Folder Include="Dtos\Payments\" />
     <Folder Include="Interfaces\" />
     <Folder Include="UseCases\" />
     <Folder Include="Validators\" />
