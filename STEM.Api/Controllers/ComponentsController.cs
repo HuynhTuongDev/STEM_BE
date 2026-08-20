@@ -16,11 +16,16 @@ public class ComponentsController : ControllerBase
 {
     private readonly IComponentRegistry _registry;
     private readonly IEnumerable<IComponentProvider> _providers;
+    private readonly IComponentProviderAggregator _aggregator;
 
-    public ComponentsController(IComponentRegistry registry, IEnumerable<IComponentProvider> providers)
+    public ComponentsController(
+        IComponentRegistry registry,
+        IEnumerable<IComponentProvider> providers,
+        IComponentProviderAggregator aggregator)
     {
         _registry = registry;
         _providers = providers;
+        _aggregator = aggregator;
     }
 
     [HttpGet]
@@ -37,22 +42,37 @@ public class ComponentsController : ControllerBase
         return component == null ? NotFound() : Ok(component);
     }
 
+    // provider is optional — omit it (or pass "") for an aggregated search
+    // across every registered IComponentProvider (STEP 9: search endpoint
+    // provider-agnostic, no /import-fritzing-style per-provider routes).
+    // Passing a specific provider name still searches just that one, for
+    // callers that already know where they want to look.
     [HttpGet("admin/external-components/search")]
     [Authorize(Policy = "TeacherAndAbove")]
     public async Task<IActionResult> SearchExternal(
-        [FromQuery] string provider,
+        [FromQuery] string? provider,
         [FromQuery] string query,
         CancellationToken cancellationToken)
     {
-        var matchedProvider = _providers.FirstOrDefault(
-            item => item.ProviderName.Equals(provider, StringComparison.OrdinalIgnoreCase));
+        IReadOnlyCollection<STEM.Application.UseCases.Components.Abstractions.ExternalComponentCandidate> candidates;
 
-        if (matchedProvider == null)
+        if (string.IsNullOrWhiteSpace(provider))
         {
-            return BadRequest(new { message = $"Unknown component provider: {provider}." });
+            candidates = await _aggregator.SearchAsync(query ?? string.Empty, cancellationToken);
+        }
+        else
+        {
+            var matchedProvider = _providers.FirstOrDefault(
+                item => item.ProviderName.Equals(provider, StringComparison.OrdinalIgnoreCase));
+
+            if (matchedProvider == null)
+            {
+                return BadRequest(new { message = $"Unknown component provider: {provider}." });
+            }
+
+            candidates = await matchedProvider.SearchAsync(query ?? string.Empty, cancellationToken);
         }
 
-        var candidates = await matchedProvider.SearchAsync(query ?? string.Empty, cancellationToken);
         var response = candidates.Select(candidate => new ExternalComponentSearchResponse
         {
             Provider = candidate.Provider,

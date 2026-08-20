@@ -95,6 +95,19 @@ public static class ServiceCollectionExtensions
         });
         services.AddSingleton<STEM.Application.UseCases.Components.Abstractions.IComponentProvider,
             STEM.Infrastructure.VirtualLab.Components.Providers.Fritzing.FritzingComponentProvider>();
+
+        services.Configure<STEM.Infrastructure.VirtualLab.Components.Providers.KiCad.KiCadOptions>(
+            configuration.GetSection(STEM.Infrastructure.VirtualLab.Components.Providers.KiCad.KiCadOptions.SectionName));
+        services.AddHttpClient(STEM.Application.UseCases.Components.Providers.KiCad.KiCadConstants.ProviderName, client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("StemFlow-ComponentImporter/1.0");
+        });
+        services.AddSingleton<STEM.Application.UseCases.Components.Abstractions.IComponentProvider,
+            STEM.Infrastructure.VirtualLab.Components.Providers.KiCad.KiCadComponentProvider>();
+
+        services.AddSingleton<STEM.Application.UseCases.Components.Abstractions.IComponentProviderAggregator,
+            STEM.Application.UseCases.Components.ComponentProviderAggregator>();
         services.AddSingleton<STEM.Application.UseCases.Components.Abstractions.IComponentNormalizer,
             STEM.Application.UseCases.Components.ComponentNormalizer>();
         services.AddScoped<STEM.Application.UseCases.Components.Abstractions.IComponentRegistry,

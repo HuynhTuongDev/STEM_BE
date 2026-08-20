@@ -45,10 +45,14 @@ public static class PinAliasRules
             ["SIG"] = "SIG",
             ["SIGNAL"] = "SIG",
 
-            // LED — matches wokwi-led's existing SupportedPins ("A", "C")
+            // LED — matches wokwi-led's existing SupportedPins ("A", "C").
+            // "K" = Kathode, the KiCad/EE convention for cathode (verified
+            // against the real KiCad Device.lib "LED" symbol: X K 1 ...).
             ["ANODE"] = "A",
             ["A"] = "A",
             ["CATHODE"] = "C",
+            ["KATHODE"] = "C",
+            ["K"] = "C",
             ["C"] = "C",
 
             // Buzzer / generic 2-pin actuator
