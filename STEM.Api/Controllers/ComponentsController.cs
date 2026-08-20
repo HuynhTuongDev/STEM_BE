@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Dtos.Components;
+using STEM.Application.UseCases.Components;
 using STEM.Application.UseCases.Components.Abstractions;
 
 namespace STEM.Api.Controllers;
@@ -17,15 +18,18 @@ public class ComponentsController : ControllerBase
     private readonly IComponentRegistry _registry;
     private readonly IEnumerable<IComponentProvider> _providers;
     private readonly IComponentProviderAggregator _aggregator;
+    private readonly IComponentNormalizer _normalizer;
 
     public ComponentsController(
         IComponentRegistry registry,
         IEnumerable<IComponentProvider> providers,
-        IComponentProviderAggregator aggregator)
+        IComponentProviderAggregator aggregator,
+        IComponentNormalizer normalizer)
     {
         _registry = registry;
         _providers = providers;
         _aggregator = aggregator;
+        _normalizer = normalizer;
     }
 
     [HttpGet]
@@ -73,13 +77,26 @@ public class ComponentsController : ControllerBase
             candidates = await matchedProvider.SearchAsync(query ?? string.Empty, cancellationToken);
         }
 
-        var response = candidates.Select(candidate => new ExternalComponentSearchResponse
+        // Preview computed with the exact same Normalizer + SimulationTypeResolver
+        // ImportAsync would use — nothing is written to the registry here, this
+        // only lets the admin see the simulation-mapping outcome (and pin count)
+        // BEFORE spending an import action, without the frontend guessing at it
+        // from category/name (STEP 5's explicit rule: backend decides capability).
+        var response = candidates.Select(candidate =>
         {
-            Provider = candidate.Provider,
-            ExternalId = candidate.ExternalId,
-            Name = candidate.Name,
-            Category = candidate.Category,
-            SourceUrl = candidate.SourceUrl
+            var normalized = _normalizer.Normalize(candidate);
+            var pinIds = normalized.Pins.Select(p => p.LogicalPinId).ToList();
+            return new ExternalComponentSearchResponse
+            {
+                Provider = candidate.Provider,
+                ExternalId = candidate.ExternalId,
+                Name = candidate.Name,
+                Category = candidate.Category,
+                SourceUrl = candidate.SourceUrl,
+                License = candidate.License,
+                PinCount = candidate.Pins.Count,
+                SimulationTypeCandidate = SimulationTypeResolver.Resolve(normalized.Category, pinIds)
+            };
         });
 
         return Ok(response);
