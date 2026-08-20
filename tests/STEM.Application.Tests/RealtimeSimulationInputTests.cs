@@ -348,6 +348,95 @@ public sealed class RealtimeSimulationInputTests
         }
     }
 
+    private const string DiagramJsonLightSensorAndLed = """
+    {
+      "version": 1,
+      "parts": [
+        { "type": "board-esp32-devkit-c-v4", "id": "esp" },
+        { "type": "wokwi-photoresistor-sensor", "id": "light1" },
+        { "type": "wokwi-resistor", "id": "r1" },
+        { "type": "wokwi-led", "id": "led1" }
+      ],
+      "connections": [
+        [ "light1:AO", "esp:GPIO35" ],
+        [ "light1:GND", "esp:GND.1" ],
+        [ "light1:VCC", "esp:3V3" ],
+        [ "esp:GPIO13", "r1:1" ],
+        [ "r1:2", "led1:A" ],
+        [ "led1:C", "esp:GND.2" ]
+      ]
+    }
+    """;
+
+    // Below a brightness threshold -> too dark -> turn the LED on (a night
+    // light, not an alarm) — deliberately the OPPOSITE polarity from the
+    // potentiometer test above, to prove this isn't just reusing the same
+    // branch by coincidence.
+    private const string LightSensorReactiveProgram = """
+    const int LIGHT_PIN = 35;
+    const int LED_PIN = 13;
+
+    void setup() {
+      pinMode(LED_PIN, OUTPUT);
+    }
+
+    void loop() {
+      int brightness = analogRead(LIGHT_PIN);
+
+      if (brightness < 1000) {
+        digitalWrite(LED_PIN, HIGH);
+      } else {
+        digitalWrite(LED_PIN, LOW);
+      }
+
+      delay(50);
+    }
+    """;
+
+    [Fact]
+    public async Task LightSensorValue_ReactsLive_CrossingThresholdBothWays_WithoutRestart()
+    {
+        var (runner, broadcaster, store, _, inputChannel) = SimulationRunnerResolverTests.CreateStreamingRunner();
+        var projectId = Guid.NewGuid().ToString("N");
+
+        var startResult = await runner.RunAsync(new SimulationRunContext
+        {
+            ProjectId = projectId,
+            Mode = "educational",
+            MaxDurationMs = 3000,
+            MaxInstructionCount = 2000,
+            DiagramJson = DiagramJsonLightSensorAndLed,
+            SourceCode = LightSensorReactiveProgram
+        }, CancellationToken.None);
+
+        Assert.True(startResult.Success, string.Join("; ", startResult.Errors));
+
+        // Default (nobody set a sensor value yet) reads as 0 -> below 1000 -> "dark" -> LED on.
+        await Task.Delay(250);
+        var eventsBeforeSet = store.AppendedEvents.Where(IsLedStateEvent).ToList();
+        Assert.NotEmpty(eventsBeforeSet);
+        Assert.All(eventsBeforeSet, item => Assert.Equal("on", PayloadString(item, "state")));
+
+        // Bright room (3000 > 1000 threshold) -> LED off.
+        Assert.True(inputChannel.TrySetInput(new SimulationInputEvent(
+            projectId, "light1", "35", SimulationInputType.Sensor, 3000, SensorKind: "light")));
+
+        await Task.Delay(300);
+        var eventsBright = store.AppendedEvents.Where(IsLedStateEvent).ToList();
+        Assert.Contains(eventsBright, item => PayloadString(item, "state") == "off");
+
+        // Dark again (200 < 1000) -> LED back on, same run.
+        Assert.True(inputChannel.TrySetInput(new SimulationInputEvent(
+            projectId, "light1", "35", SimulationInputType.Sensor, 200, SensorKind: "light")));
+
+        await Task.Delay(300);
+        var eventsDarkAgain = store.AppendedEvents.Where(IsLedStateEvent).ToList();
+        Assert.Equal("on", PayloadString(eventsDarkAgain[^1], "state"));
+
+        await WaitForCompletionAsync(broadcaster);
+        Assert.Equal(VirtualLabProjectStatuses.Running, store.FinalStatus);
+    }
+
     private static bool IsLedStateEvent(SimulationEventResponse item)
     {
         return item.Type == "part-state" && PayloadString(item, "component") == "led";
