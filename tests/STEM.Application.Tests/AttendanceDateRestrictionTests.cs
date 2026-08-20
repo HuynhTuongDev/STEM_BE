@@ -40,6 +40,7 @@ file sealed class FakeUserRepository : IUserRepository
     public Task<IEnumerable<Schedule>> GetStudentSchedulesAsync(int studentId, DateTime? fromDate, DateTime? toDate, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<(IEnumerable<User> Users, int TotalCount)> GetTeachersWithClassCountAsync(int schoolId, int page, int pageSize, string? searchTerm, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<IEnumerable<User>> GetBySchoolIdAsync(int schoolId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task<(int TeacherCount, int StudentCount)> GetTeacherStudentCountBySchoolAsync(int schoolId, CancellationToken cancellationToken = default) => Task.FromResult<(int, int)>((0, 0));
 }
 
 file sealed class FakeClassRepository : IClassRepository

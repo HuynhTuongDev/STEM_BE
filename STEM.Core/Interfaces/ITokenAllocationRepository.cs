@@ -13,4 +13,5 @@ public interface ITokenAllocationRepository : IRepository<TokenAllocation>
     Task<TokenAllocation?> GetByIdWithUserAsync(int id, CancellationToken cancellationToken = default);
     Task<IEnumerable<TokenAllocation>> GetExpiredAllocationsAsync(CancellationToken cancellationToken = default);
     Task<IEnumerable<TokenAllocation>> GetExpiredByAccountIdAsync(int accountId, CancellationToken cancellationToken = default);
+    Task<(int TeacherCount, int StudentCount, int TeacherTokens, int StudentTokens)> GetAllocationStatsByRoleAsync(int accountId, CancellationToken cancellationToken = default);
 }

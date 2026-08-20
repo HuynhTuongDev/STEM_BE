@@ -65,7 +65,11 @@ public record TokenBalanceDto(
     int TokensDistributed,
     int TokensUsed,
     DateTime? ExpiresAt,
-    DateTime? LastPurchaseAt
+    DateTime? LastPurchaseAt,
+    int TeacherCount,
+    int StudentCount,
+    int TeacherTokens,
+    int StudentTokens
 );
 
 public record TokenTransactionDto(

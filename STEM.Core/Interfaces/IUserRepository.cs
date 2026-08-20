@@ -21,4 +21,5 @@ public interface IUserRepository : IRepository<User>
     Task<IEnumerable<Schedule>> GetStudentSchedulesAsync(int studentId, DateTime? fromDate, DateTime? toDate, CancellationToken cancellationToken = default);
     Task<(IEnumerable<User> Users, int TotalCount)> GetTeachersWithClassCountAsync(int schoolId, int page, int pageSize, string? searchTerm, CancellationToken cancellationToken = default);
     Task<IEnumerable<User>> GetBySchoolIdAsync(int schoolId, CancellationToken cancellationToken = default);
+    Task<(int TeacherCount, int StudentCount)> GetTeacherStudentCountBySchoolAsync(int schoolId, CancellationToken cancellationToken = default);
 }
