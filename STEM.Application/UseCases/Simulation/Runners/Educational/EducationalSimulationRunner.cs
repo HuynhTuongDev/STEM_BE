@@ -17,6 +17,7 @@ public sealed class EducationalSimulationRunner : ISimulationRunner
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ISimulationEventBroadcaster _broadcaster;
     private readonly IRunningSimulationRegistry _registry;
+    private readonly ISimulationInputChannel _inputChannel;
     private readonly SemaphoreSlim _runGate;
 
     public EducationalSimulationRunner(
@@ -26,6 +27,7 @@ public sealed class EducationalSimulationRunner : ISimulationRunner
         IServiceScopeFactory scopeFactory,
         ISimulationEventBroadcaster broadcaster,
         IRunningSimulationRegistry registry,
+        ISimulationInputChannel inputChannel,
         IConfiguration configuration)
     {
         _diagramService = diagramService;
@@ -34,6 +36,7 @@ public sealed class EducationalSimulationRunner : ISimulationRunner
         _scopeFactory = scopeFactory;
         _broadcaster = broadcaster;
         _registry = registry;
+        _inputChannel = inputChannel;
 
         var maxConcurrentRuns = int.TryParse(
             configuration["SimulationRunner:MaxConcurrentRuns"],
@@ -95,6 +98,10 @@ public sealed class EducationalSimulationRunner : ISimulationRunner
 
         var runCts = new CancellationTokenSource();
         _registry.Register(context.ProjectId, runCts);
+        // Same instance the background loop reads from (state.Context.ComponentInputs
+        // in EducationalEventGenerator) — a live SetSimulationInput call reaching
+        // this dictionary is picked up on the NEXT digitalRead(), no restart needed.
+        _inputChannel.RegisterSession(context.ProjectId, context.ComponentInputs);
 
         _ = Task.Run(
             () => ExecuteInBackgroundAsync(program, snapshot, context, runCts),
@@ -175,6 +182,7 @@ public sealed class EducationalSimulationRunner : ISimulationRunner
             // trong lúc đang dọn dẹp, Register() của lần chạy mới không bị
             // hiểu nhầm là "phải hủy chính nó".
             _registry.Remove(context.ProjectId);
+            _inputChannel.UnregisterSession(context.ProjectId);
 
             try
             {

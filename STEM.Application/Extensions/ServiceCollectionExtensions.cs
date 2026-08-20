@@ -60,6 +60,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<QemuEsp32Runner>();
         services.AddScoped<ISimulationRunnerResolver, SimulationRunnerResolver>();
         services.AddSingleton<IRunningSimulationRegistry, RunningSimulationRegistry>();
+        services.AddSingleton<ISimulationInputChannel, SimulationInputChannel>();
         services.AddSingleton<ICompileCoordinator, CompileCoordinator>();
         services.AddHttpClient("Anthropic", client =>
         {
