@@ -63,6 +63,20 @@ public class ComponentNormalizerTests
         Assert.Equal("VCC", normalized.Pins.Single().LogicalPinId);
     }
 
+    [Theory]
+    [InlineData("K")]
+    [InlineData("Kathode")]
+    [InlineData("cathode")]
+    public void Normalize_CathodeAliases_AllResolveToC(string rawName)
+    {
+        // "K" is the real KiCad Device.lib LED symbol's cathode pin name —
+        // must resolve to the same logical pin as Fritzing's "cathode" for
+        // cross-provider dedup to have any chance of matching correctly.
+        var candidate = MakeSinglePinCandidate(rawName);
+        var normalized = _normalizer.Normalize(candidate);
+        Assert.Equal("C", normalized.Pins.Single().LogicalPinId);
+    }
+
     [Fact]
     public void Normalize_UnknownPinName_PassesThroughUnchanged()
     {
