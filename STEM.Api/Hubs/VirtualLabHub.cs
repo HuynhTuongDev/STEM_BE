@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using STEM.Application.Interfaces;
+using STEM.Application.UseCases.Simulation.Abstractions;
 using STEM.Infrastructure.Data;
 
 namespace STEM.Api.Hubs;
@@ -18,15 +19,18 @@ public class VirtualLabHub : Hub
     private readonly IVirtualLabRuntimeService _runtimeService;
     private readonly StemDbContext _context;
     private readonly ILogger<VirtualLabHub> _logger;
+    private readonly ISimulationInputChannel _inputChannel;
 
     public VirtualLabHub(
         IVirtualLabRuntimeService runtimeService,
         StemDbContext context,
-        ILogger<VirtualLabHub> logger)
+        ILogger<VirtualLabHub> logger,
+        ISimulationInputChannel inputChannel)
     {
         _runtimeService = runtimeService;
         _context = context;
         _logger = logger;
+        _inputChannel = inputChannel;
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
@@ -108,6 +112,49 @@ public class VirtualLabHub : Hub
             projectId,
             eventPayload,
             Context.ConnectionAborted);
+    }
+
+    // Realtime input path (button press/release, etc) — same auth/session
+    // pattern as SimulationEvent/DiagramUpdated above (GetOrJoinSessionAsync
+    // implicitly verifies the caller owns this project via
+    // JoinStudentSessionAsync -> _runtimeService.GetDiagramAsync(projectId,
+    // studentId, ...)). Only "digital" is wired end-to-end today (LED+Button
+    // vertical slice) — inputType is still passed through so analog/sensor
+    // can be added later without another Hub method. Value is a string on the
+    // wire ("1"/"0"/"HIGH"/"LOW"/"true"/"false") to avoid SignalR JSON-typing
+    // ambiguity; parsed to the CLR type ISimulationInputChannel expects.
+    public async Task SetSimulationInput(string projectId, string componentId, string? pin, string inputType, string value)
+    {
+        _ = await GetOrJoinSessionAsync(projectId);
+
+        if (!inputType.Equals("digital", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new HubException($"Unsupported simulation input type: {inputType}.");
+        }
+
+        var digitalValue = value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+            value.Equals("HIGH", StringComparison.OrdinalIgnoreCase);
+
+        // VirtualLabProjectController's {id}/start route builds
+        // RunEsp32SimulationRequest.SessionId as id.ToString("N") (no dashes) —
+        // that's exactly the string EducationalSimulationRunner registers under
+        // (context.ProjectId = that sessionId, unchanged). StopSimulationAsync
+        // normalizes the same way before touching IRunningSimulationRegistry
+        // (projectId.ToString("N")) — ISimulationInputChannel must match that
+        // same convention, not the raw dashed projectId the client happens to
+        // send (found live: without this, TrySetInput always missed).
+        var accepted = _inputChannel.TrySetInput(new SimulationInputEvent(
+            NormalizeProjectId(projectId),
+            componentId,
+            pin,
+            SimulationInputType.Digital,
+            digitalValue));
+
+        if (!accepted)
+        {
+            throw new HubException("No running simulation session accepts input for this project right now.");
+        }
     }
 
     public async Task Stopped(string projectId)
