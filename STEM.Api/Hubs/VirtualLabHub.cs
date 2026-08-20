@@ -121,16 +121,18 @@ public class VirtualLabHub : Hub
     private const int AnalogMinValue = 0;
     private const int AnalogMaxValue = 4095;
 
-    // Realtime input path (button press/release, slider drag, etc) — same
-    // auth/session pattern as SimulationEvent/DiagramUpdated above
-    // (GetOrJoinSessionAsync implicitly verifies the caller owns this project
-    // via JoinStudentSessionAsync -> _runtimeService.GetDiagramAsync(projectId,
-    // studentId, ...)). Value is a string on the wire to avoid SignalR
-    // JSON-typing ambiguity; parsed to the CLR type ISimulationInputChannel
-    // expects per inputType. Sensor (STEP 8) not added yet — this only
-    // recognizes "digital"/"analog", matching what's actually wired to a
-    // runner today.
-    public async Task SetSimulationInput(string projectId, string componentId, string? pin, string inputType, string value)
+    // Realtime input path (button press/release, slider drag, sensor value,
+    // etc) — same auth/session pattern as SimulationEvent/DiagramUpdated
+    // above (GetOrJoinSessionAsync implicitly verifies the caller owns this
+    // project via JoinStudentSessionAsync -> _runtimeService.GetDiagramAsync(
+    // projectId, studentId, ...)). Value is a string on the wire to avoid
+    // SignalR JSON-typing ambiguity; parsed to the CLR type
+    // ISimulationInputChannel expects per inputType. sensorKind is only
+    // meaningful (and only required) for inputType "sensor" — e.g. "light" —
+    // it's metadata for future sensor-specific handling, not something
+    // TrySetInput's storage or LightSensorModel.Read() depends on today.
+    public async Task SetSimulationInput(
+        string projectId, string componentId, string? pin, string inputType, string value, string? sensorKind = null)
     {
         _ = await GetOrJoinSessionAsync(projectId);
 
@@ -144,20 +146,28 @@ public class VirtualLabHub : Hub
                 value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
                 value.Equals("HIGH", StringComparison.OrdinalIgnoreCase);
         }
-        else if (inputType.Equals("analog", StringComparison.OrdinalIgnoreCase))
+        else if (inputType.Equals("analog", StringComparison.OrdinalIgnoreCase) ||
+                 inputType.Equals("sensor", StringComparison.OrdinalIgnoreCase))
         {
             if (!int.TryParse(value, out var analogValue))
             {
-                throw new HubException($"Analog input value must be numeric, got '{value}'.");
+                throw new HubException($"{inputType} input value must be numeric, got '{value}'.");
             }
 
             if (analogValue < AnalogMinValue || analogValue > AnalogMaxValue)
             {
                 throw new HubException(
-                    $"Analog input value {analogValue} is out of range ({AnalogMinValue}..{AnalogMaxValue}).");
+                    $"{inputType} input value {analogValue} is out of range ({AnalogMinValue}..{AnalogMaxValue}).");
             }
 
-            parsedType = SimulationInputType.Analog;
+            if (inputType.Equals("sensor", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(sensorKind))
+            {
+                throw new HubException("sensorKind is required for inputType \"sensor\".");
+            }
+
+            parsedType = inputType.Equals("sensor", StringComparison.OrdinalIgnoreCase)
+                ? SimulationInputType.Sensor
+                : SimulationInputType.Analog;
             parsedValue = analogValue;
         }
         else
@@ -178,7 +188,8 @@ public class VirtualLabHub : Hub
             componentId,
             pin,
             parsedType,
-            parsedValue));
+            parsedValue,
+            parsedType == SimulationInputType.Sensor ? sensorKind : null));
 
         if (!accepted)
         {
