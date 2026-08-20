@@ -143,6 +143,11 @@ public sealed class EducationalEventGenerator
                     await EmitAsync(state, onEventEmitted, buzzer.ToDigitalEvent(state.Time, instruction.Value!), cancellationToken);
                 }
 
+                foreach (var relay in state.FindRelays(instruction.Pin!))
+                {
+                    await EmitAsync(state, onEventEmitted, relay.ToDigitalEvent(state.Time, instruction.Value!), cancellationToken);
+                }
+
                 return null;
 
             case EducationalInstructionKind.DigitalRead:
@@ -451,6 +456,7 @@ public sealed class EducationalEventGenerator
         private readonly Dictionary<string, List<ServoModel>> _servosByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<PotentiometerModel>> _potentiometersByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<LightSensorModel>> _lightSensorsByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<RelayModel>> _relaysByPin = new(StringComparer.OrdinalIgnoreCase);
 
         public EducationalRunState(SimulationRunContext context, VirtualLabRuntimeDiagramSnapshot diagram)
         {
@@ -484,6 +490,7 @@ public sealed class EducationalEventGenerator
         public IReadOnlyCollection<ServoModel> FindServos(string pin) => Find(_servosByPin, pin);
         public IReadOnlyCollection<PotentiometerModel> FindPotentiometers(string pin) => Find(_potentiometersByPin, pin);
         public IReadOnlyCollection<LightSensorModel> FindLightSensors(string pin) => Find(_lightSensorsByPin, pin);
+        public IReadOnlyCollection<RelayModel> FindRelays(string pin) => Find(_relaysByPin, pin);
 
         // analogRead() doesn't care WHAT is attached to the pin, only that
         // something producing a 0..4095 value is — same reasoning as
@@ -558,6 +565,11 @@ public sealed class EducationalEventGenerator
                          TryFindPin(component, new[] { "AO" }, out var lightPin))
                 {
                     AddModel(_lightSensorsByPin, lightPin, new LightSensorModel(component.Id, lightPin));
+                }
+                else if (component.Type.Equals("wokwi-relay-module", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "IN" }, out var relayPin))
+                {
+                    AddModel(_relaysByPin, relayPin, new RelayModel(component.Id, relayPin));
                 }
             }
         }

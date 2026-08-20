@@ -456,6 +456,22 @@ public class VirtualLabDiagramService
                 Require(part, "Photoresistor must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
                 Require(part, "Photoresistor power must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
             }
+            else if (part.Type.Equals("wokwi-relay-module", StringComparison.OrdinalIgnoreCase))
+            {
+                // IN is what RelayModel actually reads via digitalWrite() —
+                // same shape as LED's A/Buzzer's 1. NO/COM/NC (the switching
+                // contacts) are intentionally NOT validated here — this runtime
+                // has no net-propagation engine to actually reroute current
+                // through them, so requiring wiring on pins nothing simulates
+                // would just be a hollow check. Semantic-only, same spirit as
+                // wokwi-dc-motor's "not directly to GPIO" check: reject the
+                // specific wrong wiring the validator CAN meaningfully detect
+                // (VCC/GND swapped onto a signal pin), don't invent checks for
+                // behavior that isn't simulated.
+                Require(part, "Relay IN must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "IN" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "Relay must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
+                Require(part, "Relay power must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
+            }
             else if (part.Type.Equals("wokwi-dht22", StringComparison.OrdinalIgnoreCase) ||
                      part.Type.Equals("wokwi-dht11", StringComparison.OrdinalIgnoreCase))
             {

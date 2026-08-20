@@ -22,6 +22,7 @@ public static class RuntimeCapabilityResolver
             ["wokwi-pushbutton"] = new(RuntimeCapabilities.DigitalInput, null),
             ["wokwi-potentiometer"] = new(RuntimeCapabilities.AnalogInput, null),
             ["wokwi-photoresistor-sensor"] = new(RuntimeCapabilities.SensorInput, "light"),
+            ["wokwi-relay-module"] = new(RuntimeCapabilities.Output, null),
         };
 
     public static RuntimeCapabilityInfo? Resolve(string? simulationComponentType)
