@@ -20,6 +20,14 @@ public sealed class EducationalProgramAnalyzer
     private static readonly Regex ForLoopRegex = new(
         @"^\s*(?:(?:int|long|byte|uint8_t|size_t)\s+)?(?<variable>[A-Za-z_]\w*)\s*=\s*(?<start>[A-Za-z_]\w*|\d+)\s*;\s*\k<variable>\s*(?<comparison><=|<)\s*(?<end>[A-Za-z_]\w*|\d+)\s*;\s*(?:\k<variable>\s*\+\+|\+\+\s*\k<variable>|\k<variable>\s*\+=\s*1)\s*$",
         RegexOptions.Compiled);
+    // Minimal on purpose (STEP 4/9 of the realtime-input vertical slice): only
+    // "if (digitalRead(PIN))" / "if (digitalRead(PIN) == HIGH|LOW|true|false|1|0)"
+    // with an optional leading "!" — not a general expression evaluator. This is
+    // exactly the shape Arduino sketches use to react to a button, which is the
+    // one thing this interpreter needed to actually branch on live input.
+    private static readonly Regex IfDigitalReadConditionRegex = new(
+        @"^\s*(?<negate>!\s*)?digitalRead\s*\(\s*(?<pin>[^\)]+)\s*\)\s*(?:==\s*(?<value>HIGH|LOW|true|false|1|0)\s*)?$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public EducationalProgram Analyze(string sourceCode)
     {
@@ -93,7 +101,8 @@ public sealed class EducationalProgramAnalyzer
 
             if (depth == 0 &&
                 (TryReadControlBlock(source, index, "for", out var header, out var controlBody, out var nextIndex) ||
-                 TryReadControlBlock(source, index, "while", out header, out controlBody, out nextIndex)))
+                 TryReadControlBlock(source, index, "while", out header, out controlBody, out nextIndex) ||
+                 TryReadControlBlock(source, index, "if", out header, out controlBody, out nextIndex)))
             {
                 instructions.AddRange(ParseFlatInstructions(
                     source[segmentStart..index], symbols, servoNames, warnings));
@@ -111,14 +120,70 @@ public sealed class EducationalProgramAnalyzer
                         warnings.Add($"Unsupported for loop: for ({header.Trim()}).");
                     }
                 }
-                else if (header.Trim() is "true" or "1")
+                else if (source.AsSpan(index).StartsWith("while", StringComparison.Ordinal))
                 {
-                    instructions.Add(EducationalInstruction.ForeverLoop(
-                        ParseInstructions(controlBody, symbols, servoNames, warnings)));
+                    if (header.Trim() is "true" or "1")
+                    {
+                        instructions.Add(EducationalInstruction.ForeverLoop(
+                            ParseInstructions(controlBody, symbols, servoNames, warnings)));
+                    }
+                    else
+                    {
+                        warnings.Add($"Unsupported while condition: {header.Trim()}.");
+                    }
                 }
                 else
                 {
-                    warnings.Add($"Unsupported while condition: {header.Trim()}.");
+                    // "if" — optional "else { ... }" immediately following the
+                    // if-block's closing brace is consumed here too (single
+                    // level only, no "else if" chaining — kept minimal on
+                    // purpose, see IfDigitalReadConditionRegex comment).
+                    var conditionMatch = IfDigitalReadConditionRegex.Match(header);
+                    var elseBody = string.Empty;
+                    var scan = nextIndex;
+                    while (scan < source.Length && char.IsWhiteSpace(source[scan]))
+                    {
+                        scan++;
+                    }
+
+                    if (source.AsSpan(scan).StartsWith("else", StringComparison.Ordinal) &&
+                        (scan + 4 >= source.Length || !(char.IsLetterOrDigit(source[scan + 4]) || source[scan + 4] == '_')))
+                    {
+                        var elseBraceStart = scan + 4;
+                        while (elseBraceStart < source.Length && char.IsWhiteSpace(source[elseBraceStart]))
+                        {
+                            elseBraceStart++;
+                        }
+
+                        if (elseBraceStart < source.Length && source[elseBraceStart] == '{' &&
+                            TryFindMatchingDelimiter(source, elseBraceStart, '{', '}', out var elseBraceEnd))
+                        {
+                            elseBody = source[(elseBraceStart + 1)..elseBraceEnd];
+                            nextIndex = elseBraceEnd + 1;
+                        }
+                    }
+
+                    if (conditionMatch.Success)
+                    {
+                        var pin = NormalizePin(Resolve(conditionMatch.Groups["pin"].Value, symbols));
+                        var expected = conditionMatch.Groups["value"].Success
+                            ? NormalizeDigitalValue(conditionMatch.Groups["value"].Value)
+                            : "HIGH";
+                        if (conditionMatch.Groups["negate"].Success)
+                        {
+                            expected = expected == "HIGH" ? "LOW" : "HIGH";
+                        }
+
+                        instructions.Add(EducationalInstruction.If(
+                            pin,
+                            expected,
+                            ParseInstructions(controlBody, symbols, servoNames, warnings),
+                            ParseInstructions(elseBody, symbols, servoNames, warnings)));
+                    }
+                    else
+                    {
+                        warnings.Add($"Unsupported if condition: {header.Trim()}.");
+                    }
                 }
 
                 index = nextIndex;
@@ -481,7 +546,8 @@ public sealed record EducationalInstruction(
     bool Newline = false,
     string? ServoName = null,
     IReadOnlyList<EducationalInstruction>? Body = null,
-    int IterationCount = 0)
+    int IterationCount = 0,
+    IReadOnlyList<EducationalInstruction>? ElseBody = null)
 {
     public static EducationalInstruction PinMode(string pin, string mode) =>
         new(EducationalInstructionKind.PinMode, Pin: pin, Value: mode);
@@ -520,6 +586,17 @@ public sealed record EducationalInstruction(
 
     public static EducationalInstruction ForeverLoop(IReadOnlyList<EducationalInstruction> body) =>
         new(EducationalInstructionKind.ForeverLoop, Body: body);
+
+    // Pin/Value here mean "the digitalRead condition to (re-)evaluate every time
+    // this instruction is reached" (Pin to read, Value it must equal to take the
+    // then-branch) — re-read live, not baked in at parse time, which is exactly
+    // what lets a running loop() react to ISimulationInputChannel input.
+    public static EducationalInstruction If(
+        string pin,
+        string expectedValue,
+        IReadOnlyList<EducationalInstruction> thenBody,
+        IReadOnlyList<EducationalInstruction> elseBody) =>
+        new(EducationalInstructionKind.If, Pin: pin, Value: expectedValue, Body: thenBody, ElseBody: elseBody);
 }
 
 public enum EducationalInstructionKind
@@ -535,5 +612,6 @@ public enum EducationalInstructionKind
     ServoAttach,
     ServoWrite,
     CountedLoop,
-    ForeverLoop
+    ForeverLoop,
+    If
 }

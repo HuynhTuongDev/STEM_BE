@@ -259,6 +259,32 @@ public sealed class EducationalEventGenerator
 
                 return null;
 
+            case EducationalInstructionKind.If:
+                // Re-read live on EVERY visit (not cached from parse time) —
+                // this is what lets a running loop() react to a value an
+                // external caller wrote into ComponentInputs via
+                // ISimulationInputChannel since the last iteration.
+                var conditionPinMode = state.PinModes.TryGetValue(instruction.Pin!, out var ifMode) ? ifMode : null;
+                var conditionButton = state.FindButtons(instruction.Pin!).FirstOrDefault();
+                var actualValue = conditionButton?.Read(state.Context.ComponentInputs, conditionPinMode) ??
+                    (conditionPinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW");
+                var branch = actualValue.Equals(instruction.Value, StringComparison.OrdinalIgnoreCase)
+                    ? instruction.Body
+                    : instruction.ElseBody;
+
+                if (branch == null || branch.Count == 0)
+                {
+                    return null;
+                }
+
+                var branchResult = await ExecuteBlockAsync(branch, state, onEventEmitted, isLoop: true, cancellationToken);
+                if (!branchResult.Success || state.ReachedMaxDuration)
+                {
+                    return branchResult;
+                }
+
+                return null;
+
             case EducationalInstructionKind.CountedLoop:
                 for (var iteration = 0; iteration < instruction.IterationCount; iteration++)
                 {
