@@ -54,6 +54,14 @@ public class ComponentDefinitionResponse
     public string? SimulationComponentType { get; set; }
     public bool SimulationReady => !string.IsNullOrWhiteSpace(SimulationComponentType);
 
+    // Computed from SimulationComponentType via RuntimeCapabilityResolver —
+    // never stored, never provider-derived. A component with
+    // SimulationComponentType == null (e.g. every RGB LED variant) always
+    // resolves to an empty array here, by construction — the frontend never
+    // needs its own "is this really interactive" guess.
+    public IReadOnlyCollection<string> RuntimeCapabilities { get; set; } = Array.Empty<string>();
+    public string? SensorKind { get; set; }
+
     public IReadOnlyCollection<ComponentPinResponse> Pins { get; set; } = Array.Empty<ComponentPinResponse>();
     public IReadOnlyCollection<ComponentSourceResponse> Sources { get; set; } = Array.Empty<ComponentSourceResponse>();
 }

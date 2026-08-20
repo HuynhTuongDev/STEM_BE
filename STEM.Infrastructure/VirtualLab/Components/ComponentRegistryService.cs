@@ -223,6 +223,8 @@ public sealed class ComponentRegistryService : IComponentRegistry
     {
         var pins = JsonSerializer.Deserialize<List<PinRecord>>(component.PinsJson, JsonOptions) ?? new();
 
+        var capability = RuntimeCapabilityResolver.Resolve(component.SimulationComponentType);
+
         return new ComponentDefinitionResponse
         {
             Id = component.Id,
@@ -231,6 +233,8 @@ public sealed class ComponentRegistryService : IComponentRegistry
             Category = component.Category,
             Status = component.Status,
             SimulationComponentType = component.SimulationComponentType,
+            RuntimeCapabilities = capability != null ? new[] { capability.Capability } : Array.Empty<string>(),
+            SensorKind = capability?.SensorKind,
             Pins = pins.Select(pin => new ComponentPinResponse
             {
                 VisualPinId = pin.VisualPinId,
