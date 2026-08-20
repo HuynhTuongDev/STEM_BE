@@ -162,9 +162,10 @@ public sealed class EducationalEventGenerator
             case EducationalInstructionKind.AnalogReadAssign:
                 // Re-read live on every visit — same reasoning as DigitalRead/If
                 // below, this is what lets a running loop() react to a slider
-                // moved via ISimulationInputChannel since the last iteration.
-                var pot = state.FindPotentiometers(instruction.Pin!).FirstOrDefault();
-                var analogValue = pot?.Read(state.Context.ComponentInputs) ?? 0;
+                // (or a light-sensor reading) moved via ISimulationInputChannel
+                // since the last iteration. ReadAnalog doesn't care which
+                // analog-capable component is on this pin.
+                var analogValue = state.ReadAnalog(instruction.Pin!, state.Context.ComponentInputs);
                 state.AnalogLocals[instruction.Value!] = analogValue;
 
                 await EmitAsync(state, onEventEmitted, "pin-state", state.Time, new Dictionary<string, object?>
@@ -449,6 +450,7 @@ public sealed class EducationalEventGenerator
         private readonly Dictionary<string, List<BuzzerModel>> _buzzersByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<ServoModel>> _servosByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<PotentiometerModel>> _potentiometersByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<LightSensorModel>> _lightSensorsByPin = new(StringComparer.OrdinalIgnoreCase);
 
         public EducationalRunState(SimulationRunContext context, VirtualLabRuntimeDiagramSnapshot diagram)
         {
@@ -481,6 +483,22 @@ public sealed class EducationalEventGenerator
         public IReadOnlyCollection<BuzzerModel> FindBuzzers(string pin) => Find(_buzzersByPin, pin);
         public IReadOnlyCollection<ServoModel> FindServos(string pin) => Find(_servosByPin, pin);
         public IReadOnlyCollection<PotentiometerModel> FindPotentiometers(string pin) => Find(_potentiometersByPin, pin);
+        public IReadOnlyCollection<LightSensorModel> FindLightSensors(string pin) => Find(_lightSensorsByPin, pin);
+
+        // analogRead() doesn't care WHAT is attached to the pin, only that
+        // something producing a 0..4095 value is — same reasoning as
+        // digitalRead() not caring whether it's reading a button vs. some
+        // other digital source. Tries every analog-capable component pool.
+        public int ReadAnalog(string pin, IReadOnlyDictionary<string, object> componentInputs)
+        {
+            var pot = FindPotentiometers(pin).FirstOrDefault();
+            if (pot != null) return pot.Read(componentInputs);
+
+            var lightSensor = FindLightSensors(pin).FirstOrDefault();
+            if (lightSensor != null) return lightSensor.Read(componentInputs);
+
+            return 0;
+        }
 
         public SimulationRunResult ToResult(bool success)
         {
@@ -535,6 +553,11 @@ public sealed class EducationalEventGenerator
                          TryFindPin(component, new[] { "SIG" }, out var potPin))
                 {
                     AddModel(_potentiometersByPin, potPin, new PotentiometerModel(component.Id, potPin));
+                }
+                else if (component.Type.Equals("wokwi-photoresistor-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "AO" }, out var lightPin))
+                {
+                    AddModel(_lightSensorsByPin, lightPin, new LightSensorModel(component.Id, lightPin));
                 }
             }
         }

@@ -13,12 +13,18 @@ public enum SimulationInputType
 // Provider-agnostic on purpose — never bound to Fritzing/KiCad or any external
 // component id, only to the diagram part id (componentId) already used inside
 // a running simulation (matches ButtonModel.PartId).
+// SensorKind is Sensor-only metadata (e.g. "light", "distance") — future
+// sensor types add a new SensorKind value, not a new event shape or a new
+// generic "extra data" bag. Digital/Analog leave it null; nothing about how
+// TrySetInput stores or ButtonModel/PotentiometerModel/LightSensorModel read
+// a value depends on it today.
 public sealed record SimulationInputEvent(
     string ProjectId,
     string ComponentId,
     string? Pin,
     SimulationInputType InputType,
-    object Value);
+    object Value,
+    string? SensorKind = null);
 
 // Runner-independent bridge between "a session is currently running" and
 // "someone wants to push a live input value into it". A runner that supports

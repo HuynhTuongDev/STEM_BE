@@ -445,6 +445,17 @@ public class VirtualLabDiagramService
                 Require(part, "Potentiometer must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
                 Require(part, "Potentiometer power must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
             }
+            else if (part.Type.Equals("wokwi-photoresistor-sensor", StringComparison.OrdinalIgnoreCase))
+            {
+                // AO (analog out) is what LightSensorModel actually reads via
+                // analogRead() — same shape as Potentiometer's SIG. DO (digital
+                // out / threshold comparator pin) exists on the real module but
+                // isn't runtime-supported here, same "wiring-validation only for
+                // pins we don't model" pattern already used elsewhere in this file.
+                Require(part, "Photoresistor AO must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "AO" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "Photoresistor must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
+                Require(part, "Photoresistor power must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
+            }
             else if (part.Type.Equals("wokwi-dht22", StringComparison.OrdinalIgnoreCase) ||
                      part.Type.Equals("wokwi-dht11", StringComparison.OrdinalIgnoreCase))
             {
