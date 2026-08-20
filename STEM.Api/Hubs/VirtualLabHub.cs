@@ -114,27 +114,56 @@ public class VirtualLabHub : Hub
             Context.ConnectionAborted);
     }
 
-    // Realtime input path (button press/release, etc) — same auth/session
-    // pattern as SimulationEvent/DiagramUpdated above (GetOrJoinSessionAsync
-    // implicitly verifies the caller owns this project via
-    // JoinStudentSessionAsync -> _runtimeService.GetDiagramAsync(projectId,
-    // studentId, ...)). Only "digital" is wired end-to-end today (LED+Button
-    // vertical slice) — inputType is still passed through so analog/sensor
-    // can be added later without another Hub method. Value is a string on the
-    // wire ("1"/"0"/"HIGH"/"LOW"/"true"/"false") to avoid SignalR JSON-typing
-    // ambiguity; parsed to the CLR type ISimulationInputChannel expects.
+    // ESP32 ADC is 12-bit — canonical range for every analog input this Hub
+    // accepts, not just the potentiometer. Rejecting out-of-range values here
+    // (not clamping) means a client bug surfaces as an error instead of a
+    // silently wrong reading.
+    private const int AnalogMinValue = 0;
+    private const int AnalogMaxValue = 4095;
+
+    // Realtime input path (button press/release, slider drag, etc) — same
+    // auth/session pattern as SimulationEvent/DiagramUpdated above
+    // (GetOrJoinSessionAsync implicitly verifies the caller owns this project
+    // via JoinStudentSessionAsync -> _runtimeService.GetDiagramAsync(projectId,
+    // studentId, ...)). Value is a string on the wire to avoid SignalR
+    // JSON-typing ambiguity; parsed to the CLR type ISimulationInputChannel
+    // expects per inputType. Sensor (STEP 8) not added yet — this only
+    // recognizes "digital"/"analog", matching what's actually wired to a
+    // runner today.
     public async Task SetSimulationInput(string projectId, string componentId, string? pin, string inputType, string value)
     {
         _ = await GetOrJoinSessionAsync(projectId);
 
-        if (!inputType.Equals("digital", StringComparison.OrdinalIgnoreCase))
+        object parsedValue;
+        SimulationInputType parsedType;
+
+        if (inputType.Equals("digital", StringComparison.OrdinalIgnoreCase))
+        {
+            parsedType = SimulationInputType.Digital;
+            parsedValue = value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+                value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                value.Equals("HIGH", StringComparison.OrdinalIgnoreCase);
+        }
+        else if (inputType.Equals("analog", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!int.TryParse(value, out var analogValue))
+            {
+                throw new HubException($"Analog input value must be numeric, got '{value}'.");
+            }
+
+            if (analogValue < AnalogMinValue || analogValue > AnalogMaxValue)
+            {
+                throw new HubException(
+                    $"Analog input value {analogValue} is out of range ({AnalogMinValue}..{AnalogMaxValue}).");
+            }
+
+            parsedType = SimulationInputType.Analog;
+            parsedValue = analogValue;
+        }
+        else
         {
             throw new HubException($"Unsupported simulation input type: {inputType}.");
         }
-
-        var digitalValue = value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
-            value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
-            value.Equals("HIGH", StringComparison.OrdinalIgnoreCase);
 
         // VirtualLabProjectController's {id}/start route builds
         // RunEsp32SimulationRequest.SessionId as id.ToString("N") (no dashes) —
@@ -148,8 +177,8 @@ public class VirtualLabHub : Hub
             NormalizeProjectId(projectId),
             componentId,
             pin,
-            SimulationInputType.Digital,
-            digitalValue));
+            parsedType,
+            parsedValue));
 
         if (!accepted)
         {
