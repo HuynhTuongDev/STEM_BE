@@ -61,19 +61,41 @@ public sealed class ComponentRegistryService : IComponentRegistry
             ?? throw new KeyNotFoundException($"Component {externalId} not found via provider {provider}.");
 
         var normalized = _normalizer.Normalize(candidate);
-        var simulationType = SimulationTypeResolver.Resolve(normalized.Category);
-
-        // Transitional canonical key policy (STEP 3): the normalizer's
-        // generated candidate is used as-is. Real cross-provider dedup
-        // (STEP 15, "Arduino Uno"/"Arduino UNO R3" -> one canonical key) is
-        // explicitly out of scope until a 2nd provider exists to prove it
-        // against — see PARTS THAT NEED EXTENSION note in the baseline
-        // report; ComponentAggregator is where that logic belongs.
+        var normalizedPinIds = normalized.Pins.Select(p => p.LogicalPinId).ToList();
+        var simulationType = SimulationTypeResolver.Resolve(normalized.Category, normalizedPinIds);
         var canonicalKey = normalized.CanonicalKeyCandidate;
+        var pinSignature = ComputePinSignature(normalizedPinIds);
 
+        // Deterministic cross-provider identity resolution (STEP 5). Exact
+        // canonicalKey match first. Otherwise, only attach to an existing
+        // Definition when Category + SimulationComponentType + normalized
+        // pin signature ALL agree.
+        //
+        // Category+SimulationComponentType alone is NOT enough — found live
+        // (2026-08, this phase's own STEP 11 verification): Fritzing's own
+        // "family" property is "LED" for BOTH a plain 2-pin LED AND
+        // "RGB LED (4 legs)" (core/led-rgb-4pin-anode.fzp — 4 pins: red
+        // cathode/common anode/green cathode/blue cathode). That import was
+        // wrongly merged into the plain-LED Definition before this check
+        // existed; fixed here by also requiring the pin signature to match
+        // (plain LED: "A|C" vs the RGB part: 4 unrecognized raw pin names —
+        // never equal), and the bad Source was manually removed from the DB
+        // afterward (see SQLScripts).
         var component = await _context.ComponentDefinitions
             .Include(c => c.Sources)
             .FirstOrDefaultAsync(c => c.CanonicalKey == canonicalKey, cancellationToken);
+
+        if (component == null && simulationType != null && !string.IsNullOrWhiteSpace(normalized.Category))
+        {
+            var categoryMatches = await _context.ComponentDefinitions
+                .Include(c => c.Sources)
+                .Where(c => c.SimulationComponentType == simulationType)
+                .Where(c => c.Category != null && c.Category.ToLower() == normalized.Category.ToLower())
+                .ToListAsync(cancellationToken);
+
+            component = categoryMatches.FirstOrDefault(
+                c => ComputePinSignature(ExtractStoredLogicalPinIds(c.PinsJson)) == pinSignature);
+        }
 
         var pinsJson = JsonSerializer.Serialize(
             normalized.Pins.Select(pin => new
@@ -104,7 +126,14 @@ public sealed class ComponentRegistryService : IComponentRegistry
         }
         else
         {
-            component.PinsJson = pinsJson;
+            // Attaching a new Source to an already-known Definition (exact
+            // canonicalKey re-import OR a cross-provider semantic match) —
+            // deliberately does NOT overwrite PinsJson/Name/Category with
+            // this candidate's values. The first-imported provider's data
+            // stays canonical; only provenance (a new ComponentSource row)
+            // is added. Overwriting here would silently discard whichever
+            // provider was imported first every time a second source is
+            // attached — a real data-loss bug, not just a style choice.
             component.SimulationComponentType ??= simulationType;
             component.UpdatedAt = DateTime.UtcNow;
             AdvanceStatus(component, normalized, component.SimulationComponentType);
@@ -159,6 +188,21 @@ public sealed class ComponentRegistryService : IComponentRegistry
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
 
         return component == null ? null : MapToResponse(component);
+    }
+
+    // Order-independent, case-insensitive fingerprint of a component's
+    // logical pin set — e.g. plain LED -> "A|C". Two candidates only count
+    // as "the same real-world part" for dedup when this matches exactly, on
+    // top of Category+SimulationComponentType (see ImportAsync's comment for
+    // the real false-positive this caught: same "family" string, different
+    // pin count).
+    private static string ComputePinSignature(IEnumerable<string> logicalPinIds) =>
+        string.Join('|', logicalPinIds.Select(id => id.Trim().ToUpperInvariant()).OrderBy(id => id, StringComparer.Ordinal));
+
+    private static IEnumerable<string> ExtractStoredLogicalPinIds(string pinsJson)
+    {
+        var pins = JsonSerializer.Deserialize<List<PinRecord>>(pinsJson, JsonOptions) ?? new();
+        return pins.Select(p => p.LogicalPinId);
     }
 
     private static void AdvanceStatus(ComponentDefinition component, NormalizedComponent normalized, string? simulationType)
