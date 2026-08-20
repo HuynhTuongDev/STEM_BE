@@ -286,12 +286,17 @@ public sealed class SimulationRunnerResolverTests
         FakeSimulationEventBroadcaster Broadcaster,
         FakeSimulationEventStore Store,
         IRunningSimulationRegistry Registry,
-        ISimulationInputChannel InputChannel) CreateStreamingRunner()
+        ISimulationInputChannel InputChannel) CreateStreamingRunner(
+            ISimulationInputChannel? sharedInputChannel = null)
     {
         var broadcaster = new FakeSimulationEventBroadcaster();
         var store = new FakeSimulationEventStore();
         var registry = new RunningSimulationRegistry();
-        var inputChannel = new SimulationInputChannel();
+        // Two runners sharing one channel instance is the real production
+        // topology (ISimulationInputChannel is a singleton) — tests that need
+        // to prove cross-session isolation on ONE channel pass their own
+        // shared instance in; everything else gets an independent one.
+        var inputChannel = sharedInputChannel ?? new SimulationInputChannel();
 
         // IServiceScopeFactory THẬT (không tự chế) — EducationalSimulationRunner
         // tạo scope mới cho mỗi lần chạy nền, đúng như production; store dùng

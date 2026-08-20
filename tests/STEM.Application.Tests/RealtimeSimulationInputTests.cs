@@ -203,6 +203,151 @@ public sealed class RealtimeSimulationInputTests
         Assert.False(acceptedAfterStop, "A stopped simulation must not accept input anymore.");
     }
 
+    private const string DiagramJsonPotentiometerAndLed = """
+    {
+      "version": 1,
+      "parts": [
+        { "type": "board-esp32-devkit-c-v4", "id": "esp" },
+        { "type": "wokwi-potentiometer", "id": "pot1" },
+        { "type": "wokwi-resistor", "id": "r1" },
+        { "type": "wokwi-led", "id": "led1" }
+      ],
+      "connections": [
+        [ "pot1:SIG", "esp:GPIO34" ],
+        [ "pot1:GND", "esp:GND.1" ],
+        [ "pot1:VCC", "esp:3V3" ],
+        [ "esp:GPIO13", "r1:1" ],
+        [ "r1:2", "led1:A" ],
+        [ "led1:C", "esp:GND.2" ]
+      ]
+    }
+    """;
+
+    private const string PotentiometerReactiveProgram = """
+    const int POT = 34;
+    const int LED = 13;
+
+    void setup() {
+      pinMode(LED, OUTPUT);
+    }
+
+    void loop() {
+      int value = analogRead(POT);
+
+      if (value > 2000) {
+        digitalWrite(LED, HIGH);
+      } else {
+        digitalWrite(LED, LOW);
+      }
+
+      delay(50);
+    }
+    """;
+
+    [Fact]
+    public async Task PotentiometerSlider_ReactsLive_CrossingThresholdBothWays_WithoutRestart()
+    {
+        var (runner, broadcaster, store, _, inputChannel) = SimulationRunnerResolverTests.CreateStreamingRunner();
+        var projectId = Guid.NewGuid().ToString("N");
+
+        var startResult = await runner.RunAsync(new SimulationRunContext
+        {
+            ProjectId = projectId,
+            Mode = "educational",
+            MaxDurationMs = 3000,
+            MaxInstructionCount = 2000,
+            DiagramJson = DiagramJsonPotentiometerAndLed,
+            SourceCode = PotentiometerReactiveProgram
+        }, CancellationToken.None);
+
+        Assert.True(startResult.Success, string.Join("; ", startResult.Errors));
+
+        // Default (nobody moved the slider yet) reads as 0 -> below threshold -> LED off.
+        await Task.Delay(250);
+        var eventsBeforeMove = store.AppendedEvents.Where(IsLedStateEvent).ToList();
+        Assert.NotEmpty(eventsBeforeMove);
+        Assert.All(eventsBeforeMove, item => Assert.Equal("off", PayloadString(item, "state")));
+
+        // Slider above threshold (2500 > 2000).
+        Assert.True(inputChannel.TrySetInput(new SimulationInputEvent(
+            projectId, "pot1", "34", SimulationInputType.Analog, 2500)));
+
+        await Task.Delay(300);
+        var eventsAboveThreshold = store.AppendedEvents.Where(IsLedStateEvent).ToList();
+        Assert.Contains(eventsAboveThreshold, item => PayloadString(item, "state") == "on");
+
+        // Slider back below threshold (500 < 2000) — same run, no restart.
+        Assert.True(inputChannel.TrySetInput(new SimulationInputEvent(
+            projectId, "pot1", "34", SimulationInputType.Analog, 500)));
+
+        await Task.Delay(300);
+        var eventsAfterLowered = store.AppendedEvents.Where(IsLedStateEvent).ToList();
+        Assert.Equal("off", PayloadString(eventsAfterLowered[^1], "state"));
+
+        await WaitForCompletionAsync(broadcaster);
+        Assert.Equal(VirtualLabProjectStatuses.Running, store.FinalStatus);
+    }
+
+    [Fact]
+    public async Task MultiSessionIsolation_HoldsForAnalogInputToo()
+    {
+        // ONE shared channel instance for both runners — matches the real
+        // production topology (ISimulationInputChannel is a singleton serving
+        // every concurrently-running session), unlike the other tests in this
+        // class which each get their own isolated channel for simplicity.
+        var sharedChannel = new SimulationInputChannel();
+        var (runnerA, broadcasterA, storeA, registryA, channel) = SimulationRunnerResolverTests.CreateStreamingRunner(sharedChannel);
+        var (runnerB, broadcasterB, storeB, registryB, _) = SimulationRunnerResolverTests.CreateStreamingRunner(sharedChannel);
+        var projectA = Guid.NewGuid().ToString("N");
+        var projectB = Guid.NewGuid().ToString("N");
+
+        try
+        {
+            await runnerA.RunAsync(new SimulationRunContext
+            {
+                ProjectId = projectA,
+                Mode = "educational",
+                MaxDurationMs = 10_000,
+                MaxInstructionCount = 100_000,
+                DiagramJson = DiagramJsonPotentiometerAndLed,
+                SourceCode = PotentiometerReactiveProgram
+            }, CancellationToken.None);
+            await runnerB.RunAsync(new SimulationRunContext
+            {
+                ProjectId = projectB,
+                Mode = "educational",
+                MaxDurationMs = 10_000,
+                MaxInstructionCount = 100_000,
+                DiagramJson = DiagramJsonPotentiometerAndLed,
+                SourceCode = PotentiometerReactiveProgram
+            }, CancellationToken.None);
+
+            await Task.Delay(200);
+
+            // Set project A's slider high — must accept for A, and must NEVER
+            // be reachable by asking for B's session under A's own id (there's
+            // only one channel now, so this genuinely exercises key isolation,
+            // not "two independent objects don't share state").
+            Assert.True(channel.TrySetInput(new SimulationInputEvent(
+                projectA, "pot1", "34", SimulationInputType.Analog, 3000)));
+
+            await Task.Delay(300);
+            var bEvents = storeB.AppendedEvents.Where(IsLedStateEvent).ToList();
+            Assert.NotEmpty(bEvents);
+            Assert.All(bEvents, item => Assert.Equal("off", PayloadString(item, "state")));
+
+            var aEvents = storeA.AppendedEvents.Where(IsLedStateEvent).ToList();
+            Assert.Contains(aEvents, item => PayloadString(item, "state") == "on");
+        }
+        finally
+        {
+            registryA.TryCancel(projectA);
+            registryB.TryCancel(projectB);
+            await WaitForCompletionAsync(broadcasterA);
+            await WaitForCompletionAsync(broadcasterB);
+        }
+    }
+
     private static bool IsLedStateEvent(SimulationEventResponse item)
     {
         return item.Type == "part-state" && PayloadString(item, "component") == "led";
