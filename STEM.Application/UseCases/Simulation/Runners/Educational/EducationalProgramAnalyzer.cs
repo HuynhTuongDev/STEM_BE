@@ -28,6 +28,24 @@ public sealed class EducationalProgramAnalyzer
     private static readonly Regex IfDigitalReadConditionRegex = new(
         @"^\s*(?<negate>!\s*)?digitalRead\s*\(\s*(?<pin>[^\)]+)\s*\)\s*(?:==\s*(?<value>HIGH|LOW|true|false|1|0)\s*)?$",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // "int value = analogRead(PIN);" — the ONE assignment shape this
+    // interpreter understands, matching the exact idiom analog sketches use
+    // (analogRead's result almost always gets read once and compared later,
+    // never inlined). Not a general variable system: no arithmetic, no other
+    // r-value expressions, one scalar per name, overwritten fresh every
+    // loop() visit.
+    private static readonly Regex AnalogReadAssignRegex = new(
+        @"^\s*(?:int|long|uint16_t)\s+(?<name>[A-Za-z_]\w*)\s*=\s*analogRead\s*\(\s*(?<pin>[^\)]+)\s*\)\s*$",
+        RegexOptions.Compiled);
+    private static readonly Regex AnalogReadRegex = new(@"\banalogRead\s*\(\s*(?<pin>[^\)]+)\s*\)", RegexOptions.Compiled);
+    // "if (<variableName> >|<|>=|<= <threshold>)" — the numeric counterpart to
+    // IfDigitalReadConditionRegex above, for a variable previously set by
+    // AnalogReadAssignRegex. Threshold must be a literal or a known #define/
+    // const int symbol (resolved via Resolve()), same as everywhere else in
+    // this file — no arbitrary expressions on either side.
+    private static readonly Regex IfNumericConditionRegex = new(
+        @"^\s*(?<name>[A-Za-z_]\w*)\s*(?<op>>=|<=|>|<)\s*(?<threshold>[A-Za-z_]\w*|\d+)\s*$",
+        RegexOptions.Compiled);
 
     public EducationalProgram Analyze(string sourceCode)
     {
@@ -163,6 +181,8 @@ public sealed class EducationalProgramAnalyzer
                         }
                     }
 
+                    var numericConditionMatch = conditionMatch.Success ? null : IfNumericConditionRegex.Match(header);
+
                     if (conditionMatch.Success)
                     {
                         var pin = NormalizePin(Resolve(conditionMatch.Groups["pin"].Value, symbols));
@@ -177,6 +197,16 @@ public sealed class EducationalProgramAnalyzer
                         instructions.Add(EducationalInstruction.If(
                             pin,
                             expected,
+                            ParseInstructions(controlBody, symbols, servoNames, warnings),
+                            ParseInstructions(elseBody, symbols, servoNames, warnings)));
+                    }
+                    else if (numericConditionMatch != null && numericConditionMatch.Success &&
+                             TryResolveInt(numericConditionMatch.Groups["threshold"].Value, symbols, out var threshold))
+                    {
+                        instructions.Add(EducationalInstruction.IfNumeric(
+                            numericConditionMatch.Groups["name"].Value,
+                            numericConditionMatch.Groups["op"].Value,
+                            threshold,
                             ParseInstructions(controlBody, symbols, servoNames, warnings),
                             ParseInstructions(elseBody, symbols, servoNames, warnings)));
                     }
@@ -228,11 +258,29 @@ public sealed class EducationalProgramAnalyzer
                 continue;
             }
 
+            var analogReadAssign = AnalogReadAssignRegex.Match(statement);
+            if (analogReadAssign.Success)
+            {
+                instructions.Add(EducationalInstruction.AnalogReadAssign(
+                    NormalizePin(Resolve(analogReadAssign.Groups["pin"].Value, symbols)),
+                    analogReadAssign.Groups["name"].Value));
+                continue;
+            }
+
             var digitalRead = DigitalReadRegex.Match(statement);
             if (digitalRead.Success)
             {
                 instructions.Add(EducationalInstruction.DigitalRead(
                     NormalizePin(Resolve(digitalRead.Groups["pin"].Value, symbols))));
+                continue;
+            }
+
+            var analogRead = AnalogReadRegex.Match(statement);
+            if (analogRead.Success)
+            {
+                instructions.Add(EducationalInstruction.AnalogReadAssign(
+                    NormalizePin(Resolve(analogRead.Groups["pin"].Value, symbols)),
+                    "_"));
                 continue;
             }
 
@@ -547,7 +595,11 @@ public sealed record EducationalInstruction(
     string? ServoName = null,
     IReadOnlyList<EducationalInstruction>? Body = null,
     int IterationCount = 0,
-    IReadOnlyList<EducationalInstruction>? ElseBody = null)
+    IReadOnlyList<EducationalInstruction>? ElseBody = null,
+    // Numeric-If only (IfNumeric factory below) — Pin/Value above stay
+    // reserved for the digital-equality If.
+    string? ComparisonOperator = null,
+    int Threshold = 0)
 {
     public static EducationalInstruction PinMode(string pin, string mode) =>
         new(EducationalInstructionKind.PinMode, Pin: pin, Value: mode);
@@ -597,6 +649,24 @@ public sealed record EducationalInstruction(
         IReadOnlyList<EducationalInstruction> thenBody,
         IReadOnlyList<EducationalInstruction> elseBody) =>
         new(EducationalInstructionKind.If, Pin: pin, Value: expectedValue, Body: thenBody, ElseBody: elseBody);
+
+    // pin: source GPIO to read (or the sentinel "_" for a bare, unassigned
+    // analogRead(pin) call kept only for its Serial/event side effect).
+    // variableName: AnalogLocals key the value is stored under afterward.
+    public static EducationalInstruction AnalogReadAssign(string pin, string variableName) =>
+        new(EducationalInstructionKind.AnalogReadAssign, Pin: pin, Value: variableName);
+
+    // IfNumeric reuses Pin to mean "AnalogLocals variable name to compare" —
+    // distinct from If's Pin (a GPIO), disambiguated by ComparisonOperator
+    // being non-null. Re-evaluated live every visit, same as If.
+    public static EducationalInstruction IfNumeric(
+        string variableName,
+        string comparisonOperator,
+        int threshold,
+        IReadOnlyList<EducationalInstruction> thenBody,
+        IReadOnlyList<EducationalInstruction> elseBody) =>
+        new(EducationalInstructionKind.If, Pin: variableName, Body: thenBody, ElseBody: elseBody,
+            ComparisonOperator: comparisonOperator, Threshold: threshold);
 }
 
 public enum EducationalInstructionKind
@@ -613,5 +683,6 @@ public enum EducationalInstructionKind
     ServoWrite,
     CountedLoop,
     ForeverLoop,
-    If
+    If,
+    AnalogReadAssign
 }

@@ -159,6 +159,22 @@ public sealed class EducationalEventGenerator
                 }, cancellationToken);
                 return null;
 
+            case EducationalInstructionKind.AnalogReadAssign:
+                // Re-read live on every visit — same reasoning as DigitalRead/If
+                // below, this is what lets a running loop() react to a slider
+                // moved via ISimulationInputChannel since the last iteration.
+                var pot = state.FindPotentiometers(instruction.Pin!).FirstOrDefault();
+                var analogValue = pot?.Read(state.Context.ComponentInputs) ?? 0;
+                state.AnalogLocals[instruction.Value!] = analogValue;
+
+                await EmitAsync(state, onEventEmitted, "pin-state", state.Time, new Dictionary<string, object?>
+                {
+                    ["pin"] = instruction.Pin,
+                    ["value"] = analogValue,
+                    ["operation"] = "analogRead"
+                }, cancellationToken);
+                return null;
+
             case EducationalInstructionKind.Delay:
                 await AdvanceTimeAsync(state, instruction.DurationMs, cancellationToken);
                 return null;
@@ -264,13 +280,37 @@ public sealed class EducationalEventGenerator
                 // this is what lets a running loop() react to a value an
                 // external caller wrote into ComponentInputs via
                 // ISimulationInputChannel since the last iteration.
-                var conditionPinMode = state.PinModes.TryGetValue(instruction.Pin!, out var ifMode) ? ifMode : null;
-                var conditionButton = state.FindButtons(instruction.Pin!).FirstOrDefault();
-                var actualValue = conditionButton?.Read(state.Context.ComponentInputs, conditionPinMode) ??
-                    (conditionPinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW");
-                var branch = actualValue.Equals(instruction.Value, StringComparison.OrdinalIgnoreCase)
-                    ? instruction.Body
-                    : instruction.ElseBody;
+                IReadOnlyList<EducationalInstruction>? branch;
+                if (instruction.ComparisonOperator != null)
+                {
+                    // Numeric mode (IfNumeric) — Pin holds the AnalogLocals
+                    // variable name here, set by the AnalogReadAssign visited
+                    // earlier this same loop() pass. Missing/never-assigned
+                    // variable reads as 0, matching an uninitialized int's
+                    // typical Arduino behavior closely enough for this scope.
+                    var currentValue = state.AnalogLocals.TryGetValue(instruction.Pin!, out var storedValue)
+                        ? storedValue
+                        : 0;
+                    var conditionTrue = instruction.ComparisonOperator switch
+                    {
+                        ">" => currentValue > instruction.Threshold,
+                        "<" => currentValue < instruction.Threshold,
+                        ">=" => currentValue >= instruction.Threshold,
+                        "<=" => currentValue <= instruction.Threshold,
+                        _ => false
+                    };
+                    branch = conditionTrue ? instruction.Body : instruction.ElseBody;
+                }
+                else
+                {
+                    var conditionPinMode = state.PinModes.TryGetValue(instruction.Pin!, out var ifMode) ? ifMode : null;
+                    var conditionButton = state.FindButtons(instruction.Pin!).FirstOrDefault();
+                    var actualValue = conditionButton?.Read(state.Context.ComponentInputs, conditionPinMode) ??
+                        (conditionPinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW");
+                    branch = actualValue.Equals(instruction.Value, StringComparison.OrdinalIgnoreCase)
+                        ? instruction.Body
+                        : instruction.ElseBody;
+                }
 
                 if (branch == null || branch.Count == 0)
                 {
@@ -408,6 +448,7 @@ public sealed class EducationalEventGenerator
         private readonly Dictionary<string, List<ButtonModel>> _buttonsByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<BuzzerModel>> _buzzersByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<ServoModel>> _servosByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<PotentiometerModel>> _potentiometersByPin = new(StringComparer.OrdinalIgnoreCase);
 
         public EducationalRunState(SimulationRunContext context, VirtualLabRuntimeDiagramSnapshot diagram)
         {
@@ -428,10 +469,18 @@ public sealed class EducationalEventGenerator
         public Dictionary<string, string> PinValues { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, string> ServoPins { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+        // Minimal local-variable slot for "int value = analogRead(pin);" followed
+        // later by "if (value > N)" — NOT a general variable system (no arithmetic,
+        // no other types). Overwritten by the SAME AnalogReadAssign instruction
+        // every loop() iteration, so it's always fresh by the time an If reads it —
+        // no separate per-iteration reset needed.
+        public Dictionary<string, int> AnalogLocals { get; } = new(StringComparer.OrdinalIgnoreCase);
+
         public IReadOnlyCollection<LedModel> FindLeds(string pin) => Find(_ledsByPin, pin);
         public IReadOnlyCollection<ButtonModel> FindButtons(string pin) => Find(_buttonsByPin, pin);
         public IReadOnlyCollection<BuzzerModel> FindBuzzers(string pin) => Find(_buzzersByPin, pin);
         public IReadOnlyCollection<ServoModel> FindServos(string pin) => Find(_servosByPin, pin);
+        public IReadOnlyCollection<PotentiometerModel> FindPotentiometers(string pin) => Find(_potentiometersByPin, pin);
 
         public SimulationRunResult ToResult(bool success)
         {
@@ -481,6 +530,11 @@ public sealed class EducationalEventGenerator
                          TryFindPin(component, new[] { "PWM" }, out var servoPin))
                 {
                     AddModel(_servosByPin, servoPin, new ServoModel(component.Id, servoPin));
+                }
+                else if (component.Type.Equals("wokwi-potentiometer", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "SIG" }, out var potPin))
+                {
+                    AddModel(_potentiometersByPin, potPin, new PotentiometerModel(component.Id, potPin));
                 }
             }
         }
