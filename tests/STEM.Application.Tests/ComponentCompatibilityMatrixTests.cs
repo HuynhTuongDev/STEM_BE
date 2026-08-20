@@ -130,6 +130,25 @@ public sealed class ComponentCompatibilityMatrixTests
         Assert.Null(importedEntry.SimulationComponentType);
     }
 
+    // Relay Module milestone (Class D -> B): must be classified B, with a
+    // real SimulationComponentType, Output-only capability (never
+    // DigitalInput — Relay is not an input component), and
+    // RuntimeCapabilityResolver must independently agree, same shape as the
+    // ClassA invariant check above.
+    [Fact]
+    public void Relay_IsClassB_WithOutputOnlyCapabilityConfirmedByResolver()
+    {
+        var entry = Matrix.Value.Components.Single(c => c.CanonicalKey == "wokwi-relay-module");
+
+        Assert.Equal("B", entry.Classification);
+        Assert.Equal("wokwi-relay-module", entry.SimulationComponentType);
+        Assert.Equal(new[] { "Output" }, entry.RuntimeCapabilities);
+
+        var resolved = RuntimeCapabilityResolver.Resolve(entry.SimulationComponentType);
+        Assert.NotNull(resolved);
+        Assert.Equal(RuntimeCapabilities.Output, resolved!.Capability);
+    }
+
     private sealed class MatrixDocument
     {
         public List<MatrixEntry> Components { get; set; } = new();
