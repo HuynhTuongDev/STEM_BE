@@ -56,4 +56,27 @@ public class SimulationTypeResolverTests
         // fallback (STEP 8: "Không đoán simulation behavior").
         Assert.Null(SimulationTypeResolver.Resolve(category, new[] { "A", "C" }));
     }
+
+    // Component Compatibility Matrix milestone (STEP 4): explicit regression
+    // guards for the two providers-can't-honestly-supply-this findings from
+    // that audit. Live-verified (2026-08, this phase): KiCad's real
+    // R_Potentiometer symbol has bare pins "1"/"2"/"3" (no VCC/SIG/GND
+    // identity — a schematic rheostat, not a breakout module) and Fritzing's
+    // real LDR (core/LDR_photocell_300mil.fzp) has bare pins "pin 0"/"pin 1".
+    // "POTENTIOMETER"/"LDR"/"PHOTORESISTOR" are deliberately absent from
+    // CategoryToRule — this test locks that omission in as intentional, so a
+    // future careless addition (e.g. "category says potentiometer, map it")
+    // has to deliberately change/remove this test, not silently slip past it.
+    [Theory]
+    [InlineData("POTENTIOMETER")]
+    [InlineData("LDR")]
+    [InlineData("PHOTORESISTOR")]
+    public void Resolve_PassiveComponentCategoriesWithNoBreakoutModuleIdentity_NeverMapped(string category)
+    {
+        // Even with pins that superficially look plausible, category alone
+        // must not be enough — these categories simply have no rule at all.
+        Assert.Null(SimulationTypeResolver.Resolve(category, new[] { "1", "2", "3" }));
+        Assert.Null(SimulationTypeResolver.Resolve(category, new[] { "SIG", "VCC", "GND" }));
+        Assert.Null(SimulationTypeResolver.Resolve(category, null));
+    }
 }
