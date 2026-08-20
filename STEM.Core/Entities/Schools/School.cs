@@ -1,7 +1,6 @@
 using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Users;
 using STEM.Core.Entities.Courses;
-using STEM.Core.Entities.Payments;
 
 namespace STEM.Core.Entities.Schools;
 
@@ -32,6 +31,5 @@ public class School : BaseEntity
     public ICollection<User> Users { get; set; } = new List<User>();
     public ICollection<Class> Classes { get; set; } = new List<Class>();
     public ICollection<Course> Courses { get; set; } = new List<Course>();
-    public ICollection<TokenAccount> TokenAccounts { get; set; } = new List<TokenAccount>();
-    public ICollection<TokenTransaction> TokenTransactions { get; set; } = new List<TokenTransaction>();
+   
 }

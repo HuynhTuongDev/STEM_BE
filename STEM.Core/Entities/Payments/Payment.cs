@@ -1,51 +1,33 @@
-using STEM.Core.Entities.Common;
+using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using STEM.Core.Entities.Schools;
-using STEM.Core.Entities.Users;
 
 namespace STEM.Core.Entities.Payments;
 
 public class Payment : BaseEntity
 {
-    public string TransactionId { get; set; } = Guid.NewGuid().ToString();
-    public int BuyerId { get; set; } // School Admin user ID
-    public int SellerId { get; set; } // Master Admin user ID
+    [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+    public override int Id { get; set; }
+    public string TransactionId { get; set; } = string.Empty;
+    public long? OrderCode { get; set; }
     public int PackageId { get; set; }
+    public int? SchoolId { get; set; }
+    public int? UserId { get; set; }
+    public int TokenAmount { get; set; }
     public decimal Amount { get; set; }
-    public string Currency { get; set; } = "USD";
+    public string Currency { get; set; } = "VND";
     public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
-    public PaymentMethod Method { get; set; } = PaymentMethod.Unknown;
+    public PaymentMethod Method { get; set; } = PaymentMethod.PayOS;
+    public string? GatewayTransactionId { get; set; }
+    public string? PaymentLinkId { get; set; }
+    public string? CheckoutUrl { get; set; }
     public DateTime? PaidAt { get; set; }
     public DateTime? ExpiresAt { get; set; }
-    public string? PaymentGateway { get; set; } // e.g., "PayOS", "Stripe", "Manual"
-    public string? GatewayTransactionId { get; set; }
-    public string? FailureReason { get; set; }
-    public int TokenQuantity { get; set; } // Number of tokens purchased
-    public int TokensRemaining { get; set; } // Tokens left after purchase
-    public string? Metadata { get; set; } // JSON for extra data
+    public DateTime? CanceledAt { get; set; }
+    public string? CancellationReason { get; set; }
+    public string? Metadata { get; set; }
 
-    // Navigation
-    public User? Buyer { get; set; }
-    public User? Seller { get; set; }
     public PaymentPackage? Package { get; set; }
-}
-
-public enum PaymentStatus
-{
-    Pending = 0,
-    Processing = 1,
-    Completed = 2,
-    Failed = 3,
-    Refunded = 4,
-    Expired = 5
-}
-
-public enum PaymentMethod
-{
-    Unknown = 0,
-    CreditCard = 1,
-    BankTransfer = 2,
-    PayOS = 3,
-    Momo = 4,
-    ZaloPay = 5,
-    Manual = 6
+    public School? School { get; set; }
+    public ICollection<TokenTransaction> Transactions { get; set; } = new List<TokenTransaction>();
 }

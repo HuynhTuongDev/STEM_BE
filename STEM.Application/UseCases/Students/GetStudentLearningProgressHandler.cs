@@ -1,9 +1,7 @@
 using STEM.Application.Dtos.Students;
 using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Courses;
-using STEM.Core.Entities.Participants;
 using STEM.Core.Entities.Projects;
-using STEM.Core.Entities.Simulations;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 using ClassEntity = STEM.Core.Entities.Classes.Class;
@@ -23,8 +21,6 @@ public class GetStudentLearningProgressHandler
     private readonly IRepository<CourseModule> _moduleRepository;
     private readonly IRepository<Lesson> _lessonRepository;
     private readonly IRepository<Assignment> _assignmentRepository;
-    private readonly IRepository<ProjectMember> _projectMemberRepository;
-    private readonly IRepository<SimulationSession> _simulationSessionRepository;
     private readonly ISubmissionRepository _submissionRepository;
 
     public GetStudentLearningProgressHandler(
@@ -36,8 +32,6 @@ public class GetStudentLearningProgressHandler
         IRepository<CourseModule> moduleRepository,
         IRepository<Lesson> lessonRepository,
         IRepository<Assignment> assignmentRepository,
-        IRepository<ProjectMember> projectMemberRepository,
-        IRepository<SimulationSession> simulationSessionRepository,
         ISubmissionRepository submissionRepository)
     {
         _userRepository = userRepository;
@@ -48,8 +42,6 @@ public class GetStudentLearningProgressHandler
         _moduleRepository = moduleRepository;
         _lessonRepository = lessonRepository;
         _assignmentRepository = assignmentRepository;
-        _projectMemberRepository = projectMemberRepository;
-        _simulationSessionRepository = simulationSessionRepository;
         _submissionRepository = submissionRepository;
     }
 
@@ -87,10 +79,6 @@ public class GetStudentLearningProgressHandler
         var assignments = classIds.Count == 0
             ? new List<Assignment>()
             : (await _assignmentRepository.FindAsync(assignment => classIds.Contains(assignment.ClassId), cancellationToken)).ToList();
-        var projectMembers = (await _projectMemberRepository.FindAsync(projectMember => projectMember.StudentId == studentId, cancellationToken))
-            .ToList();
-        var simulationSessions = (await _simulationSessionRepository.FindAsync(session => session.StudentId == studentId, cancellationToken))
-            .ToList();
 
         var courseById = courses.ToDictionary(course => course.Id);
         var lessonCountsByCourse = lessons
@@ -164,8 +152,7 @@ public class GetStudentLearningProgressHandler
             CourseCompletionRate = 0,
             TotalLessons = lessons.Count,
             TotalAssignments = assignments.Count,
-            TotalProjects = projectMembers.Select(projectMember => projectMember.ProjectId).Distinct().Count(),
-            TotalSimulationSessions = simulationSessions.Count,
+            TotalSimulationSessions = 0,
             TotalGrades = totalGrades,
             AverageScore = averageScore,
             CertificatesEarned = 0,

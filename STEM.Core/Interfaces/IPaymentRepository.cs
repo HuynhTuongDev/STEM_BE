@@ -1,28 +1,15 @@
 using STEM.Core.Entities.Payments;
+using STEM.Core.Repository;
 
-namespace STEM.Core.Repository;
+namespace STEM.Core.Interfaces;
 
 public interface IPaymentRepository : IRepository<Payment>
 {
+    Task<Payment?> GetByIdWithDetailsAsync(int id, CancellationToken cancellationToken = default);
     Task<Payment?> GetByTransactionIdAsync(string transactionId, CancellationToken cancellationToken = default);
-    Task<(IEnumerable<Payment> Payments, int TotalCount)> GetBySchoolAsync(int schoolId, int page, int pageSize, CancellationToken cancellationToken = default);
-    Task<IEnumerable<Payment>> GetByBuyerAsync(int buyerId, CancellationToken cancellationToken = default);
-}
-
-public interface IPaymentPackageRepository : IRepository<PaymentPackage>
-{
-    Task<IEnumerable<PaymentPackage>> GetActivePackagesAsync(CancellationToken cancellationToken = default);
-    Task<PaymentPackage?> GetByIdWithDetailsAsync(int id, CancellationToken cancellationToken = default);
-}
-
-public interface ITokenAccountRepository : IRepository<TokenAccount>
-{
-    Task<TokenAccount?> GetBySchoolIdAsync(int schoolId, CancellationToken cancellationToken = default);
-    Task<TokenAccount> GetOrCreateAsync(int schoolId, CancellationToken cancellationToken = default);
-}
-
-public interface ITokenTransactionRepository : IRepository<TokenTransaction>
-{
-    Task<IEnumerable<TokenTransaction>> GetBySchoolAsync(int schoolId, int page, int pageSize, CancellationToken cancellationToken = default);
-    Task<IEnumerable<TokenTransaction>> GetByPaymentAsync(int paymentId, CancellationToken cancellationToken = default);
+    Task<Payment?> GetByPaymentLinkIdAsync(string paymentLinkId, CancellationToken cancellationToken = default);
+    Task<Payment?> GetByOrderCodeAsync(long orderCode, CancellationToken cancellationToken = default);
+    Task<IEnumerable<Payment>> GetBySchoolIdAsync(int schoolId, int page, int pageSize, CancellationToken cancellationToken = default);
+    Task<int> GetCountBySchoolIdAsync(int schoolId, CancellationToken cancellationToken = default);
+    Task<IEnumerable<Payment>> GetPendingPaymentsAsync(CancellationToken cancellationToken = default);
 }

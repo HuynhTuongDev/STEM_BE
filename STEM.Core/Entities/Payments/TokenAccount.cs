@@ -1,4 +1,3 @@
-using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Schools;
 
 namespace STEM.Core.Entities.Payments;
@@ -12,6 +11,7 @@ public class TokenAccount : BaseEntity
     public DateTime? ExpiresAt { get; set; }
     public DateTime? LastPurchaseAt { get; set; }
 
-    // Navigation
     public School? School { get; set; }
+    public ICollection<TokenTransaction> Transactions { get; set; } = new List<TokenTransaction>();
+    public ICollection<TokenAllocation> Allocations { get; set; } = new List<TokenAllocation>();
 }

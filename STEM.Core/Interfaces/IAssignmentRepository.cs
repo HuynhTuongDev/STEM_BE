@@ -1,5 +1,4 @@
 using STEM.Core.Entities.Projects;
-using STEM.Core.Entities.Assessments;
 
 namespace STEM.Core.Repository;
 

@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <Folder Include="Dtos\" />
+    <Folder Include="Dtos\Payments\" />
     <Folder Include="Interfaces\" />
     <Folder Include="UseCases\" />
     <Folder Include="Validators\" />
@@ -31,6 +32,7 @@
     <PackageReference Include="Microsoft.Extensions.Configuration" Version="10.0.8" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.8" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.8" />
+    <PackageReference Include="payOS.Net5" Version="1.0.7" />
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.4.0" />
   </ItemGroup>
 

@@ -4,7 +4,6 @@ using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Users;
 using STEM.Core.Entities.Projects;
-using STEM.Core.Entities.Quizzes;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 

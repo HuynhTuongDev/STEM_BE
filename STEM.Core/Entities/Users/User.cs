@@ -1,6 +1,5 @@
 using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Schools;
-using STEM.Core.Entities.Payments;
 
 namespace STEM.Core.Entities.Users;
 
@@ -28,6 +27,4 @@ public class User : BaseEntity
     public Role? Role { get; set; }
     public School? School { get; set; }
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
-    public ICollection<Payment> BuyerPayments { get; set; } = new List<Payment>();
-    public ICollection<Payment> SellerPayments { get; set; } = new List<Payment>();
 }
