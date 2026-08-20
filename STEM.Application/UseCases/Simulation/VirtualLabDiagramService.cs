@@ -42,6 +42,10 @@ public class VirtualLabDiagramService
             ["wokwi-pushbutton"] = PinSet("1.l", "2.l", "1.r", "2.r"),
             ["wokwi-buzzer"] = PinSet("1", "2"),
             ["wokwi-servo"] = PinSet("GND", "V+", "PWM"),
+            // Pin names match FE POTENTIOMETER_PINS exactly (pinMaps.ts) — SIG is
+            // the analog wiper output, GND/VCC are power (same 3-pin convention as
+            // wokwi-servo above).
+            ["wokwi-potentiometer"] = PinSet("GND", "SIG", "VCC"),
             ["wokwi-dht22"] = PinSet("VCC", "SDA", "NC", "GND"),
             ["wokwi-dht11"] = PinSet("VCC", "SDA", "NC", "GND"),
             ["wokwi-hc-sr04"] = PinSet("VCC", "TRIG", "ECHO", "GND"),
@@ -434,6 +438,12 @@ public class VirtualLabDiagramService
                 Require(part, "Servo PWM must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "PWM" }, connectedPinToNet, partsById, IsBoardGpio), errors);
                 Require(part, "Servo must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
                 Require(part, "Servo power must connect to 3V3/5V.", HasReachable(part.Id, new[] { "V+" }, connectedPinToNet, partsById, IsPower), errors);
+            }
+            else if (part.Type.Equals("wokwi-potentiometer", StringComparison.OrdinalIgnoreCase))
+            {
+                Require(part, "Potentiometer SIG must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "SIG" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "Potentiometer must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
+                Require(part, "Potentiometer power must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
             }
             else if (part.Type.Equals("wokwi-dht22", StringComparison.OrdinalIgnoreCase) ||
                      part.Type.Equals("wokwi-dht11", StringComparison.OrdinalIgnoreCase))
