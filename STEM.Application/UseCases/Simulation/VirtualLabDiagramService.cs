@@ -486,6 +486,19 @@ public class VirtualLabDiagramService
                 Require(part, "Ultrasonic VCC must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
                 Require(part, "Ultrasonic GND must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
             }
+            else if (part.Type.Equals("wokwi-pir-motion-sensor", StringComparison.OrdinalIgnoreCase))
+            {
+                // OUT is a plain digital HIGH/LOW pin (real HC-SR501-shape
+                // module, visual + pin geometry both real-extracted from
+                // @wokwi/elements' pir-motion-sensor-element.js pinInfo — see
+                // Verified External Component Assets milestone). No runtime
+                // model wired here (this milestone is visual/pin sourcing,
+                // not simulation expansion) — same "wiring-validation only"
+                // shape as the other sensor blocks above.
+                Require(part, "PIR OUT must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "OUT" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "PIR must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
+                Require(part, "PIR power must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
+            }
             else if (part.Type.Equals("wokwi-l298n", StringComparison.OrdinalIgnoreCase))
             {
                 Require(part, "L298N IN1 must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "IN1" }, connectedPinToNet, partsById, IsBoardGpio), errors);
