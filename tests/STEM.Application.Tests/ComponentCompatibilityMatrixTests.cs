@@ -212,6 +212,30 @@ public sealed class ComponentCompatibilityMatrixTests
         Assert.Equal("@wokwi/elements", entry.AssetProvider);
     }
 
+    // Component Source Resolution milestone — Soil Moisture Sensor. A
+    // genuinely NEW middle state, distinct from both PIR (fully verified)
+    // and pH (nothing verified): pin SEMANTICS verified (cross-vendor
+    // corroborated, no CAD/visual asset needed for that) + a real
+    // dedicated wiring rule, but pin GEOMETRY still unverified (no matching
+    // visual/CAD asset found anywhere checked). Locks that
+    // PinDefinitionVerified and PinGeometryVerified can legitimately
+    // disagree — a wiring rule doesn't require verified geometry — while
+    // CanvasWiringReady still correctly stays false (Phase 17's badge rule
+    // needs ALL THREE: PinDefinitionVerified, PinGeometryVerified, AND
+    // DedicatedWiringRule).
+    [Fact]
+    public void SoilMoisture_HasVerifiedSemanticsAndWiringRule_ButNotVerifiedGeometry()
+    {
+        var entry = Matrix.Value.Components.Single(c => c.CanonicalKey == "wokwi-soil-moisture-sensor");
+
+        Assert.Equal("C", entry.Classification);
+        Assert.True(entry.DedicatedWiringRule);
+        Assert.True(entry.PinDefinitionVerified);
+        Assert.False(entry.PinGeometryVerified);
+        Assert.False(entry.VisualAssetVerified);
+        Assert.False(entry.CanvasWiringReady);
+    }
+
     private sealed class MatrixDocument
     {
         public List<MatrixEntry> Components { get; set; } = new();
