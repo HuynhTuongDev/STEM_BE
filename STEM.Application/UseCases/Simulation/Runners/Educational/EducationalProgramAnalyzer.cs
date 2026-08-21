@@ -6,6 +6,16 @@ public sealed class EducationalProgramAnalyzer
 {
     private static readonly Regex DefineRegex = new(@"^\s*#define\s+(?<name>[A-Za-z_]\w*)\s+(?<value>[A-Za-z0-9_]+)", RegexOptions.Compiled | RegexOptions.Multiline);
     private static readonly Regex IntConstRegex = new(@"\b(?:const\s+|constexpr\s+)?(?:int|byte|uint8_t)\s+(?<name>[A-Za-z_]\w*)\s*=\s*(?<value>\d+)\s*;", RegexOptions.Compiled);
+    // Threshold consts declared as float/double (e.g. "const float
+    // TEMP_THRESHOLD_C = 35.0;" — the shipped DHT sample exercise's exact
+    // shape). The numeric-If path (IfNumericConditionRegex/TryResolveInt)
+    // only understands integer thresholds, matching the same 0..4095
+    // integer world Potentiometer/LightSensor already live in — so the
+    // value is rounded to the nearest int right here, at symbol-table build
+    // time, rather than teaching TryResolveInt (used by delay/tone/servo
+    // too) to parse decimals. Narrow, isolated, does not touch any other
+    // threshold-parsing path.
+    private static readonly Regex FloatConstRegex = new(@"\b(?:const\s+|constexpr\s+)?(?:float|double)\s+(?<name>[A-Za-z_]\w*)\s*=\s*(?<value>\d+(?:\.\d+)?)\s*;", RegexOptions.Compiled);
     private static readonly Regex ServoDeclarationRegex = new(@"\bServo\s+(?<name>[A-Za-z_]\w*)\s*;", RegexOptions.Compiled);
     private static readonly Regex PinModeRegex = new(@"\bpinMode\s*\(\s*(?<pin>[^,\)]+)\s*,\s*(?<mode>INPUT_PULLUP|INPUT|OUTPUT)\s*\)", RegexOptions.Compiled);
     private static readonly Regex DigitalWriteRegex = new(@"\bdigitalWrite\s*\(\s*(?<pin>[^,\)]+)\s*,\s*(?<value>HIGH|LOW|true|false|1|0)\s*\)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -46,6 +56,24 @@ public sealed class EducationalProgramAnalyzer
     private static readonly Regex IfNumericConditionRegex = new(
         @"^\s*(?<name>[A-Za-z_]\w*)\s*(?<op>>=|<=|>|<)\s*(?<threshold>[A-Za-z_]\w*|\d+)\s*$",
         RegexOptions.Compiled);
+    // DHT22/DHT11 scripted-sensor port (QEMU already supports this exact
+    // contract via SensorRuntimeHeaderGenerator.cs — see that file's
+    // StemFlowDHT class). "StemFlowDHT dht("dht1");" — a top-level
+    // declaration, same shape/role as ServoDeclarationRegex above: maps a
+    // sketch-local variable name to a diagram componentId (the sensorScenario
+    // key), not a pin.
+    private static readonly Regex DhtDeclarationRegex = new(
+        @"\bStemFlowDHT\s+(?<name>[A-Za-z_]\w*)\s*\(\s*""(?<id>[^""]*)""\s*\)\s*;",
+        RegexOptions.Compiled);
+    // "float temperature = dht.readTemperature();" / "...readHumidity();" —
+    // the ONLY two method calls supported on a declared StemFlowDHT variable
+    // (STEP 6: no generic object.method() engine). Deliberately narrower than
+    // ServoAttach/WriteRegex (those don't require a specific declared-name
+    // check at the regex level, only via servoNames.Contains after matching)
+    // — here the exact same gating happens via dhtNames.ContainsKey below.
+    private static readonly Regex DhtReadAssignRegex = new(
+        @"^\s*(?:float|double)\s+(?<varname>[A-Za-z_]\w*)\s*=\s*(?<dhtname>[A-Za-z_]\w*)\s*\.\s*read(?<field>Temperature|Humidity)\s*\(\s*\)\s*$",
+        RegexOptions.Compiled);
 
     public EducationalProgram Analyze(string sourceCode)
     {
@@ -68,6 +96,14 @@ public sealed class EducationalProgramAnalyzer
             .Matches(cleanedSource)
             .Select(match => match.Groups["name"].Value)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        // name -> componentId (the sensorScenario key), not a HashSet like
+        // servoNames — DhtReadAssign needs the componentId, not just a
+        // presence check.
+        var dhtNames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (Match match in DhtDeclarationRegex.Matches(cleanedSource))
+        {
+            dhtNames[match.Groups["name"].Value] = match.Groups["id"].Value;
+        }
 
         var setupBody = ExtractFunctionBody(cleanedSource, "setup");
         var loopBody = ExtractFunctionBody(cleanedSource, "loop");
@@ -83,8 +119,8 @@ public sealed class EducationalProgramAnalyzer
         }
 
         return new EducationalProgram(
-            ParseInstructions(setupBody ?? string.Empty, symbols, servoNames, warnings),
-            ParseInstructions(loopBody ?? string.Empty, symbols, servoNames, warnings),
+            ParseInstructions(setupBody ?? string.Empty, symbols, servoNames, dhtNames, warnings),
+            ParseInstructions(loopBody ?? string.Empty, symbols, servoNames, dhtNames, warnings),
             errors,
             warnings);
     }
@@ -93,6 +129,7 @@ public sealed class EducationalProgramAnalyzer
         string body,
         IReadOnlyDictionary<string, string> symbols,
         IReadOnlySet<string> servoNames,
+        IReadOnlyDictionary<string, string> dhtNames,
         ICollection<string> warnings)
     {
         var instructions = new List<EducationalInstruction>();
@@ -123,14 +160,14 @@ public sealed class EducationalProgramAnalyzer
                  TryReadControlBlock(source, index, "if", out header, out controlBody, out nextIndex)))
             {
                 instructions.AddRange(ParseFlatInstructions(
-                    source[segmentStart..index], symbols, servoNames, warnings));
+                    source[segmentStart..index], symbols, servoNames, dhtNames, warnings));
 
                 if (source.AsSpan(index).StartsWith("for", StringComparison.Ordinal))
                 {
                     if (TryGetForIterationCount(header, symbols, out var iterationCount))
                     {
                         instructions.Add(EducationalInstruction.CountedLoop(
-                            ParseInstructions(controlBody, symbols, servoNames, warnings),
+                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, warnings),
                             iterationCount));
                     }
                     else
@@ -143,7 +180,7 @@ public sealed class EducationalProgramAnalyzer
                     if (header.Trim() is "true" or "1")
                     {
                         instructions.Add(EducationalInstruction.ForeverLoop(
-                            ParseInstructions(controlBody, symbols, servoNames, warnings)));
+                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, warnings)));
                     }
                     else
                     {
@@ -197,8 +234,8 @@ public sealed class EducationalProgramAnalyzer
                         instructions.Add(EducationalInstruction.If(
                             pin,
                             expected,
-                            ParseInstructions(controlBody, symbols, servoNames, warnings),
-                            ParseInstructions(elseBody, symbols, servoNames, warnings)));
+                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, warnings),
+                            ParseInstructions(elseBody, symbols, servoNames, dhtNames, warnings)));
                     }
                     else if (numericConditionMatch != null && numericConditionMatch.Success &&
                              TryResolveInt(numericConditionMatch.Groups["threshold"].Value, symbols, out var threshold))
@@ -207,8 +244,8 @@ public sealed class EducationalProgramAnalyzer
                             numericConditionMatch.Groups["name"].Value,
                             numericConditionMatch.Groups["op"].Value,
                             threshold,
-                            ParseInstructions(controlBody, symbols, servoNames, warnings),
-                            ParseInstructions(elseBody, symbols, servoNames, warnings)));
+                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, warnings),
+                            ParseInstructions(elseBody, symbols, servoNames, dhtNames, warnings)));
                     }
                     else
                     {
@@ -224,7 +261,7 @@ public sealed class EducationalProgramAnalyzer
             index++;
         }
 
-        instructions.AddRange(ParseFlatInstructions(source[segmentStart..], symbols, servoNames, warnings));
+        instructions.AddRange(ParseFlatInstructions(source[segmentStart..], symbols, servoNames, dhtNames, warnings));
         return instructions;
     }
 
@@ -232,6 +269,7 @@ public sealed class EducationalProgramAnalyzer
         string body,
         IReadOnlyDictionary<string, string> symbols,
         IReadOnlySet<string> servoNames,
+        IReadOnlyDictionary<string, string> dhtNames,
         ICollection<string> warnings)
     {
         var instructions = new List<EducationalInstruction>();
@@ -240,6 +278,17 @@ public sealed class EducationalProgramAnalyzer
 
         foreach (var statement in statements)
         {
+            var dhtReadAssign = DhtReadAssignRegex.Match(statement);
+            if (dhtReadAssign.Success &&
+                dhtNames.TryGetValue(dhtReadAssign.Groups["dhtname"].Value, out var dhtComponentId))
+            {
+                instructions.Add(EducationalInstruction.DhtReadAssign(
+                    dhtComponentId,
+                    dhtReadAssign.Groups["field"].Value,
+                    dhtReadAssign.Groups["varname"].Value));
+                continue;
+            }
+
             var serial = SerialRegex.Match(statement);
             if (serial.Success)
             {
@@ -490,6 +539,19 @@ public sealed class EducationalProgramAnalyzer
             symbols[intConst.Groups["name"].Value] = intConst.Groups["value"].Value;
         }
 
+        foreach (Match floatConst in FloatConstRegex.Matches(sourceCode))
+        {
+            if (double.TryParse(
+                floatConst.Groups["value"].Value,
+                System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var doubleValue))
+            {
+                symbols[floatConst.Groups["name"].Value] =
+                    ((int)Math.Round(doubleValue)).ToString(System.Globalization.CultureInfo.InvariantCulture);
+            }
+        }
+
         return symbols;
     }
 
@@ -656,6 +718,14 @@ public sealed record EducationalInstruction(
     public static EducationalInstruction AnalogReadAssign(string pin, string variableName) =>
         new(EducationalInstructionKind.AnalogReadAssign, Pin: pin, Value: variableName);
 
+    // DHT scripted-sensor read. Reuses the exact same AnalogLocals scalar
+    // slot AnalogReadAssign writes to (STEP 7: no rename needed, no second
+    // dictionary) — Pin encodes "{componentId}:{field}" (field is
+    // "Temperature" or "Humidity") since the read source is a
+    // sensorScenario timeline keyed by componentId, not a GPIO pin.
+    public static EducationalInstruction DhtReadAssign(string componentId, string field, string variableName) =>
+        new(EducationalInstructionKind.DhtReadAssign, Pin: $"{componentId}:{field}", Value: variableName);
+
     // IfNumeric reuses Pin to mean "AnalogLocals variable name to compare" —
     // distinct from If's Pin (a GPIO), disambiguated by ComparisonOperator
     // being non-null. Re-evaluated live every visit, same as If.
@@ -684,5 +754,6 @@ public enum EducationalInstructionKind
     CountedLoop,
     ForeverLoop,
     If,
-    AnalogReadAssign
+    AnalogReadAssign,
+    DhtReadAssign
 }

@@ -2,6 +2,7 @@ using STEM.Application.Dtos.Simulation;
 using STEM.Application.UseCases.Simulation.Abstractions;
 using STEM.Application.UseCases.Simulation.Runtime;
 using STEM.Application.UseCases.Simulation.Runners.Educational.Components;
+using STEM.Application.UseCases.Simulation.Runners.Qemu;
 
 namespace STEM.Application.UseCases.Simulation.Runners.Educational;
 
@@ -178,6 +179,30 @@ public sealed class EducationalEventGenerator
                     ["pin"] = instruction.Pin,
                     ["value"] = analogValue,
                     ["operation"] = "analogRead"
+                }, cancellationToken);
+                return null;
+
+            case EducationalInstructionKind.DhtReadAssign:
+                // Pin encodes "{componentId}:{field}" — see
+                // EducationalInstruction.DhtReadAssign's comment. Re-read
+                // live every visit (same reasoning as AnalogReadAssign
+                // above) so a scenario timeline crossing a new mark mid-run
+                // is picked up on the very next loop() pass.
+                var dhtParts = instruction.Pin!.Split(':', 2);
+                var dhtValue = state.ReadDhtScenario(dhtParts[0], dhtParts[1]);
+                // AnalogLocals is int-only (matches IfNumeric's int
+                // Threshold, same 0..4095-integer world Potentiometer/
+                // LightSensor already live in) — DHT values are rounded,
+                // not truncated. Documented limitation, not a bug: this
+                // milestone's own sensorScenario samples only use
+                // whole-number temperature/humidity marks.
+                state.AnalogLocals[instruction.Value!] = (int)Math.Round(dhtValue);
+
+                await EmitAsync(state, onEventEmitted, "pin-state", state.Time, new Dictionary<string, object?>
+                {
+                    ["pin"] = dhtParts[0],
+                    ["value"] = dhtValue,
+                    ["operation"] = dhtParts[1] == "Temperature" ? "dht.readTemperature" : "dht.readHumidity"
                 }, cancellationToken);
                 return null;
 
@@ -458,11 +483,25 @@ public sealed class EducationalEventGenerator
         private readonly Dictionary<string, List<LightSensorModel>> _lightSensorsByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<RelayModel>> _relaysByPin = new(StringComparer.OrdinalIgnoreCase);
 
+        // DHT scripted-sensor timeline — reused AS-IS from the QEMU side
+        // (STEP 8/9: "Reuse trực tiếp semantic của QEMU. Không viết một
+        // timeline behavior khác.") via SensorRuntimeHeaderGenerator's own
+        // parser, so both runners read the exact same sensorScenario shape.
+        private readonly SensorScenarioConfig? _scenario;
+
+        // Must match SensorRuntimeHeaderGenerator.cs's DefaultTemperatureC/
+        // DefaultHumidityPct exactly (those are private consts there) — kept
+        // in sync by SensorRuntimeHeaderGeneratorDhtTests.cs's read-assign
+        // coverage plus this port's own DhtEducationalTests.
+        private const double DefaultTemperatureC = 25.0;
+        private const double DefaultHumidityPct = 50.0;
+
         public EducationalRunState(SimulationRunContext context, VirtualLabRuntimeDiagramSnapshot diagram)
         {
             Context = context;
             MaxDurationMs = Math.Max(1, context.MaxDurationMs);
             BuildComponentIndexes(diagram);
+            _scenario = SensorRuntimeHeaderGenerator.TryParseScenario(context.DiagramJson);
         }
 
         public SimulationRunContext Context { get; }
@@ -505,6 +544,42 @@ public sealed class EducationalEventGenerator
             if (lightSensor != null) return lightSensor.Read(componentInputs);
 
             return 0;
+        }
+
+        // DHT step-function timeline lookup — direct C# port of
+        // SensorRuntimeHeaderGenerator.cs's __sf_lookupFloat, same semantics:
+        // "latest scenario entry whose TimeMs <= now" (elapsed simulated
+        // time, this class's own Time — the Educational equivalent of
+        // QEMU's millis()), stepping forward only, no interpolation. Before
+        // the first entry, returns the FIRST entry's value (matching
+        // __sf_lookupFloat exactly) — defaultValue only applies when the
+        // component has no scenario/timeline entries for this field at all.
+        public double ReadDhtScenario(string componentId, string field)
+        {
+            var defaultValue = field == "Temperature" ? DefaultTemperatureC : DefaultHumidityPct;
+            if (_scenario == null || !_scenario.Sensors.TryGetValue(componentId, out var timeline))
+            {
+                return defaultValue;
+            }
+
+            var entries = timeline.Timeline
+                .Where(e => field == "Temperature" ? e.Temperature.HasValue : e.Humidity.HasValue)
+                .OrderBy(e => e.TimeMs)
+                .Select(e => (e.TimeMs, Value: (field == "Temperature" ? e.Temperature : e.Humidity)!.Value))
+                .ToList();
+
+            if (entries.Count == 0)
+            {
+                return defaultValue;
+            }
+
+            var result = entries[0].Value;
+            foreach (var entry in entries)
+            {
+                if (entry.TimeMs <= Time) result = entry.Value; else break;
+            }
+
+            return result;
         }
 
         public SimulationRunResult ToResult(bool success)
