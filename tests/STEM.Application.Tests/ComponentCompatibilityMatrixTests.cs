@@ -149,6 +149,69 @@ public sealed class ComponentCompatibilityMatrixTests
         Assert.Equal(RuntimeCapabilities.Output, resolved!.Capability);
     }
 
+    // Verified External Component Assets milestone — PIR Motion Sensor
+    // vertical slice (Class D -> C). Visual + pin geometry were already real
+    // (wokwi-pir-motion-sensor, @wokwi/elements pinInfo, MIT) before this
+    // milestone; the wiring rule added this milestone is what earns the
+    // classification move, per the matrix's own C-vs-D legend (dedicated
+    // wiring rule exists), independent of runtime capability (Phase 23:
+    // "Không thay classification A-E nếu runtime capability không đổi" —
+    // this move is legitimate because dedicatedWiringRule changed, not
+    // because any runtime capability did).
+    [Fact]
+    public void Pir_IsClassC_WithVerifiedVisualAndPinGeometry()
+    {
+        var entry = Matrix.Value.Components.Single(c => c.CanonicalKey == "wokwi-pir-motion-sensor");
+
+        Assert.Equal("C", entry.Classification);
+        Assert.True(entry.DedicatedWiringRule);
+        Assert.True(entry.VisualAssetVerified);
+        Assert.True(entry.PinGeometryVerified);
+        Assert.True(entry.CanvasWiringReady);
+        Assert.Equal("@wokwi/elements", entry.AssetProvider);
+        // Still no live/interactive capability — this milestone is
+        // visual/pin sourcing, not simulation expansion (Phase 24).
+        Assert.Empty(entry.RuntimeCapabilities);
+    }
+
+    // PIN_UNVERIFIED negative-test case (Phase 20/22). pH Sensor's
+    // VCC/GND/PO were invented to fit the fallback card, never checked
+    // against any provider metadata, datasheet, or manufacturer doc — and
+    // "pH Sensor" itself is an unresolved identity question (probe vs
+    // interface board). Must never claim wiring-readiness while that's
+    // true: this test locks CanvasWiringReady/PinGeometryVerified/
+    // VisualAssetVerified all false, and Classification NOT C or above,
+    // so nobody flips pH to "wiring-validation" by editing the JSON alone
+    // without also attaching real evidence first.
+    [Fact]
+    public void PhSensor_IsPinUnverified_NeverClaimsWiringReady()
+    {
+        var entry = Matrix.Value.Components.Single(c => c.CanonicalKey == "wokwi-ph-sensor");
+
+        Assert.False(entry.VisualAssetVerified);
+        Assert.False(entry.PinGeometryVerified);
+        Assert.False(entry.CanvasWiringReady);
+        Assert.False(entry.DedicatedWiringRule);
+        Assert.DoesNotContain(entry.Classification, new[] { "A", "B", "C" });
+    }
+
+    // Phase 21 regression (raw LDR vs Light Sensor Module) is already
+    // covered by SimulationTypeResolverTests.
+    // Resolve_PassiveComponentCategoriesWithNoBreakoutModuleIdentity_NeverMapped
+    // — re-asserted here from the matrix side: the STATIC wokwi-photoresistor-sensor
+    // entry (a real module: VCC/GND/DO/AO) must stay a real, distinct A-class
+    // entry, independent of whatever a raw-LDR import attempt resolves to.
+    [Fact]
+    public void PhotoresistorModule_StaysClassA_IndependentOfRawLdrRegression()
+    {
+        var entry = Matrix.Value.Components.Single(c => c.CanonicalKey == "wokwi-photoresistor-sensor");
+
+        Assert.Equal("A", entry.Classification);
+        Assert.True(entry.VisualAssetVerified);
+        Assert.True(entry.PinGeometryVerified);
+        Assert.Equal("@wokwi/elements", entry.AssetProvider);
+    }
+
     private sealed class MatrixDocument
     {
         public List<MatrixEntry> Components { get; set; } = new();
@@ -160,5 +223,15 @@ public sealed class ComponentCompatibilityMatrixTests
         public string? SimulationComponentType { get; set; }
         public List<string> RuntimeCapabilities { get; set; } = new();
         public string Classification { get; set; } = string.Empty;
+        public bool DedicatedWiringRule { get; set; }
+        public string? VisualAsset { get; set; }
+        public bool? VisualAssetVerified { get; set; }
+        public bool PinDefinition { get; set; }
+        public bool? PinDefinitionVerified { get; set; }
+        public bool PinGeometry { get; set; }
+        public bool? PinGeometryVerified { get; set; }
+        public bool CanvasWiringReady { get; set; }
+        public string? AssetProvider { get; set; }
+        public string? PinProvider { get; set; }
     }
 }
