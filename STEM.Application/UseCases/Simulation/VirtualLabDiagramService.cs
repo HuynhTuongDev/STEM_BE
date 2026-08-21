@@ -499,6 +499,27 @@ public class VirtualLabDiagramService
                 Require(part, "PIR must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
                 Require(part, "PIR power must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
             }
+            else if (part.Type.Equals("wokwi-soil-moisture-sensor", StringComparison.OrdinalIgnoreCase))
+            {
+                // VCC/GND/DO/AO — the standard YL-69 probe + LM393 comparator
+                // driver-board pinout, cross-corroborated across multiple
+                // independent vendor sources this milestone (Component Source
+                // Resolution: no single "official manufacturer" exists for
+                // this generic/commodity module, but the pin convention is
+                // consistent everywhere it's documented, e.g.
+                // electropeak.com/soil-moisture-sensor-1). Pin SEMANTICS
+                // verified this way — pin GEOMETRY (visual anchor position)
+                // is still NOT verified (no matching real element/CAD asset
+                // found in @wokwi/elements, Fritzing core, or KiCad core —
+                // see the milestone's Provider Gap Report), which is exactly
+                // why this rule can exist (a wiring rule only needs pin
+                // names/electrical roles, never pixel coordinates) while the
+                // canvas badge still correctly shows "Chưa xác minh sơ đồ
+                // chân" rather than "Kiểm tra nối dây".
+                Require(part, "Soil moisture AO must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "AO" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "Soil moisture must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
+                Require(part, "Soil moisture power must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
+            }
             else if (part.Type.Equals("wokwi-l298n", StringComparison.OrdinalIgnoreCase))
             {
                 Require(part, "L298N IN1 must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "IN1" }, connectedPinToNet, partsById, IsBoardGpio), errors);
