@@ -158,7 +158,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         // Lesson -> Module
         modelBuilder.Entity<Lesson>()
             .HasOne(l => l.Module)
-            .WithMany()
+            .WithMany(m => m.Lessons)
             .HasForeignKey(l => l.ModuleId)
             .OnDelete(DeleteBehavior.Cascade);
 

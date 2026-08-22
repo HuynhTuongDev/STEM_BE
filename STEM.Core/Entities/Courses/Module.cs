@@ -11,4 +11,5 @@ public class Module : BaseEntity
     public string Output { get; set; } = string.Empty;
 
     public Course? Course { get; set; }
+    public ICollection<Lesson> Lessons { get; set; } = new List<Lesson>();
 }
