@@ -6,6 +6,7 @@ using STEM.Application.UseCases.Simulation;
 using STEM.Application.UseCases.Schools;
 using STEM.Application.UseCases.Courses;
 using STEM.Application.UseCases.Syllabuses;
+using STEM.Application.UseCases.SystemLogs;
 using STEM.Application.UseCases.Classes;
 using STEM.Application.UseCases.Users;
 using STEM.Application.UseCases.Teachers;
@@ -138,6 +139,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<UpdateSyllabusHandler>();
         services.AddScoped<ArchiveSyllabusHandler>();
         services.AddScoped<GetGradeLevelsListHandler>();
+        services.AddScoped<GetSystemLogsListHandler>();
 
         // Class Handlers
         services.AddScoped<GetClassesListHandler>();
