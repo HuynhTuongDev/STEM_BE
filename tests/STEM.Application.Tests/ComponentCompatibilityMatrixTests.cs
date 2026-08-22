@@ -212,28 +212,25 @@ public sealed class ComponentCompatibilityMatrixTests
         Assert.Equal("@wokwi/elements", entry.AssetProvider);
     }
 
-    // Component Source Resolution milestone — Soil Moisture Sensor. A
-    // genuinely NEW middle state, distinct from both PIR (fully verified)
-    // and pH (nothing verified): pin SEMANTICS verified (cross-vendor
-    // corroborated, no CAD/visual asset needed for that) + a real
-    // dedicated wiring rule, but pin GEOMETRY still unverified (no matching
-    // visual/CAD asset found anywhere checked). Locks that
-    // PinDefinitionVerified and PinGeometryVerified can legitimately
-    // disagree — a wiring rule doesn't require verified geometry — while
-    // CanvasWiringReady still correctly stays false (Phase 17's badge rule
-    // needs ALL THREE: PinDefinitionVerified, PinGeometryVerified, AND
-    // DedicatedWiringRule).
+    // Component Source Resolution milestone — Soil Moisture Sensor. Pin
+    // SEMANTICS were verified first (cross-vendor corroborated) + a real
+    // dedicated wiring rule added, while pin GEOMETRY/visual stayed
+    // unassessed. VISUAL REFINEMENT / EXPANSION phase closed that gap: the
+    // existing fallback-card SVG was re-checked against the real YL-69
+    // module and found already accurate, so all four flags — and
+    // CanvasWiringReady — are true now. Locks in that outcome.
     [Fact]
-    public void SoilMoisture_HasVerifiedSemanticsAndWiringRule_ButNotVerifiedGeometry()
+    public void SoilMoisture_NowFullyVerified_IncludingGeometryAndCanvasWiringReady()
     {
         var entry = Matrix.Value.Components.Single(c => c.CanonicalKey == "wokwi-soil-moisture-sensor");
 
         Assert.Equal("C", entry.Classification);
         Assert.True(entry.DedicatedWiringRule);
         Assert.True(entry.PinDefinitionVerified);
-        Assert.False(entry.PinGeometryVerified);
-        Assert.False(entry.VisualAssetVerified);
-        Assert.False(entry.CanvasWiringReady);
+        Assert.True(entry.PinGeometryVerified);
+        Assert.True(entry.VisualAssetVerified);
+        Assert.True(entry.CanvasWiringReady);
+        Assert.Equal("VERIFIED_INTERNAL_VISUAL", entry.VisualCapability);
     }
 
     // REAL COMPONENT VISUAL milestone — visualCapability is a NEW, independent
@@ -311,16 +308,21 @@ public sealed class ComponentCompatibilityMatrixTests
         Assert.Equal("REAL_PROVIDER_VISUAL", entry!.VisualCapability);
     }
 
+    // VISUAL REFINEMENT / EXPANSION phase superseded this: Relay Module and
+    // L298N were re-assessed and their existing fallback-card SVGs judged to
+    // already be reference-accurate (green PCB + terminal rows + heatsink for
+    // L298N; blue PCB + relay-chip block for Relay) — see
+    // P0_GapComponents_NowVerifiedInternalVisual_WithCanvasWiringReady below
+    // for the current, correct assertion. Pin names stay cross-verified
+    // regardless (checked here too, since that fact didn't change).
     [Theory]
     [InlineData("wokwi-relay-module")]
     [InlineData("wokwi-l298n")]
-    public void P0_GapComponents_AreGenericFallback_ButHavePinNamesVerified(string canonicalKey)
+    public void P0_GapComponents_HavePinNamesVerified(string canonicalKey)
     {
         var entry = Matrix.Value.Components.SingleOrDefault(c => c.CanonicalKey == canonicalKey);
         Assert.NotNull(entry);
-        Assert.Equal("GENERIC_FALLBACK", entry!.VisualCapability);
-        Assert.True(entry.PinDefinitionVerified, $"{canonicalKey} pin names should be cross-verified even though the visual is generic");
-        Assert.False(entry.VisualAssetVerified);
+        Assert.True(entry!.PinDefinitionVerified, $"{canonicalKey} pin names should be cross-verified");
     }
 
     // Full-catalog coverage snapshot (STEP 20): locks in the current honest
@@ -328,13 +330,112 @@ public sealed class ComponentCompatibilityMatrixTests
     // hard-failing CI on a target this milestone explicitly does not require
     // for the full 71-component catalog (only for the 12 P0 parts above).
     [Fact]
-    public void FullCatalog_RealProviderVisualCoverage_MatchesKnownSnapshot()
+    public void FullCatalog_VisualCoverage_MatchesKnownSnapshot()
     {
         var total = Matrix.Value.Components.Count;
         var realProviderCount = Matrix.Value.Components.Count(c => c.VisualCapability == "REAL_PROVIDER_VISUAL");
+        var verifiedInternalCount = Matrix.Value.Components.Count(c => c.VisualCapability == "VERIFIED_INTERNAL_VISUAL");
+        var fallbackCount = Matrix.Value.Components.Count(c => c.VisualCapability == "GENERIC_FALLBACK");
 
         Assert.Equal(71, total);
-        Assert.Equal(21, realProviderCount);
+        Assert.Equal(28, realProviderCount);
+        Assert.Equal(18, verifiedInternalCount);
+        Assert.Equal(25, fallbackCount);
+    }
+
+    // VISUAL REFINEMENT / EXPANSION phase (Rule 3: raw component != module —
+    // asserted per-entry so a future accidental identity swap can't silently
+    // slip a wrong-identity visual into VERIFIED_INTERNAL_VISUAL).
+    [Fact]
+    public void VerifiedInternalVisual_Entries_AreNeverAssetProviderWokwiElements()
+    {
+        var verifiedInternal = Matrix.Value.Components.Where(c => c.VisualCapability == "VERIFIED_INTERNAL_VISUAL");
+        Assert.NotEmpty(verifiedInternal);
+
+        foreach (var entry in verifiedInternal)
+        {
+            // A verified-internal illustration is StemFlow's own — it must
+            // never claim to BE the real @wokwi/elements asset (that's
+            // REAL_PROVIDER_VISUAL's exclusive claim, see the other test).
+            Assert.NotEqual("@wokwi/elements", entry.AssetProvider);
+            Assert.True(entry.VisualAssetVerified);
+            Assert.True(entry.PinGeometryVerified);
+        }
+    }
+
+    // Relay Module and L298N: the two P0 components that needed a fresh
+    // VERIFIED_INTERNAL_VISUAL judgment call this phase (STEP 3-6). Locks in
+    // the specific outcome so it can't silently regress or get swapped for a
+    // wrong-identity "real" source later.
+    [Theory]
+    [InlineData("wokwi-relay-module")]
+    [InlineData("wokwi-l298n")]
+    public void P0_GapComponents_NowVerifiedInternalVisual_WithCanvasWiringReady(string canonicalKey)
+    {
+        var entry = Matrix.Value.Components.SingleOrDefault(c => c.CanonicalKey == canonicalKey);
+        Assert.NotNull(entry);
+        Assert.Equal("VERIFIED_INTERNAL_VISUAL", entry!.VisualCapability);
+        Assert.True(entry.CanvasWiringReady);
+    }
+
+    [Fact]
+    public void Matrix_HasNoDuplicateCanonicalKeys()
+    {
+        var duplicates = Matrix.Value.Components
+            .GroupBy(c => c.CanonicalKey)
+            .Where(g => g.Count() > 1)
+            .Select(g => g.Key)
+            .ToList();
+
+        Assert.Empty(duplicates);
+    }
+
+    // Batch 1 (VISUAL REFINEMENT / EXPANSION, STEP 10-11): sensor/actuator
+    // components whose EXISTING fallback-card SVGs were re-assessed against
+    // real references and found already accurate — no new artwork needed,
+    // only correcting a matrix that had never been updated to reflect it.
+    [Theory]
+    [InlineData("wokwi-water-leak-sensor")]
+    [InlineData("wokwi-rain-sensor")]
+    [InlineData("wokwi-soil-moisture-sensor")]
+    [InlineData("wokwi-ir-obstacle-sensor")]
+    [InlineData("wokwi-line-tracking-sensor")]
+    [InlineData("wokwi-line-tracking-3ch")]
+    [InlineData("wokwi-line-tracking-5ch")]
+    [InlineData("wokwi-color-sensor")]
+    [InlineData("wokwi-vibration-sensor")]
+    [InlineData("wokwi-dc-motor")]
+    [InlineData("wokwi-battery-pack")]
+    [InlineData("wokwi-power-switch")]
+    [InlineData("wokwi-fan")]
+    [InlineData("wokwi-water-pump")]
+    [InlineData("wokwi-esc")]
+    [InlineData("wokwi-heating-element")]
+    public void Batch1_SensorsAndActuators_AreVerifiedInternalVisual(string canonicalKey)
+    {
+        var entry = Matrix.Value.Components.SingleOrDefault(c => c.CanonicalKey == canonicalKey);
+        Assert.NotNull(entry);
+        Assert.Equal("VERIFIED_INTERNAL_VISUAL", entry!.VisualCapability);
+        Assert.True(entry.VisualAssetVerified);
+        Assert.True(entry.PinGeometryVerified);
+    }
+
+    // Fallback honesty (STEP 20): components with no specific real-world
+    // reference to check against (generic robot-kit scene props — a "Robot
+    // Wheel"/"Delivery Box"/"Ball" isn't one specific real part) correctly
+    // stay GENERIC_FALLBACK rather than being force-classified upward to hit
+    // a coverage number. pH Sensor stays the deliberate PIN_UNVERIFIED
+    // negative-test case (identity itself unresolved, not just visual).
+    [Theory]
+    [InlineData("wokwi-robot-wheel")]
+    [InlineData("wokwi-robot-chassis")]
+    [InlineData("wokwi-breadboard")]
+    [InlineData("wokwi-ph-sensor")]
+    public void GenericRobotKitPropsAndUnresolvedIdentity_HonestlyStayFallback(string canonicalKey)
+    {
+        var entry = Matrix.Value.Components.SingleOrDefault(c => c.CanonicalKey == canonicalKey);
+        Assert.NotNull(entry);
+        Assert.Equal("GENERIC_FALLBACK", entry!.VisualCapability);
     }
 
     private sealed class MatrixDocument
