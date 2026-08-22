@@ -65,20 +65,34 @@ public sealed class ComponentCompatibilityMatrixTests
         }
     }
 
-    // Class B invariant: SimulationComponentType != null. Some Class B
-    // entries (QEMU-only: l298n, static rgb-led) are a documented
-    // RuntimeCapabilityResolver gap (matrix's own missingRequirements says
-    // so) — this test only asserts the parts of the invariant that hold
-    // today, it does not assert the resolver has an entry for them.
+    // Class B invariant: the component must be simulation-capable via SOME
+    // real path — either SimulationTypeResolver resolved a
+    // SimulationComponentType (the Registry-import path), OR it's a native
+    // static-catalog type with real, confirmed QEMU support (QemuSupport is
+    // truthy) — SimulationTypeResolver is exclusively about resolving a
+    // GENERIC IMPORTED part's category to a canonical type; native catalog
+    // types (registrySource.imported=false) never go through it and
+    // legitimately have a null SimulationComponentType regardless of how
+    // real their runtime is (RUNTIME + INTERACTIVE COVERAGE BOOST milestone
+    // — this widened an exception that used to cover only l298n/rgb-led to
+    // the 11 scripted-sensor types found in the same situation).
     [Fact]
-    public void ClassB_Entries_HaveSimulationComponentType()
+    public void ClassB_Entries_AreSimulationCapableViaResolverOrConfirmedQemu()
     {
         var classB = Matrix.Value.Components.Where(c => c.Classification == "B");
         Assert.NotEmpty(classB);
 
         foreach (var entry in classB)
         {
-            Assert.NotNull(entry.SimulationComponentType);
+            var hasResolvedType = entry.SimulationComponentType != null;
+            var hasConfirmedQemu = entry.QemuSupport.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.String => true, // e.g. "L298nModel.cs" — a named model IS confirmed support
+                _ => false
+            };
+            Assert.True(hasResolvedType || hasConfirmedQemu,
+                $"{entry.CanonicalKey} is Class B but has neither a resolved SimulationComponentType nor confirmed QemuSupport");
         }
     }
 
@@ -159,19 +173,20 @@ public sealed class ComponentCompatibilityMatrixTests
     // this move is legitimate because dedicatedWiringRule changed, not
     // because any runtime capability did).
     [Fact]
-    public void Pir_IsClassC_WithVerifiedVisualAndPinGeometry()
+    public void Pir_IsClassB_WithVerifiedVisualPinGeometryAndScriptedRuntime()
     {
         var entry = Matrix.Value.Components.Single(c => c.CanonicalKey == "wokwi-pir-motion-sensor");
 
-        Assert.Equal("C", entry.Classification);
+        // RUNTIME + INTERACTIVE COVERAGE BOOST milestone: moved from C to B
+        // — the real, already-existing QEMU scripted support (and this
+        // milestone's new Educational port) is now credited.
+        Assert.Equal("B", entry.Classification);
         Assert.True(entry.DedicatedWiringRule);
         Assert.True(entry.VisualAssetVerified);
         Assert.True(entry.PinGeometryVerified);
         Assert.True(entry.CanvasWiringReady);
         Assert.Equal("@wokwi/elements", entry.AssetProvider);
-        // Still no live/interactive capability — this milestone is
-        // visual/pin sourcing, not simulation expansion (Phase 24).
-        Assert.Empty(entry.RuntimeCapabilities);
+        Assert.Contains("ScriptedSensor", entry.RuntimeCapabilities);
     }
 
     // PIN_UNVERIFIED negative-test case (Phase 20/22). pH Sensor's
@@ -224,13 +239,17 @@ public sealed class ComponentCompatibilityMatrixTests
     {
         var entry = Matrix.Value.Components.Single(c => c.CanonicalKey == "wokwi-soil-moisture-sensor");
 
-        Assert.Equal("C", entry.Classification);
+        // RUNTIME + INTERACTIVE COVERAGE BOOST milestone: moved from C to B
+        // — real, already-existing QEMU scripted support (and this
+        // milestone's new Educational port) is now credited.
+        Assert.Equal("B", entry.Classification);
         Assert.True(entry.DedicatedWiringRule);
         Assert.True(entry.PinDefinitionVerified);
         Assert.True(entry.PinGeometryVerified);
         Assert.True(entry.VisualAssetVerified);
         Assert.True(entry.CanvasWiringReady);
         Assert.Equal("VERIFIED_INTERNAL_VISUAL", entry.VisualCapability);
+        Assert.Contains("ScriptedSensor", entry.RuntimeCapabilities);
     }
 
     // REAL COMPONENT VISUAL milestone — visualCapability is a NEW, independent
@@ -449,6 +468,11 @@ public sealed class ComponentCompatibilityMatrixTests
         public string? SimulationComponentType { get; set; }
         public List<string> RuntimeCapabilities { get; set; } = new();
         public string Classification { get; set; } = string.Empty;
+        // Polymorphic in the JSON — either a bool (false, or true after this
+        // milestone's correction) or a string naming the model class (e.g.
+        // "L298nModel.cs") for entries documented before boolean-only became
+        // the convention. JsonElement handles both without a custom converter.
+        public JsonElement QemuSupport { get; set; }
         public bool DedicatedWiringRule { get; set; }
         public string? VisualAsset { get; set; }
         public bool? VisualAssetVerified { get; set; }
