@@ -56,12 +56,38 @@ public sealed class ComponentCompatibilityMatrixTests
 
         foreach (var entry in classA)
         {
-            Assert.NotNull(entry.SimulationComponentType);
             Assert.NotEmpty(entry.RuntimeCapabilities);
 
-            var resolved = RuntimeCapabilityResolver.Resolve(entry.SimulationComponentType);
+            // Same reasoning as the Class B invariant below: SimulationComponentType
+            // is exclusively a Registry-import concept (SimulationTypeResolver);
+            // native catalog types (PIR/Water Leak/Vibration, since the
+            // INTERACTIVE SENSOR CONTROLS milestone) legitimately have it null
+            // while still being fully interactive via confirmed QemuSupport +
+            // RuntimeCapabilityResolver.
+            var hasResolvedType = entry.SimulationComponentType != null;
+            var hasConfirmedQemu = entry.QemuSupport.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.String => true,
+                _ => false
+            };
+            Assert.True(hasResolvedType || hasConfirmedQemu,
+                $"{entry.CanonicalKey} is Class A but has neither a resolved SimulationComponentType nor confirmed QemuSupport");
+
+            // Native catalog types resolve by their OWN canonicalKey (the
+            // resolver dictionary's key), not by SimulationComponentType,
+            // which is exclusively a Registry-import concept — same fallback
+            // as the hasResolvedType/hasConfirmedQemu check just above.
+            var resolved = RuntimeCapabilityResolver.Resolve(entry.SimulationComponentType)
+                ?? RuntimeCapabilityResolver.Resolve(entry.CanonicalKey);
             Assert.NotNull(resolved);
-            Assert.Contains(resolved!.Capability, entry.RuntimeCapabilities);
+            Assert.True(
+                resolved!.AllCapabilities.Any(entry.RuntimeCapabilities.Contains),
+                $"{entry.CanonicalKey}'s resolver capabilities ({string.Join(",", resolved.AllCapabilities)}) don't overlap with the matrix's ({string.Join(",", entry.RuntimeCapabilities)})");
+            // Class A specifically requires SOME live/realtime input capability
+            // (Digital/Analog/Sensor) — ScriptedSensor/Output alone don't qualify.
+            var realtimeCapabilities = new[] { RuntimeCapabilities.DigitalInput, RuntimeCapabilities.AnalogInput, RuntimeCapabilities.SensorInput };
+            Assert.Contains(resolved.AllCapabilities, realtimeCapabilities.Contains);
         }
     }
 
@@ -173,20 +199,25 @@ public sealed class ComponentCompatibilityMatrixTests
     // this move is legitimate because dedicatedWiringRule changed, not
     // because any runtime capability did).
     [Fact]
-    public void Pir_IsClassB_WithVerifiedVisualPinGeometryAndScriptedRuntime()
+    public void Pir_IsClassA_WithVerifiedVisualPinGeometryScriptedAndLiveRuntime()
     {
         var entry = Matrix.Value.Components.Single(c => c.CanonicalKey == "wokwi-pir-motion-sensor");
 
-        // RUNTIME + INTERACTIVE COVERAGE BOOST milestone: moved from C to B
-        // — the real, already-existing QEMU scripted support (and this
-        // milestone's new Educational port) is now credited.
-        Assert.Equal("B", entry.Classification);
+        // INTERACTIVE SENSOR CONTROLS milestone: moved B -> A — a real live
+        // FE toggle now reaches DigitalSensorModel.TryReadLiveInput through
+        // ISimulationInputChannel (proven end-to-end by
+        // InteractiveDigitalSensorTests.cs), meeting the same bar Push
+        // Button/Potentiometer/Photoresistor already do. ScriptedSensor
+        // support (RUNTIME + INTERACTIVE COVERAGE BOOST milestone) is
+        // retained alongside the new live capability, not replaced.
+        Assert.Equal("A", entry.Classification);
         Assert.True(entry.DedicatedWiringRule);
         Assert.True(entry.VisualAssetVerified);
         Assert.True(entry.PinGeometryVerified);
         Assert.True(entry.CanvasWiringReady);
         Assert.Equal("@wokwi/elements", entry.AssetProvider);
         Assert.Contains("ScriptedSensor", entry.RuntimeCapabilities);
+        Assert.Contains("DigitalInput", entry.RuntimeCapabilities);
     }
 
     // PIN_UNVERIFIED negative-test case (Phase 20/22). pH Sensor's
