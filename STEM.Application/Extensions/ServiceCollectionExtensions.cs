@@ -5,6 +5,7 @@ using STEM.Application.UseCases.Notifications;
 using STEM.Application.UseCases.Simulation;
 using STEM.Application.UseCases.Schools;
 using STEM.Application.UseCases.Courses;
+using STEM.Application.UseCases.Syllabuses;
 using STEM.Application.UseCases.Classes;
 using STEM.Application.UseCases.Users;
 using STEM.Application.UseCases.Teachers;
@@ -128,6 +129,15 @@ public static class ServiceCollectionExtensions
         services.AddScoped<CreateCourseHandler>();
         services.AddScoped<UpdateCourseHandler>();
         services.AddScoped<DeleteCourseHandler>();
+
+        // Syllabus Handlers
+        services.AddScoped<GetSyllabusesListHandler>();
+        services.AddScoped<GetSyllabusDetailHandler>();
+        services.AddScoped<GetSyllabusStructureHandler>();
+        services.AddScoped<CreateSyllabusHandler>();
+        services.AddScoped<UpdateSyllabusHandler>();
+        services.AddScoped<ArchiveSyllabusHandler>();
+        services.AddScoped<GetGradeLevelsListHandler>();
 
         // Class Handlers
         services.AddScoped<GetClassesListHandler>();

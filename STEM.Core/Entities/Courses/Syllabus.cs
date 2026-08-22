@@ -16,3 +16,17 @@ public class Syllabus : BaseEntity
     public GradeLevel? GradeLevel { get; set; }
     public ICollection<Course> Courses { get; set; } = new List<Course>();
 }
+
+public static class SyllabusStatuses
+{
+    public const string Draft = "draft";
+    public const string Published = "published";
+    public const string Archived = "archived";
+
+    public static readonly HashSet<string> All = new(StringComparer.OrdinalIgnoreCase)
+    {
+        Draft,
+        Published,
+        Archived
+    };
+}

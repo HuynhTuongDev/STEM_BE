@@ -34,6 +34,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<ICourseRepository, CourseRepository>();
+        services.AddScoped<ISyllabusRepository, SyllabusRepository>();
         services.AddScoped<IClassRepository, ClassRepository>();
         services.AddScoped<IAttendanceRepository, AttendanceRepository>();
         services.AddScoped<IAssignmentRepository, AssignmentRepository>();
