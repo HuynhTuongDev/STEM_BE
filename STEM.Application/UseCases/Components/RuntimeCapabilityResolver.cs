@@ -41,15 +41,24 @@ public static class RuntimeCapabilityResolver
             // (see RuntimeCapabilities.ScriptedSensor's own doc comment for
             // why this is NOT the same as SensorInput/live-realtime).
             ["wokwi-hc-sr04"] = new(RuntimeCapabilities.ScriptedSensor, "ultrasonic-distance"),
-            ["wokwi-pir-motion-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "motion"),
+            // INTERACTIVE SENSOR CONTROLS milestone: these three now ALSO have
+            // a real, tested (InteractiveDigitalSensorTests.cs) live FE toggle
+            // going through the exact same ComponentInputs/ISimulationInputChannel
+            // path as the pushbutton — DigitalInput added alongside
+            // ScriptedSensor, not instead of it (STEP 9: a sensor may
+            // legitimately support both; scripted scenario still applies
+            // whenever no live value has been set for the session).
+            ["wokwi-pir-motion-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "motion", new[] { RuntimeCapabilities.DigitalInput }),
+            ["wokwi-water-leak-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "water-leak", new[] { RuntimeCapabilities.DigitalInput }),
+            ["wokwi-vibration-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "vibration", new[] { RuntimeCapabilities.DigitalInput }),
             ["wokwi-line-tracking-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "line"),
             ["wokwi-line-tracking-3ch"] = new(RuntimeCapabilities.ScriptedSensor, "line"),
             ["wokwi-line-tracking-5ch"] = new(RuntimeCapabilities.ScriptedSensor, "line"),
-            ["wokwi-water-leak-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "water-leak"),
             ["wokwi-flame-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "flame"),
             ["wokwi-soil-moisture-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "soil-moisture"),
-            ["wokwi-rain-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "rain"),
-            ["wokwi-vibration-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "vibration"),
+            // Optional 4th sensor (STEP 22) — same generic mechanism as PIR/
+            // Water Leak/Vibration above, zero new architecture.
+            ["wokwi-rain-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "rain", new[] { RuntimeCapabilities.DigitalInput }),
             ["wokwi-ir-obstacle-sensor"] = new(RuntimeCapabilities.ScriptedSensor, "obstacle"),
         };
 
@@ -64,7 +73,18 @@ public static class RuntimeCapabilityResolver
     }
 }
 
-public sealed record RuntimeCapabilityInfo(string Capability, string? SensorKind);
+// AdditionalCapabilities lets a component legitimately claim more than one
+// capability (STEP 9/10 of the INTERACTIVE SENSOR CONTROLS milestone — e.g.
+// PIR is both ScriptedSensor AND DigitalInput) without breaking every
+// existing 2-arg call site above (defaults to null = single-capability,
+// same as before this record grew a 3rd parameter).
+public sealed record RuntimeCapabilityInfo(string Capability, string? SensorKind, IReadOnlyList<string>? AdditionalCapabilities = null)
+{
+    public IReadOnlyList<string> AllCapabilities =>
+        AdditionalCapabilities == null
+            ? new[] { Capability }
+            : new[] { Capability }.Concat(AdditionalCapabilities).ToList();
+}
 
 public static class RuntimeCapabilities
 {

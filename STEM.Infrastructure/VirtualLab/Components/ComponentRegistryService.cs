@@ -233,7 +233,7 @@ public sealed class ComponentRegistryService : IComponentRegistry
             Category = component.Category,
             Status = component.Status,
             SimulationComponentType = component.SimulationComponentType,
-            RuntimeCapabilities = capability != null ? new[] { capability.Capability } : Array.Empty<string>(),
+            RuntimeCapabilities = capability != null ? capability.AllCapabilities.ToArray() : Array.Empty<string>(),
             SensorKind = capability?.SensorKind,
             Pins = pins.Select(pin => new ComponentPinResponse
             {

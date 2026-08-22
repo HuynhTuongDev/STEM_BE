@@ -96,4 +96,34 @@ public class RuntimeCapabilityResolverTests
         Assert.NotEqual(RuntimeCapabilities.SensorInput, result.Capability);
         Assert.NotNull(result.SensorKind);
     }
+
+    // INTERACTIVE SENSOR CONTROLS milestone — PIR/Water Leak/Vibration are
+    // the first components to genuinely need BOTH capabilities at once
+    // (proven live by InteractiveDigitalSensorTests.cs), exercising
+    // RuntimeCapabilityInfo.AllCapabilities for the first time.
+    [Theory]
+    [InlineData("wokwi-pir-motion-sensor")]
+    [InlineData("wokwi-water-leak-sensor")]
+    [InlineData("wokwi-vibration-sensor")]
+    [InlineData("wokwi-rain-sensor")]
+    public void Resolve_LiveInteractiveSensors_ReturnBothScriptedAndDigitalInput(string simulationComponentType)
+    {
+        var result = RuntimeCapabilityResolver.Resolve(simulationComponentType);
+        Assert.NotNull(result);
+        Assert.Contains(RuntimeCapabilities.ScriptedSensor, result!.AllCapabilities);
+        Assert.Contains(RuntimeCapabilities.DigitalInput, result.AllCapabilities);
+        Assert.Equal(2, result.AllCapabilities.Count);
+    }
+
+    [Fact]
+    public void Resolve_ScriptedOnlySensor_AllCapabilities_HasExactlyOneEntry()
+    {
+        // HC-SR04 never got a live FE control this milestone (pulseIn/
+        // microsecond arithmetic, explicitly out of scope) — AllCapabilities
+        // must not silently pick up DigitalInput it was never given.
+        var result = RuntimeCapabilityResolver.Resolve("wokwi-hc-sr04");
+        Assert.NotNull(result);
+        Assert.Single(result!.AllCapabilities);
+        Assert.Equal(RuntimeCapabilities.ScriptedSensor, result.AllCapabilities[0]);
+    }
 }
