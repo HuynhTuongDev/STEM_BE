@@ -1,4 +1,6 @@
 using STEM.Application.Dtos.Syllabuses;
+using STEM.Application.Interfaces;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
@@ -10,15 +12,18 @@ public class CreateSyllabusHandler
     private readonly ISyllabusRepository _syllabusRepository;
     private readonly IUserRepository _userRepository;
     private readonly IRepository<GradeLevel> _gradeLevelRepository;
+    private readonly ISystemLogService _systemLogService;
 
     public CreateSyllabusHandler(
         ISyllabusRepository syllabusRepository,
         IUserRepository userRepository,
-        IRepository<GradeLevel> gradeLevelRepository)
+        IRepository<GradeLevel> gradeLevelRepository,
+        ISystemLogService systemLogService)
     {
         _syllabusRepository = syllabusRepository;
         _userRepository = userRepository;
         _gradeLevelRepository = gradeLevelRepository;
+        _systemLogService = systemLogService;
     }
 
     public async Task<int> Handle(
@@ -61,6 +66,17 @@ public class CreateSyllabusHandler
 
         await _syllabusRepository.AddAsync(syllabus, cancellationToken);
         await _syllabusRepository.SaveChangesAsync(cancellationToken);
+
+        await _systemLogService.WriteAsync(
+            SystemLogLevels.Information,
+            SystemLogActions.SyllabusCreated,
+            currentUser.Id,
+            currentUser.Role?.Name,
+            entityType: nameof(Syllabus),
+            entityId: syllabus.Id.ToString(),
+            description: $"Created standard syllabus '{syllabus.Title}'.",
+            metadata: new { syllabus.Id, syllabus.Title, syllabus.SubjectArea, syllabus.GradeLevelId },
+            cancellationToken);
 
         return syllabus.Id;
     }

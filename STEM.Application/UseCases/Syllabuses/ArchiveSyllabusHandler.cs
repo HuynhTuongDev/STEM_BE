@@ -1,3 +1,5 @@
+using STEM.Application.Interfaces;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
@@ -8,11 +10,16 @@ public class ArchiveSyllabusHandler
 {
     private readonly ISyllabusRepository _syllabusRepository;
     private readonly IUserRepository _userRepository;
+    private readonly ISystemLogService _systemLogService;
 
-    public ArchiveSyllabusHandler(ISyllabusRepository syllabusRepository, IUserRepository userRepository)
+    public ArchiveSyllabusHandler(
+        ISyllabusRepository syllabusRepository,
+        IUserRepository userRepository,
+        ISystemLogService systemLogService)
     {
         _syllabusRepository = syllabusRepository;
         _userRepository = userRepository;
+        _systemLogService = systemLogService;
     }
 
     public async Task<bool> Handle(
@@ -37,6 +44,17 @@ public class ArchiveSyllabusHandler
 
         _syllabusRepository.Update(syllabus);
         await _syllabusRepository.SaveChangesAsync(cancellationToken);
+
+        await _systemLogService.WriteAsync(
+            SystemLogLevels.Warning,
+            SystemLogActions.SyllabusArchived,
+            currentUser.Id,
+            currentUser.Role?.Name,
+            entityType: nameof(Syllabus),
+            entityId: syllabus.Id.ToString(),
+            description: $"Archived standard syllabus '{syllabus.Title}'.",
+            metadata: new { syllabus.Id, syllabus.Title },
+            cancellationToken);
 
         return true;
     }

@@ -1,7 +1,9 @@
 using System.Linq.Expressions;
 using STEM.Application.Dtos.Syllabuses;
+using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Syllabuses;
 using STEM.Core.Entities;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Simulations;
 using STEM.Core.Entities.Users;
@@ -87,6 +89,30 @@ internal class FakeSyllabusRepository : FakeRepository<Syllabus>, ISyllabusRepos
         Task.FromResult(Items.FirstOrDefault(s => s.Id == id));
 }
 
+internal record RecordedLogCall(
+    string Level,
+    string Action,
+    int? ActorUserId,
+    string? ActorRole,
+    string? EntityType,
+    string? EntityId,
+    string Description,
+    object? Metadata);
+
+internal class FakeSystemLogService : ISystemLogService
+{
+    public readonly List<RecordedLogCall> Calls = new();
+
+    public Task WriteAsync(
+        string level, string action, int? actorUserId, string? actorRole,
+        string? entityType, string? entityId, string description, object? metadata = null,
+        CancellationToken cancellationToken = default)
+    {
+        Calls.Add(new RecordedLogCall(level, action, actorUserId, actorRole, entityType, entityId, description, metadata));
+        return Task.CompletedTask;
+    }
+}
+
 public class SyllabusHandlerTests
 {
     private static User MakeUser(int id, string roleName) =>
@@ -101,8 +127,9 @@ public class SyllabusHandlerTests
 
         var syllabusRepo = new FakeSyllabusRepository();
         var gradeLevelRepo = new FakeRepository<GradeLevel>();
+        var systemLog = new FakeSystemLogService();
 
-        var handler = new CreateSyllabusHandler(syllabusRepo, userRepo, gradeLevelRepo);
+        var handler = new CreateSyllabusHandler(syllabusRepo, userRepo, gradeLevelRepo, systemLog);
 
         var id = await handler.Handle(new CreateSyllabusRequest
         {
@@ -116,6 +143,10 @@ public class SyllabusHandlerTests
         var created = syllabusRepo.Items.Single(s => s.Id == id);
         Assert.True(created.IsSystemOwned);
         Assert.Equal(SyllabusStatuses.Draft, created.Status);
+
+        var logCall = Assert.Single(systemLog.Calls);
+        Assert.Equal(SystemLogActions.SyllabusCreated, logCall.Action);
+        Assert.Equal(masterAdmin.Id, logCall.ActorUserId);
     }
 
     [Fact]
@@ -125,10 +156,13 @@ public class SyllabusHandlerTests
         var schoolAdmin = MakeUser(2, RoleNames.SchoolAdministrator);
         await userRepo.AddAsync(schoolAdmin);
 
-        var handler = new CreateSyllabusHandler(new FakeSyllabusRepository(), userRepo, new FakeRepository<GradeLevel>());
+        var systemLog = new FakeSystemLogService();
+        var handler = new CreateSyllabusHandler(new FakeSyllabusRepository(), userRepo, new FakeRepository<GradeLevel>(), systemLog);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             handler.Handle(new CreateSyllabusRequest { Title = "X" }, schoolAdmin.Id));
+
+        Assert.Empty(systemLog.Calls); // denied write must never produce a success audit event
     }
 
     [Fact]
@@ -142,7 +176,8 @@ public class SyllabusHandlerTests
         var syllabus = new Syllabus { Id = 1, Title = "Old", Status = SyllabusStatuses.Draft, IsSystemOwned = true };
         await syllabusRepo.AddAsync(syllabus);
 
-        var handler = new UpdateSyllabusHandler(syllabusRepo, userRepo, new FakeRepository<GradeLevel>());
+        var systemLog = new FakeSystemLogService();
+        var handler = new UpdateSyllabusHandler(syllabusRepo, userRepo, new FakeRepository<GradeLevel>(), systemLog);
 
         var result = await handler.Handle(1, new UpdateSyllabusRequest
         {
@@ -153,6 +188,25 @@ public class SyllabusHandlerTests
         Assert.True(result);
         Assert.Equal("New Title", syllabus.Title);
         Assert.Equal(SyllabusStatuses.Published, syllabus.Status);
+
+        var logCall = Assert.Single(systemLog.Calls);
+        Assert.Equal(SystemLogActions.SyllabusUpdated, logCall.Action);
+    }
+
+    [Fact]
+    public async Task UpdateSyllabus_WhenNotFound_WritesNoSuccessAuditEvent()
+    {
+        var userRepo = new FakeUserRepository();
+        var masterAdmin = MakeUser(1, RoleNames.MasterAdministrator);
+        await userRepo.AddAsync(masterAdmin);
+
+        var systemLog = new FakeSystemLogService();
+        var handler = new UpdateSyllabusHandler(new FakeSyllabusRepository(), userRepo, new FakeRepository<GradeLevel>(), systemLog);
+
+        var result = await handler.Handle(999, new UpdateSyllabusRequest { Title = "New" }, masterAdmin.Id);
+
+        Assert.False(result);
+        Assert.Empty(systemLog.Calls); // failed update must never produce a success audit event
     }
 
     [Fact]
@@ -165,10 +219,13 @@ public class SyllabusHandlerTests
         var syllabusRepo = new FakeSyllabusRepository();
         await syllabusRepo.AddAsync(new Syllabus { Id = 1, Title = "Old" });
 
-        var handler = new UpdateSyllabusHandler(syllabusRepo, userRepo, new FakeRepository<GradeLevel>());
+        var systemLog = new FakeSystemLogService();
+        var handler = new UpdateSyllabusHandler(syllabusRepo, userRepo, new FakeRepository<GradeLevel>(), systemLog);
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             handler.Handle(1, new UpdateSyllabusRequest { Title = "New" }, teacher.Id));
+
+        Assert.Empty(systemLog.Calls);
     }
 
     [Fact]
@@ -182,13 +239,18 @@ public class SyllabusHandlerTests
         var syllabus = new Syllabus { Id = 1, Title = "Referenced by a Course", Status = SyllabusStatuses.Published };
         await syllabusRepo.AddAsync(syllabus);
 
-        var handler = new ArchiveSyllabusHandler(syllabusRepo, userRepo);
+        var systemLog = new FakeSystemLogService();
+        var handler = new ArchiveSyllabusHandler(syllabusRepo, userRepo, systemLog);
 
         var result = await handler.Handle(1, masterAdmin.Id);
 
         Assert.True(result);
         Assert.Equal(SyllabusStatuses.Archived, syllabus.Status);
         Assert.Contains(syllabus, syllabusRepo.Items); // still present — never hard-deleted
+
+        var logCall = Assert.Single(systemLog.Calls);
+        Assert.Equal(SystemLogActions.SyllabusArchived, logCall.Action);
+        Assert.Equal(SystemLogLevels.Warning, logCall.Level);
     }
 
     [Fact]
@@ -282,5 +344,26 @@ public class SyllabusHandlerTests
         var handler = new GetSyllabusStructureHandler(new FakeSyllabusRepository());
         var result = await handler.Handle(999);
         Assert.Null(result);
+    }
+
+    private static readonly string[] SensitiveKeywords =
+        { "password", "passwordhash", "token", "secret", "authorization", "apikey", "connectionstring" };
+
+    [Fact]
+    public async Task CreateSyllabus_AuditMetadata_ContainsNoSensitiveFields()
+    {
+        var userRepo = new FakeUserRepository();
+        var masterAdmin = MakeUser(1, RoleNames.MasterAdministrator);
+        await userRepo.AddAsync(masterAdmin);
+
+        var systemLog = new FakeSystemLogService();
+        var handler = new CreateSyllabusHandler(new FakeSyllabusRepository(), userRepo, new FakeRepository<GradeLevel>(), systemLog);
+
+        await handler.Handle(new CreateSyllabusRequest { Title = "Chương trình khối 12", SubjectArea = "engineering" }, masterAdmin.Id);
+
+        var call = Assert.Single(systemLog.Calls);
+        var metadataJson = System.Text.Json.JsonSerializer.Serialize(call.Metadata).ToLowerInvariant();
+        foreach (var keyword in SensitiveKeywords)
+            Assert.DoesNotContain(keyword, metadataJson);
     }
 }

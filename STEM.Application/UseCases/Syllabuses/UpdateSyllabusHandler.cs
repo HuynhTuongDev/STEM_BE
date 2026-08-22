@@ -1,4 +1,6 @@
 using STEM.Application.Dtos.Syllabuses;
+using STEM.Application.Interfaces;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
@@ -10,15 +12,18 @@ public class UpdateSyllabusHandler
     private readonly ISyllabusRepository _syllabusRepository;
     private readonly IUserRepository _userRepository;
     private readonly IRepository<GradeLevel> _gradeLevelRepository;
+    private readonly ISystemLogService _systemLogService;
 
     public UpdateSyllabusHandler(
         ISyllabusRepository syllabusRepository,
         IUserRepository userRepository,
-        IRepository<GradeLevel> gradeLevelRepository)
+        IRepository<GradeLevel> gradeLevelRepository,
+        ISystemLogService systemLogService)
     {
         _syllabusRepository = syllabusRepository;
         _userRepository = userRepository;
         _gradeLevelRepository = gradeLevelRepository;
+        _systemLogService = systemLogService;
     }
 
     public async Task<bool> Handle(
@@ -65,6 +70,17 @@ public class UpdateSyllabusHandler
 
         _syllabusRepository.Update(syllabus);
         await _syllabusRepository.SaveChangesAsync(cancellationToken);
+
+        await _systemLogService.WriteAsync(
+            SystemLogLevels.Information,
+            SystemLogActions.SyllabusUpdated,
+            currentUser.Id,
+            currentUser.Role?.Name,
+            entityType: nameof(Syllabus),
+            entityId: syllabus.Id.ToString(),
+            description: $"Updated standard syllabus '{syllabus.Title}'.",
+            metadata: new { syllabus.Id, syllabus.Title, syllabus.Status },
+            cancellationToken);
 
         return true;
     }
