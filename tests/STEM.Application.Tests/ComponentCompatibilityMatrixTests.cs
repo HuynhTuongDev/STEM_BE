@@ -236,6 +236,107 @@ public sealed class ComponentCompatibilityMatrixTests
         Assert.False(entry.CanvasWiringReady);
     }
 
+    // REAL COMPONENT VISUAL milestone — visualCapability is a NEW, independent
+    // axis (Golden Rule: "Visual-ready != Simulation-ready"). Every entry must
+    // carry one of exactly 3 values, and the value must be internally
+    // consistent with the asset fields it's derived from.
+    private static readonly HashSet<string> ValidVisualCapabilities = new()
+    {
+        "REAL_PROVIDER_VISUAL", "VERIFIED_INTERNAL_VISUAL", "GENERIC_FALLBACK"
+    };
+
+    [Fact]
+    public void EveryEntry_HasAValidVisualCapability()
+    {
+        foreach (var entry in Matrix.Value.Components)
+        {
+            Assert.False(string.IsNullOrWhiteSpace(entry.VisualCapability), $"{entry.CanonicalKey} is missing visualCapability");
+            Assert.Contains(entry.VisualCapability!, ValidVisualCapabilities);
+        }
+    }
+
+    [Fact]
+    public void RealProviderVisual_Entries_AreAlwaysWokwiElementsAndVerified()
+    {
+        var realProvider = Matrix.Value.Components.Where(c => c.VisualCapability == "REAL_PROVIDER_VISUAL");
+        Assert.NotEmpty(realProvider);
+
+        foreach (var entry in realProvider)
+        {
+            Assert.True(entry.VisualAssetVerified, $"{entry.CanonicalKey} claims REAL_PROVIDER_VISUAL without VisualAssetVerified");
+            Assert.Equal("@wokwi/elements", entry.AssetProvider);
+        }
+    }
+
+    [Fact]
+    public void GenericFallback_Entries_NeverClaimAWokwiElementsAsset()
+    {
+        var fallback = Matrix.Value.Components.Where(c => c.VisualCapability == "GENERIC_FALLBACK");
+        Assert.NotEmpty(fallback);
+
+        foreach (var entry in fallback)
+        {
+            Assert.NotEqual("@wokwi/elements", entry.AssetProvider);
+        }
+    }
+
+    // P0 components (REAL COMPONENT VISUAL milestone, STEP 9): 12 parts serve
+    // the current lab set, but ESP32 DevKit V1 is the BOARD itself (handled
+    // by getBoardTagName in CircuitCanvas.tsx, not a placeable peripheral) and
+    // has no entry in this component-only matrix — out of scope for this
+    // file, not a gap. Of the 11 remaining, 9 already have real visual + real
+    // pin geometry via @wokwi/elements (verified against the actual shipped
+    // package during this milestone's audit, not re-derived here). Relay
+    // Module and L298N are the only 2 genuine gaps — audited and confirmed
+    // unfixable via the officially-configured Fritzing repo (no "relay
+    // module"/"L298N" part exists there; @wokwi/elements' `ks2e-m-dc5` is a
+    // raw dual relay, wrong identity for "Relay Module" — same raw-vs-module
+    // trap as the earlier LDR/pH cases). Their pin NAMES were cross-verified
+    // against components101.com / lastminuteengineers.com / circuitdigest.com
+    // this milestone even though the visual stays generic.
+    [Theory]
+    [InlineData("wokwi-led")]
+    [InlineData("wokwi-pushbutton")]
+    [InlineData("wokwi-buzzer")]
+    [InlineData("wokwi-servo")]
+    [InlineData("wokwi-potentiometer")]
+    [InlineData("wokwi-photoresistor-sensor")]
+    [InlineData("wokwi-dht11")]
+    [InlineData("wokwi-dht22")]
+    [InlineData("wokwi-hc-sr04")]
+    public void P0_RealVisualComponents_AreClassifiedRealProviderVisual(string canonicalKey)
+    {
+        var entry = Matrix.Value.Components.SingleOrDefault(c => c.CanonicalKey == canonicalKey);
+        Assert.NotNull(entry);
+        Assert.Equal("REAL_PROVIDER_VISUAL", entry!.VisualCapability);
+    }
+
+    [Theory]
+    [InlineData("wokwi-relay-module")]
+    [InlineData("wokwi-l298n")]
+    public void P0_GapComponents_AreGenericFallback_ButHavePinNamesVerified(string canonicalKey)
+    {
+        var entry = Matrix.Value.Components.SingleOrDefault(c => c.CanonicalKey == canonicalKey);
+        Assert.NotNull(entry);
+        Assert.Equal("GENERIC_FALLBACK", entry!.VisualCapability);
+        Assert.True(entry.PinDefinitionVerified, $"{canonicalKey} pin names should be cross-verified even though the visual is generic");
+        Assert.False(entry.VisualAssetVerified);
+    }
+
+    // Full-catalog coverage snapshot (STEP 20): locks in the current honest
+    // number so future drift (up OR down) is visible in a diff, without
+    // hard-failing CI on a target this milestone explicitly does not require
+    // for the full 71-component catalog (only for the 12 P0 parts above).
+    [Fact]
+    public void FullCatalog_RealProviderVisualCoverage_MatchesKnownSnapshot()
+    {
+        var total = Matrix.Value.Components.Count;
+        var realProviderCount = Matrix.Value.Components.Count(c => c.VisualCapability == "REAL_PROVIDER_VISUAL");
+
+        Assert.Equal(71, total);
+        Assert.Equal(21, realProviderCount);
+    }
+
     private sealed class MatrixDocument
     {
         public List<MatrixEntry> Components { get; set; } = new();
@@ -257,5 +358,6 @@ public sealed class ComponentCompatibilityMatrixTests
         public bool CanvasWiringReady { get; set; }
         public string? AssetProvider { get; set; }
         public string? PinProvider { get; set; }
+        public string? VisualCapability { get; set; }
     }
 }
