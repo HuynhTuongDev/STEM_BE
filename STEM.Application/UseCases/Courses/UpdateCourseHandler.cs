@@ -36,29 +36,29 @@ public class UpdateCourseHandler
         if (currentUser == null)
             throw new UnauthorizedAccessException("Current user not found.");
 
-        if (currentUser.Role?.Name != RoleNames.SchoolAdministrator)
-            throw new UnauthorizedAccessException("Only School Administrator can update courses.");
+        if (currentUser.Role?.Name != RoleNames.MasterAdministrator)
+            throw new UnauthorizedAccessException("Only Master Administrator can update courses.");
 
         var course = await _courseRepository.GetByIdAsync(courseId, cancellationToken);
         if (course == null)
             return false;
 
-        if (course.SchoolId != currentUser.SchoolId)
-            throw new UnauthorizedAccessException("You can only update courses from your own school.");
-
-        // Check for duplicate course title in the same school (excluding current course)
-        if (!string.IsNullOrWhiteSpace(request.Title) && 
-            course.Title.ToLower() != request.Title.Trim().ToLower())
+        // Check for duplicate course title
+        if (!string.IsNullOrWhiteSpace(request.Title) && course.Title.ToLower() != request.Title.Trim().ToLower())
         {
-            var titleExists = await _courseRepository.ExistsByTitleAsync(request.Title.Trim(), currentUser.SchoolId!.Value, cancellationToken);
+            var titleExists = await _courseRepository.ExistsByTitleAsync(request.Title.Trim(), cancellationToken);
             if (titleExists)
-                throw new InvalidOperationException($"A course with the title '{request.Title.Trim()}' already exists in your school.");
+                throw new InvalidOperationException($"A course with the title '{request.Title.Trim()}' already exists.");
         }
 
         if (!string.IsNullOrWhiteSpace(request.Title))
             course.Title = request.Title.Trim();
         if (request.Description != null)
             course.Description = request.Description.Trim();
+        course.SyllabusId = request.SyllabusId;
+        course.EstimatedHours = request.EstimatedHours;
+        course.IsRequired = request.IsRequired;
+        course.IsActive = request.IsActive;
         course.UpdatedAt = DateTime.UtcNow;
 
         _courseRepository.Update(course);

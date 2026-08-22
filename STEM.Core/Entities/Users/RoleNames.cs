@@ -16,6 +16,9 @@ public static class RoleNames
     public const string Teacher = "Teacher";
     public const string Student = "Student";
 
+    // Alias để support cả 2 cách viết trong DB
+    public const string SchoolAdmin = "School Admin";
+
     /// <summary>
     /// Roles that manage business operations (School Admin + Teacher)
     /// Used for accessing student data, classes, grades
@@ -23,6 +26,7 @@ public static class RoleNames
     public static readonly HashSet<string> ManagementRoles = new(StringComparer.OrdinalIgnoreCase)
     {
         SchoolAdministrator,
+        SchoolAdmin,
         Teacher
     };
 
@@ -31,8 +35,54 @@ public static class RoleNames
     /// </summary>
     public static readonly HashSet<string> SchoolDataAccessRoles = new(StringComparer.OrdinalIgnoreCase)
     {
-        SchoolAdministrator
+        SchoolAdministrator,
+        SchoolAdmin
     };
+
+    /// <summary>
+    /// Check if role is Master Administrator
+    /// </summary>
+    public static bool IsMasterAdmin(string? roleName)
+    {
+        return string.Equals(roleName, MasterAdministrator, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Check if role is School Administrator (support both "School Administrator" and "School Admin")
+    /// </summary>
+    public static bool IsSchoolAdmin(string? roleName)
+    {
+        if (string.IsNullOrWhiteSpace(roleName)) return false;
+        return string.Equals(roleName, SchoolAdministrator, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(roleName, SchoolAdmin, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Check if role is a teacher
+    /// </summary>
+    public static bool IsTeacher(string? roleName)
+    {
+        return string.Equals(roleName, Teacher, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Check if role is a student
+    /// </summary>
+    public static bool IsStudent(string? roleName)
+    {
+        return string.Equals(roleName, Student, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Check if role name is a valid admin role (Master or School Admin)
+    /// </summary>
+    public static bool IsAdminRole(string? roleName)
+    {
+        if (string.IsNullOrWhiteSpace(roleName)) return false;
+        return string.Equals(roleName, MasterAdministrator, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(roleName, SchoolAdministrator, StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(roleName, SchoolAdmin, StringComparison.OrdinalIgnoreCase);
+    }
 
     public static bool IsManagementRole(string? roleName)
     {

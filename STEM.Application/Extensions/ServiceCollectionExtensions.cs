@@ -18,6 +18,7 @@ using STEM.Application.UseCases.Simulation.Runners.Educational;
 using STEM.Application.UseCases.Simulation.Runners.Mock;
 using STEM.Application.UseCases.Simulation.Runners.Qemu;
 using STEM.Application.UseCases.Simulation.Runtime;
+using STEM.Application.UseCases.Curriculum;
 using FluentValidation;
 using STEM.Application.Validators;
 using STEM.Core.Repository;
@@ -137,6 +138,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AssignStudentsToClassHandler>();
         services.AddScoped<RemoveStudentFromClassHandler>();
         services.AddScoped<GetAvailableStudentsHandler>();
+        services.AddScoped<GetStudentTemplateHandler>();
+        services.AddScoped<ImportStudentsHandler>();
 
         // Schedule Handlers
         services.AddScoped<CreateScheduleHandler>();
@@ -144,6 +147,39 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DeleteScheduleHandler>();
         services.AddScoped<GetTeacherScheduleHandler>();
         services.AddScoped<GetStudentScheduleHandler>();
+
+        // Curriculum Handlers (Syllabus, GradeLevel, Module, Lesson)
+        services.AddScoped<GetSyllabiHandler>();
+        services.AddScoped<GetSyllabusByIdHandler>();
+        services.AddScoped<CreateSyllabusHandler>();
+        services.AddScoped<UpdateSyllabusHandler>();
+        services.AddScoped<DeleteSyllabusHandler>();
+        services.AddScoped<PublishSyllabusHandler>();
+        services.AddScoped<ArchiveSyllabusHandler>();
+        services.AddScoped<UnpublishSyllabusHandler>();
+        services.AddScoped<RestoreSyllabusHandler>();
+        services.AddScoped<GetGradeLevelsHandler>();
+        services.AddScoped<GetGradeLevelByIdHandler>();
+        services.AddScoped<CreateGradeLevelHandler>();
+        services.AddScoped<UpdateGradeLevelHandler>();
+        services.AddScoped<DeleteGradeLevelHandler>();
+        
+        // Module Handlers
+        services.AddScoped<GetModulesHandler>();
+        services.AddScoped<GetModuleByIdHandler>();
+        services.AddScoped<CreateModuleHandler>();
+        services.AddScoped<UpdateModuleHandler>();
+        services.AddScoped<DeleteModuleHandler>();
+        services.AddScoped<ReorderModulesHandler>();
+        services.AddScoped<GetModulesByClassHandler>();
+        
+        // Lesson Handlers
+        services.AddScoped<GetLessonsHandler>();
+        services.AddScoped<GetLessonByIdHandler>();
+        services.AddScoped<CreateLessonHandler>();
+        services.AddScoped<UpdateLessonHandler>();
+        services.AddScoped<DeleteLessonHandler>();
+        services.AddScoped<ReorderLessonsHandler>();
 
         // Validators - register all validators from assembly
         services.AddValidatorsFromAssemblyContaining<CreateUserBySchoolAdminValidator>();

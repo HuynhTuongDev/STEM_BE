@@ -3,6 +3,8 @@ using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
+using static STEM.Core.Entities.Users.RoleNames;
+
 namespace STEM.Application.UseCases.Classes;
 
 public class RemoveStudentFromClassHandler
@@ -29,14 +31,14 @@ public class RemoveStudentFromClassHandler
 
         var roleName = currentUser.Role?.Name;
 
-        if (roleName != RoleNames.MasterAdministrator && roleName != RoleNames.SchoolAdministrator && roleName != RoleNames.Teacher)
+        if (!IsMasterAdmin(roleName) && !IsSchoolAdmin(roleName) && !IsTeacher(roleName))
             throw new UnauthorizedAccessException("Chỉ quản trị viên và giáo viên mới được xóa học sinh khỏi lớp học.");
 
         var classEntity = await _classRepository.GetByIdAsync(classId, cancellationToken);
         if (classEntity == null)
             throw new KeyNotFoundException("Không tìm thấy lớp học.");
 
-        if (classEntity.SchoolId != currentUser.SchoolId && roleName != RoleNames.MasterAdministrator)
+        if (classEntity.SchoolId != currentUser.SchoolId && !IsMasterAdmin(roleName))
             throw new UnauthorizedAccessException("Bạn chỉ có thể thao tác với lớp học thuộc trường của mình.");
 
         var enrollment = await _enrollmentRepository.FindAsync(e => e.ClassId == classId && e.StudentId == studentId, cancellationToken);

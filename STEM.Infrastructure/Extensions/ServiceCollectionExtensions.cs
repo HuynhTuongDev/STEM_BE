@@ -50,7 +50,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IWokwiService, WokwiService>();
         services.AddTransient<IEmailService, EmailService>();
-        
+
+        // Curriculum Repositories
+        services.AddScoped<ISyllabusRepository, SyllabusRepository>();
+        services.AddScoped<IGradeLevelRepository, GradeLevelRepository>();
+        services.AddScoped<IModuleRepository, ModuleRepository>();
+        services.AddScoped<ILessonRepository, LessonRepository>();
+
         services.AddScoped<IVirtualLabProjectService, VirtualLabProjectService>();
         services.AddHttpClient<ILabService, LabService>();
         services.AddHttpClient<ILabAiProvider, BeeknoeeLabAiProvider>(client =>

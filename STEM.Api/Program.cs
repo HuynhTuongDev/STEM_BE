@@ -113,21 +113,29 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("MasterOnly", policy =>
         policy.RequireRole(RoleNames.MasterAdministrator));
 
+    // Master Admin only (curriculum management)
+    options.AddPolicy("MasterAdminOnly", policy =>
+        policy.RequireRole(RoleNames.MasterAdministrator));
+
+    // Master Admin or School Admin (course management)
+    options.AddPolicy("MasterAdminOrSchoolAdmin", policy =>
+        policy.RequireRole(RoleNames.MasterAdministrator, RoleNames.SchoolAdministrator, RoleNames.SchoolAdmin));
+
     // School Administrator: Business operations (students, classes, grades, etc.)
     options.AddPolicy("SchoolAdminOnly", policy =>
-        policy.RequireRole(RoleNames.SchoolAdministrator));
+        policy.RequireRole(RoleNames.SchoolAdministrator, RoleNames.SchoolAdmin));
 
     // Teachers & School Admins: Course/Class management
     options.AddPolicy("TeacherAndAbove", policy =>
-        policy.RequireRole(RoleNames.SchoolAdministrator, RoleNames.Teacher));
+        policy.RequireRole(RoleNames.SchoolAdministrator, RoleNames.SchoolAdmin, RoleNames.Teacher));
 
     // All authenticated roles: Students, Teachers, School Admins
     options.AddPolicy("StudentAndAbove", policy =>
-        policy.RequireRole(RoleNames.SchoolAdministrator, RoleNames.Teacher, RoleNames.Student));
+        policy.RequireRole(RoleNames.SchoolAdministrator, RoleNames.SchoolAdmin, RoleNames.Teacher, RoleNames.Student));
 
     // Legacy: Both admin types (avoid using, prefer specific policies above)
     options.AddPolicy("AdminOnly", policy =>
-        policy.RequireRole(RoleNames.MasterAdministrator, RoleNames.SchoolAdministrator));
+        policy.RequireRole(RoleNames.MasterAdministrator, RoleNames.SchoolAdministrator, RoleNames.SchoolAdmin));
 });
 
 // Configure CORS - More permissive for development

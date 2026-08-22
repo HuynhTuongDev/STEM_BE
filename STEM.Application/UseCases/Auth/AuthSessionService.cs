@@ -102,9 +102,9 @@ public class AuthSessionService
             }, cancellationToken);
             await _loginHistoryRepository.SaveChangesAsync(cancellationToken);
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            Console.WriteLine($"Failed to record login history: {ex.Message}");
+            // Silently ignore login history recording failures
         }
     }
 }

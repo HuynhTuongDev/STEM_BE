@@ -71,6 +71,7 @@ file sealed class FakeClassRepository : IClassRepository
     public Task<List<int>> GetAvailableTeacherIdsForClassAsync(int classId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<IEnumerable<Enrollment>> GetStudentEnrollmentsAsync(int studentId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
     public Task<IEnumerable<Assignment>> GetClassAssignmentsAsync(int classId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task<STEM.Core.Entities.Courses.Course?> GetCourseByIdAsync(int courseId, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 }
 
 file sealed class FakeAttendanceRepository : IAttendanceRepository

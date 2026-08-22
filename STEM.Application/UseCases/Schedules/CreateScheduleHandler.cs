@@ -1,5 +1,6 @@
 using STEM.Application.Dtos.Schedules;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Courses;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Schedules;
@@ -10,17 +11,20 @@ public class CreateScheduleHandler
     private readonly IClassRepository _classRepository;
     private readonly IUserRepository _userRepository;
     private readonly IAttendanceRepository _attendanceRepository;
+    private readonly IRepository<Lesson> _lessonRepository;
 
     public CreateScheduleHandler(
         IScheduleRepository scheduleRepository,
         IClassRepository classRepository,
         IUserRepository userRepository,
-        IAttendanceRepository attendanceRepository)
+        IAttendanceRepository attendanceRepository,
+        IRepository<Lesson> lessonRepository)
     {
         _scheduleRepository = scheduleRepository;
         _classRepository = classRepository;
         _userRepository = userRepository;
         _attendanceRepository = attendanceRepository;
+        _lessonRepository = lessonRepository;
     }
 
     public async Task<CreateScheduleResponse> Handle(CreateScheduleRequest request, int currentUserId, CancellationToken cancellationToken = default)
@@ -38,6 +42,31 @@ public class CreateScheduleHandler
 
         if (request.StartTime >= request.EndTime)
             throw new InvalidOperationException("Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc.");
+
+        // Validate lesson nếu được cung cấp
+        Lesson? lesson = null;
+        if (request.LessonId > 0)
+        {
+            var lessons = await _lessonRepository.FindAsync(l => l.Id == request.LessonId, cancellationToken);
+            lesson = lessons.FirstOrDefault();
+
+            if (lesson == null)
+                throw new KeyNotFoundException($"Không tìm thấy bài học với id {request.LessonId}.");
+
+            // Kiểm tra lesson đã được gán cho slot nào khác chưa
+            var existingSchedules = await _scheduleRepository.FindAsync(
+                s => s.LessonId == request.LessonId, cancellationToken);
+
+            if (existingSchedules.Any())
+                throw new InvalidOperationException($"Bài học '{lesson.Title}' đã được gán cho slot khác.");
+
+            // Kiểm tra lesson có thuộc course của lớp không
+            // Module của lesson phải có CourseId trùng với CourseId của lớp
+            if (lesson.Module != null && lesson.Module.CourseId != classEntity.CourseId)
+            {
+                throw new InvalidOperationException($"Bài học '{lesson.Title}' không thuộc khóa học của lớp này.");
+            }
+        }
 
         // Normalize times to UTC for comparison
         var normalizedStartTime = new DateTime(request.StartTime.Year, request.StartTime.Month, request.StartTime.Day,
@@ -71,10 +100,11 @@ public class CreateScheduleHandler
             ConflictingEndTime = c.ConflictingEndTime
         }).ToList();
 
-        // Create the schedule regardless of conflicts (warnings only)
+        // Create the schedule with optional lesson
         var schedule = new Schedule
         {
             ClassId = request.ClassId,
+            LessonId = request.LessonId > 0 ? request.LessonId : null,
             StartTime = normalizedStartTime,
             EndTime = normalizedEndTime,
             CreatedAt = DateTime.UtcNow,
@@ -111,6 +141,8 @@ public class CreateScheduleHandler
                 ClassId = schedule.ClassId,
                 ClassCode = classEntity.ClassCode,
                 ClassName = classEntity.Course?.Title ?? string.Empty,
+                LessonId = schedule.LessonId,
+                LessonTitle = lesson?.Title,
                 StartTime = schedule.StartTime,
                 EndTime = schedule.EndTime,
                 CreatedAt = schedule.CreatedAt,

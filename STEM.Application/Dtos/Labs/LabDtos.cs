@@ -30,6 +30,7 @@ public class CreateLabRequest
     public IReadOnlyCollection<int> ClassIds { get; set; } = Array.Empty<int>();
     public string Status { get; set; } = "draft";
     public int? LinkedAssignmentId { get; set; }
+    public int? ScheduleId { get; set; } // Gán lab vào buổi dạy cụ thể
 }
 
 public class UpdateLabRequest
@@ -48,6 +49,7 @@ public class UpdateLabRequest
     public IReadOnlyCollection<int> ClassIds { get; set; } = Array.Empty<int>();
     public string Status { get; set; } = "draft";
     public int? LinkedAssignmentId { get; set; }
+    public int? ScheduleId { get; set; } // Gán lab vào buổi dạy cụ thể
 }
 
 public class ValidateWokwiProjectRequest
