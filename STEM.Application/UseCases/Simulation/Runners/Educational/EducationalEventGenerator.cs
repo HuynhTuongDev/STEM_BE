@@ -154,8 +154,13 @@ public sealed class EducationalEventGenerator
             case EducationalInstructionKind.DigitalRead:
                 var pinMode = state.PinModes.TryGetValue(instruction.Pin!, out var mode) ? mode : null;
                 var button = state.FindButtons(instruction.Pin!).FirstOrDefault();
+                var digitalSensor = state.FindDigitalSensors(instruction.Pin!).FirstOrDefault();
                 var value = button?.Read(state.Context.ComponentInputs, pinMode) ??
-                    (pinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW");
+                    (digitalSensor != null
+                        ? ((digitalSensor.TryReadLiveInput(state.Context.ComponentInputs) ??
+                            state.ReadDigitalSensorScenario(digitalSensor.PartId, digitalSensor.UseMotionField, defaultValue: false))
+                           ? "HIGH" : "LOW")
+                        : (pinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW"));
 
                 await EmitAsync(state, onEventEmitted, "pin-state", state.Time, new Dictionary<string, object?>
                 {
@@ -336,8 +341,13 @@ public sealed class EducationalEventGenerator
                 {
                     var conditionPinMode = state.PinModes.TryGetValue(instruction.Pin!, out var ifMode) ? ifMode : null;
                     var conditionButton = state.FindButtons(instruction.Pin!).FirstOrDefault();
+                    var conditionDigitalSensor = state.FindDigitalSensors(instruction.Pin!).FirstOrDefault();
                     var actualValue = conditionButton?.Read(state.Context.ComponentInputs, conditionPinMode) ??
-                        (conditionPinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW");
+                        (conditionDigitalSensor != null
+                            ? ((conditionDigitalSensor.TryReadLiveInput(state.Context.ComponentInputs) ??
+                                state.ReadDigitalSensorScenario(conditionDigitalSensor.PartId, conditionDigitalSensor.UseMotionField, defaultValue: false))
+                               ? "HIGH" : "LOW")
+                            : (conditionPinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW"));
                     branch = actualValue.Equals(instruction.Value, StringComparison.OrdinalIgnoreCase)
                         ? instruction.Body
                         : instruction.ElseBody;
@@ -482,6 +492,7 @@ public sealed class EducationalEventGenerator
         private readonly Dictionary<string, List<PotentiometerModel>> _potentiometersByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<LightSensorModel>> _lightSensorsByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<RelayModel>> _relaysByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<DigitalSensorModel>> _digitalSensorsByPin = new(StringComparer.OrdinalIgnoreCase);
 
         // DHT scripted-sensor timeline — reused AS-IS from the QEMU side
         // (STEP 8/9: "Reuse trực tiếp semantic của QEMU. Không viết một
@@ -530,6 +541,7 @@ public sealed class EducationalEventGenerator
         public IReadOnlyCollection<PotentiometerModel> FindPotentiometers(string pin) => Find(_potentiometersByPin, pin);
         public IReadOnlyCollection<LightSensorModel> FindLightSensors(string pin) => Find(_lightSensorsByPin, pin);
         public IReadOnlyCollection<RelayModel> FindRelays(string pin) => Find(_relaysByPin, pin);
+        public IReadOnlyCollection<DigitalSensorModel> FindDigitalSensors(string pin) => Find(_digitalSensorsByPin, pin);
 
         // analogRead() doesn't care WHAT is attached to the pin, only that
         // something producing a 0..4095 value is — same reasoning as
@@ -566,6 +578,42 @@ public sealed class EducationalEventGenerator
                 .Where(e => field == "Temperature" ? e.Temperature.HasValue : e.Humidity.HasValue)
                 .OrderBy(e => e.TimeMs)
                 .Select(e => (e.TimeMs, Value: (field == "Temperature" ? e.Temperature : e.Humidity)!.Value))
+                .ToList();
+
+            if (entries.Count == 0)
+            {
+                return defaultValue;
+            }
+
+            var result = entries[0].Value;
+            foreach (var entry in entries)
+            {
+                if (entry.TimeMs <= Time) result = entry.Value; else break;
+            }
+
+            return result;
+        }
+
+        // Generic digital-sensor scripted-scenario lookup — same step-function
+        // semantics as ReadDhtScenario, ported for the boolean-valued sensor
+        // family (PIR's Motion field; Water Leak/Flame/Soil Moisture/Rain/
+        // Vibration/IR Obstacle's shared Detected field — see
+        // SensorTimelineEntry's own doc comments in SensorScenarioDtos.cs).
+        // Deliberately NOT extended to HC-SR04 (needs pulseIn/microsecond
+        // arithmetic) or Line Tracking (needs pattern-to-per-channel-array
+        // logic) — QEMU-only remains the correct, honest state for those two,
+        // matching STEP 8/17's explicit low-ROI/runner-honesty guidance.
+        public bool ReadDigitalSensorScenario(string componentId, bool useMotionField, bool defaultValue)
+        {
+            if (_scenario == null || !_scenario.Sensors.TryGetValue(componentId, out var timeline))
+            {
+                return defaultValue;
+            }
+
+            var entries = timeline.Timeline
+                .Where(e => useMotionField ? e.Motion.HasValue : e.Detected.HasValue)
+                .OrderBy(e => e.TimeMs)
+                .Select(e => (e.TimeMs, Value: (useMotionField ? e.Motion : e.Detected)!.Value))
                 .ToList();
 
             if (entries.Count == 0)
@@ -645,6 +693,41 @@ public sealed class EducationalEventGenerator
                          TryFindPin(component, new[] { "IN" }, out var relayPin))
                 {
                     AddModel(_relaysByPin, relayPin, new RelayModel(component.Id, relayPin));
+                }
+                else if (component.Type.Equals("wokwi-pir-motion-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "OUT" }, out var pirPin))
+                {
+                    AddModel(_digitalSensorsByPin, pirPin, new DigitalSensorModel(component.Id, pirPin, useMotionField: true));
+                }
+                else if (component.Type.Equals("wokwi-water-leak-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "S" }, out var waterLeakPin))
+                {
+                    AddModel(_digitalSensorsByPin, waterLeakPin, new DigitalSensorModel(component.Id, waterLeakPin, useMotionField: false));
+                }
+                else if (component.Type.Equals("wokwi-flame-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "DOUT" }, out var flamePin))
+                {
+                    AddModel(_digitalSensorsByPin, flamePin, new DigitalSensorModel(component.Id, flamePin, useMotionField: false));
+                }
+                else if (component.Type.Equals("wokwi-soil-moisture-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "DO" }, out var soilPin))
+                {
+                    AddModel(_digitalSensorsByPin, soilPin, new DigitalSensorModel(component.Id, soilPin, useMotionField: false));
+                }
+                else if (component.Type.Equals("wokwi-rain-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "DO" }, out var rainPin))
+                {
+                    AddModel(_digitalSensorsByPin, rainPin, new DigitalSensorModel(component.Id, rainPin, useMotionField: false));
+                }
+                else if (component.Type.Equals("wokwi-vibration-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "OUT" }, out var vibrationPin))
+                {
+                    AddModel(_digitalSensorsByPin, vibrationPin, new DigitalSensorModel(component.Id, vibrationPin, useMotionField: false));
+                }
+                else if (component.Type.Equals("wokwi-ir-obstacle-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "OUT" }, out var irObstaclePin))
+                {
+                    AddModel(_digitalSensorsByPin, irObstaclePin, new DigitalSensorModel(component.Id, irObstaclePin, useMotionField: false));
                 }
             }
         }
