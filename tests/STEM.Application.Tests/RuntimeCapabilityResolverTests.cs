@@ -39,8 +39,7 @@ public class RuntimeCapabilityResolverTests
     }
 
     // STEP 15's explicit protection — a component whose SimulationComponentType
-    // is null (e.g. every RGB LED variant, per the earlier dedup/mapping bug
-    // fixes) must resolve to NO capability at all, not silently inherit
+    // is null must resolve to NO capability at all, not silently inherit
     // wokwi-led's Output capability by any kind of name/category guessing.
     [Fact]
     public void Resolve_NullSimulationComponentType_ReturnsNull()
@@ -51,6 +50,50 @@ public class RuntimeCapabilityResolverTests
     [Fact]
     public void Resolve_UnknownSimulationComponentType_ReturnsNull()
     {
-        Assert.Null(RuntimeCapabilityResolver.Resolve("wokwi-rgb-led"));
+        // No runtime model exists for this type at all (display/IMU, no
+        // Educational or QEMU support) — genuinely unmapped, unlike
+        // wokwi-l298n/wokwi-rgb-led below which used to be here by mistake
+        // (they DO have real QEMU runtime, the resolver entry was just missing).
+        Assert.Null(RuntimeCapabilityResolver.Resolve("wokwi-mpu6050"));
+    }
+
+    // RUNTIME + INTERACTIVE COVERAGE BOOST milestone — L298nModel.cs and
+    // RgbLedModel.cs both have real, working QEMU runtime already; the
+    // resolver just never had an entry for either (a gap called out by
+    // their own matrix "missingRequirements" notes).
+    [Theory]
+    [InlineData("wokwi-l298n")]
+    [InlineData("wokwi-rgb-led")]
+    public void Resolve_QemuOutputOnlyTypes_ReturnOutput(string simulationComponentType)
+    {
+        var result = RuntimeCapabilityResolver.Resolve(simulationComponentType);
+        Assert.NotNull(result);
+        Assert.Equal(RuntimeCapabilities.Output, result!.Capability);
+    }
+
+    // The 10 scripted-sensor types confirmed to already have real, ENABLED
+    // QEMU support in SensorRuntimeHeaderGenerator.cs (verified by source
+    // read, not assumed) — must resolve to ScriptedSensor, never SensorInput
+    // (that's reserved for live/realtime-via-SignalR sensors like the
+    // photoresistor).
+    [Theory]
+    [InlineData("wokwi-hc-sr04")]
+    [InlineData("wokwi-pir-motion-sensor")]
+    [InlineData("wokwi-line-tracking-sensor")]
+    [InlineData("wokwi-line-tracking-3ch")]
+    [InlineData("wokwi-line-tracking-5ch")]
+    [InlineData("wokwi-water-leak-sensor")]
+    [InlineData("wokwi-flame-sensor")]
+    [InlineData("wokwi-soil-moisture-sensor")]
+    [InlineData("wokwi-rain-sensor")]
+    [InlineData("wokwi-vibration-sensor")]
+    [InlineData("wokwi-ir-obstacle-sensor")]
+    public void Resolve_ScriptedSensorTypes_ReturnScriptedSensor_NeverSensorInput(string simulationComponentType)
+    {
+        var result = RuntimeCapabilityResolver.Resolve(simulationComponentType);
+        Assert.NotNull(result);
+        Assert.Equal(RuntimeCapabilities.ScriptedSensor, result!.Capability);
+        Assert.NotEqual(RuntimeCapabilities.SensorInput, result.Capability);
+        Assert.NotNull(result.SensorKind);
     }
 }
