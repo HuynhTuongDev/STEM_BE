@@ -44,6 +44,8 @@ public static class SensorRuntimeHeaderGenerator
     private const string SoilMoistureType = "wokwi-soil-moisture-sensor";
     private const string RainType = "wokwi-rain-sensor";
     private const string VibrationType = "wokwi-vibration-sensor";
+    private const string IrObstacleType = "wokwi-ir-obstacle-sensor";
+    private const string LineTrackingSingleType = "wokwi-line-tracking-sensor";
     private const string Dht22Type = "wokwi-dht22";
     private const string Dht11Type = "wokwi-dht11";
 
@@ -93,6 +95,12 @@ public static class SensorRuntimeHeaderGenerator
         [SoilMoistureType] = new GenericSensorPinConfig("DO", "AO"),
         [RainType] = new GenericSensorPinConfig("DO", "AO"),
         [VibrationType] = new GenericSensorPinConfig("OUT", null),
+        // RUNTIME + INTERACTIVE COVERAGE BOOST milestone — same TCRT5000-family
+        // digital-only convention (VCC/GND/OUT) already cross-verified for the
+        // 3ch/5ch line-tracking variants; the 1-channel and IR-obstacle types
+        // use the identical single OUT pin, just never added to this dict.
+        [IrObstacleType] = new GenericSensorPinConfig("OUT", null),
+        [LineTrackingSingleType] = new GenericSensorPinConfig("OUT", null),
     };
 
     public static SensorScenarioConfig? TryParseScenario(string diagramJson)
