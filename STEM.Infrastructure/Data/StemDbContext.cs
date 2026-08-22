@@ -58,6 +58,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Rubric> Rubrics => Set<Rubric>();
 
     public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -836,5 +837,57 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         modelBuilder.Entity<ComponentSource>()
             .Property(source => source.AssetsJson)
             .HasColumnType("jsonb");
+
+        // SystemLog — append-only audit trail, no navigation to User (actor
+        // may be deleted/deactivated later; the log must still exist), so a
+        // plain FK-by-value rather than a modeled relationship/navigation.
+        modelBuilder.Entity<SystemLog>()
+            .HasKey(l => l.Id);
+
+        modelBuilder.Entity<SystemLog>()
+            .Property(l => l.Level)
+            .HasMaxLength(20);
+
+        modelBuilder.Entity<SystemLog>()
+            .Property(l => l.Action)
+            .HasMaxLength(80);
+
+        modelBuilder.Entity<SystemLog>()
+            .Property(l => l.ActorRole)
+            .HasMaxLength(60);
+
+        modelBuilder.Entity<SystemLog>()
+            .Property(l => l.EntityType)
+            .HasMaxLength(60);
+
+        modelBuilder.Entity<SystemLog>()
+            .Property(l => l.EntityId)
+            .HasMaxLength(60);
+
+        modelBuilder.Entity<SystemLog>()
+            .Property(l => l.MetadataJson)
+            .HasColumnType("jsonb");
+
+        modelBuilder.Entity<SystemLog>()
+            .Property(l => l.IpAddress)
+            .HasMaxLength(64);
+
+        modelBuilder.Entity<SystemLog>()
+            .HasOne<User>()
+            .WithMany()
+            .HasForeignKey(l => l.ActorUserId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<SystemLog>()
+            .HasIndex(l => l.CreatedAt);
+
+        modelBuilder.Entity<SystemLog>()
+            .HasIndex(l => l.Action);
+
+        modelBuilder.Entity<SystemLog>()
+            .HasIndex(l => l.ActorUserId);
+
+        modelBuilder.Entity<SystemLog>()
+            .HasIndex(l => new { l.EntityType, l.EntityId });
     }
 }
