@@ -465,4 +465,68 @@ public sealed class RobotDeliveryLabTests
         var analysis = DiagramService.Analyze(mechanicalOnlyDiagram);
         Assert.True(analysis.Validation.IsValid, string.Join("; ", analysis.Validation.Errors));
     }
+
+    // ------------------------------------------------------------------
+    // PHASE 6 — STEP 19: Error UX. Intentionally wrong wiring must produce
+    // an understandable message (no stack trace / exception text), using
+    // the exact two examples the milestone spec names.
+    // ------------------------------------------------------------------
+    [Fact]
+    public void Lab04_HcSr04MissingGnd_ProducesUnderstandableError()
+    {
+        const string brokenDiagram = """
+        {
+          "version": 1,
+          "parts": [
+            { "type": "board-esp32-devkit-c-v4", "id": "esp" },
+            { "type": "wokwi-hc-sr04", "id": "us1" }
+          ],
+          "connections": [
+            ["esp:3V3", "us1:VCC"],
+            ["esp:GPIO32", "us1:TRIG"],
+            ["esp:GPIO33", "us1:ECHO"]
+          ]
+        }
+        """;
+
+        var analysis = DiagramService.Analyze(brokenDiagram);
+
+        Assert.False(analysis.Validation.IsValid);
+        Assert.Contains(analysis.Validation.Errors, e =>
+            e.Contains("GND", StringComparison.OrdinalIgnoreCase) &&
+            !e.Contains("Exception") && !e.Contains("StackTrace") && !e.Contains("   at "));
+    }
+
+    [Fact]
+    public void Lab06_L298nMissingIn4_ProducesUnderstandableError()
+    {
+        const string brokenDiagram = """
+        {
+          "version": 1,
+          "parts": [
+            { "type": "board-esp32-devkit-c-v4", "id": "esp" },
+            { "type": "wokwi-l298n", "id": "l298n1" },
+            { "type": "wokwi-dc-motor", "id": "motorL" },
+            { "type": "wokwi-battery-pack", "id": "battery1" }
+          ],
+          "connections": [
+            ["esp:GPIO13", "l298n1:IN1"],
+            ["esp:GPIO14", "l298n1:IN2"],
+            ["esp:GPIO16", "l298n1:IN3"],
+            ["motorL:terminal1", "l298n1:OUT1"],
+            ["motorL:terminal2", "l298n1:OUT2"],
+            ["battery1:+", "l298n1:VIN"],
+            ["battery1:-", "l298n1:GND"],
+            ["l298n1:GND", "esp:GND.1"]
+          ]
+        }
+        """;
+
+        var analysis = DiagramService.Analyze(brokenDiagram);
+
+        Assert.False(analysis.Validation.IsValid);
+        Assert.Contains(analysis.Validation.Errors, e =>
+            e.Contains("IN4", StringComparison.OrdinalIgnoreCase) &&
+            !e.Contains("Exception") && !e.Contains("StackTrace") && !e.Contains("   at "));
+    }
 }
