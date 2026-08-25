@@ -24,6 +24,7 @@ public class GetLessonsHandler
             Id = l.Id,
             ModuleId = l.ModuleId,
             Title = l.Title,
+            Description = l.Description,
             Content = l.Content,
             Input = l.Input,
             Output = l.Output,
@@ -46,6 +47,7 @@ public class GetLessonsHandler
             Id = l.Id,
             ModuleId = l.ModuleId,
             Title = l.Title,
+            Description = l.Description,
             Content = l.Content,
             Input = l.Input,
             Output = l.Output,
@@ -80,6 +82,7 @@ public class GetLessonByIdHandler
             Id = lesson.Id,
             ModuleId = lesson.ModuleId,
             Title = lesson.Title,
+            Description = lesson.Description,
             Content = lesson.Content,
             Input = lesson.Input,
             Output = lesson.Output,
@@ -127,6 +130,7 @@ public class CreateLessonHandler
         {
             ModuleId = request.ModuleId,
             Title = request.Title.Trim(),
+            Description = request.Description?.Trim() ?? string.Empty,
             Content = request.Content?.Trim() ?? string.Empty,
             Input = request.Input?.Trim() ?? string.Empty,
             Output = request.Output?.Trim() ?? string.Empty,
@@ -175,6 +179,7 @@ public class UpdateLessonHandler
         }
 
         lesson.Title = request.Title.Trim();
+        lesson.Description = request.Description?.Trim() ?? string.Empty;
         lesson.Content = request.Content?.Trim() ?? string.Empty;
         lesson.Input = request.Input?.Trim() ?? string.Empty;
         lesson.Output = request.Output?.Trim() ?? string.Empty;

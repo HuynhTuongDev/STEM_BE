@@ -79,8 +79,15 @@ public class AvailableStudentResponse
 public class ScheduleResponse
 {
     public int Id { get; set; }
+    public int ClassId { get; set; }
+    public string ClassCode { get; set; } = string.Empty;
+    public string ClassName { get; set; } = string.Empty;
+    public int? LessonId { get; set; }
+    public string? LessonTitle { get; set; }
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }
 
 public class AnnouncementResponse

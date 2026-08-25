@@ -85,6 +85,10 @@ public class GetClassDetailHandler
                 .ToList();
         }
 
+        // DEBUG: Log schedule lesson info
+        var scheduleDebug = classEntity.Schedules?.Select(s => new { s.Id, LessonId = s.LessonId, LessonTitle = s.Lesson?.Title }).ToList();
+        Console.WriteLine($"[GetClassDetailHandler] ClassId={classId}, Schedules with lessons: {System.Text.Json.JsonSerializer.Serialize(scheduleDebug)}");
+
         return new ClassDetailResponse
         {
             Id = classEntity.Id,
@@ -112,8 +116,15 @@ public class GetClassDetailHandler
             Schedules = classEntity.Schedules?.Select(s => new ScheduleResponse
             {
                 Id = s.Id,
+                ClassId = s.ClassId,
+                ClassCode = classEntity.ClassCode,
+                ClassName = classEntity.Course?.Title ?? string.Empty,
+                LessonId = s.LessonId,
+                LessonTitle = s.Lesson?.Title,
                 StartTime = s.StartTime,
-                EndTime = s.EndTime
+                EndTime = s.EndTime,
+                CreatedAt = s.CreatedAt,
+                UpdatedAt = s.UpdatedAt
             }).ToList() ?? new List<ScheduleResponse>(),
             Announcements = classEntity.Announcements?.Select(a => new AnnouncementResponse
             {
@@ -193,7 +204,8 @@ public class GetClassDetailHandler
                 ClassId = classEntity.Id,
                 DueDate = a.DueDate?.ToString("O") ?? string.Empty,
                 Status = DetermineAssignmentStatus(a),
-                MaxScore = (double)a.MaxScore
+                MaxScore = (double)a.MaxScore,
+                AssignmentType = a.AssignmentType
             }).ToList()
         };
     }
@@ -354,7 +366,7 @@ public class GetClassDetailHandler
         {
             Id = classEntity.Id,
             ClassCode = classEntity.ClassCode,
-            ClassName = classEntity.Course?.Title ?? classEntity.ClassCode,
+            ClassName = classEntity.ClassCode,
             CourseId = classEntity.CourseId,
             CourseName = classEntity.Course?.Title ?? string.Empty,
             Status = DetermineStatus(classEntity),
@@ -409,6 +421,7 @@ public class StudentAssignmentResponse
     public string DueDate { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public double MaxScore { get; set; }
+    public string AssignmentType { get; set; } = string.Empty;
 }
 
 public class StudentScheduleItemResponse

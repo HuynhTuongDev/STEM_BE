@@ -14,4 +14,5 @@ public interface IGradeLevelRepository
     Task<bool> ExistsAsync(int id);
     Task<bool> ExistsByCodeAsync(string code, int? excludeId = null);
     Task<int> GetSyllabusCountAsync(int gradeLevelId);
+    Task<int> GetCourseCountAsync(int gradeLevelId);
 }

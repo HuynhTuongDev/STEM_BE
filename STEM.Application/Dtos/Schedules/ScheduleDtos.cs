@@ -3,7 +3,7 @@ namespace STEM.Application.Dtos.Schedules;
 public class CreateScheduleRequest
 {
     public int ClassId { get; set; }
-    public int LessonId { get; set; }
+    public int? LessonId { get; set; } // Optional: gán lesson cho slot
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
 }

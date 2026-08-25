@@ -74,6 +74,7 @@ public class GetModuleByIdHandler
             {
                 Id = l.Id,
                 Title = l.Title,
+                Description = l.Description,
                 DisplayOrder = l.DisplayOrder,
                 EstimatedMinutes = l.EstimatedMinutes,
                 LessonType = l.LessonType,

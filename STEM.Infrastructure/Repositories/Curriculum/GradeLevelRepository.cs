@@ -79,4 +79,13 @@ public class GradeLevelRepository : Repository<GradeLevel>, IGradeLevelRepositor
             .SelectMany(g => g.Syllabi)
             .CountAsync();
     }
+
+    public async Task<int> GetCourseCountAsync(int gradeLevelId)
+    {
+        return await _dbSet
+            .Where(g => g.Id == gradeLevelId)
+            .SelectMany(g => g.Syllabi)
+            .SelectMany(s => s.Courses)
+            .CountAsync();
+    }
 }

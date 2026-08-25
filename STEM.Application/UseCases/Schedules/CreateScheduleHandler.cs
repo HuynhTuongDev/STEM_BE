@@ -53,12 +53,12 @@ public class CreateScheduleHandler
             if (lesson == null)
                 throw new KeyNotFoundException($"Không tìm thấy bài học với id {request.LessonId}.");
 
-            // Kiểm tra lesson đã được gán cho slot nào khác chưa
+            // Kiểm tra lesson đã được gán cho slot nào khác TRONG CÙNG LỚP không
             var existingSchedules = await _scheduleRepository.FindAsync(
-                s => s.LessonId == request.LessonId, cancellationToken);
+                s => s.LessonId == request.LessonId && s.ClassId == request.ClassId, cancellationToken);
 
             if (existingSchedules.Any())
-                throw new InvalidOperationException($"Bài học '{lesson.Title}' đã được gán cho slot khác.");
+                throw new InvalidOperationException($"Bài học '{lesson.Title}' đã được gán cho slot khác trong lớp này.");
 
             // Kiểm tra lesson có thuộc course của lớp không
             // Module của lesson phải có CourseId trùng với CourseId của lớp

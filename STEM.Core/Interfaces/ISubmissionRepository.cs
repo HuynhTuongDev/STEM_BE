@@ -30,4 +30,6 @@ public interface ISubmissionRepository : IRepository<Submission>
         CancellationToken cancellationToken = default);
 
     Task<IEnumerable<Submission>> GetGradedByStudentIdAsync(int studentId, CancellationToken cancellationToken = default);
+
+    Task<Dictionary<int, double>> GetAverageScoresByStudentIdsAsync(IEnumerable<int> studentIds, CancellationToken cancellationToken = default);
 }

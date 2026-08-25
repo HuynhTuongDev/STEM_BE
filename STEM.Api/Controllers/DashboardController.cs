@@ -5,6 +5,7 @@ using STEM.Core.Entities.Schools;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 using System.Security.Claims;
+using System.Linq;
 
 namespace STEM.Api.Controllers;
 
@@ -159,9 +160,7 @@ public class DashboardController : ControllerBase
                 return Unauthorized(new { success = false, message = "Không tìm thấy người dùng" });
 
             var isMasterAdmin = user.SchoolId == null;
-
-            // Fetch all users for role distribution
-            var allUsers = (await _userRepository.GetAllAsync(cancellationToken)).ToList();
+            var dbContext = HttpContext.RequestServices.GetService<StemDbContext>();
 
             var chartData = new Dictionary<string, object>();
 
@@ -169,7 +168,6 @@ public class DashboardController : ControllerBase
             if (user.SchoolId != null)
             {
                 var schoolId = user.SchoolId.Value;
-                var dbContext = HttpContext.RequestServices.GetService<StemDbContext>();
                 if (dbContext != null)
                 {
                     var filteredEnrollments = dbContext.Enrollments
@@ -220,15 +218,26 @@ public class DashboardController : ControllerBase
 
             chartData["schoolsGrowth"] = schoolsGrowth;
 
-            // User distribution by role - filtered by school for School Admin
-            var userDistribution = isMasterAdmin
-                ? allUsers.Select(u => new { u.RoleId, Name = u.Role?.Name ?? "Unknown" }).ToList()
-                : allUsers.Where(u => u.SchoolId == user!.SchoolId).Select(u => new { u.RoleId, Name = u.Role?.Name ?? "Unknown" }).ToList();
+            // User distribution by role using DbContext directly
+            if (dbContext != null)
+            {
+                var userDistributionQuery = dbContext.Users.AsQueryable();
 
-            chartData["usersByRole"] = userDistribution
-                .GroupBy(u => u.Name)
-                .Select(g => new { name = g.Key, value = g.Count() })
-                .ToArray();
+                // Filter by school for School Admin
+                if (!isMasterAdmin && user.SchoolId.HasValue)
+                {
+                    userDistributionQuery = userDistributionQuery.Where(u => u.SchoolId == user.SchoolId.Value);
+                }
+
+                var userDistribution = userDistributionQuery
+                    .Include(u => u.Role)
+                    .AsEnumerable()
+                    .GroupBy(u => u.Role?.Name ?? "Unknown")
+                    .Select(g => new { name = g.Key, value = g.Count() })
+                    .ToList();
+
+                chartData["usersByRole"] = userDistribution.ToArray();
+            }
 
             return Ok(new { success = true, data = chartData });
         }

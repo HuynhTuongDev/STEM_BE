@@ -241,9 +241,10 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(s => s.LessonId)
             .OnDelete(DeleteBehavior.Restrict); // Không xóa lesson khi xóa schedule
 
-        // Unique index: mỗi lesson chỉ được gán cho 1 slot
+        // Unique composite index: mỗi lesson chỉ được gán cho 1 slot TRONG MỘT LỚP
+        // (ClassId, LessonId) đảm bảo cùng lesson không trùng trong cùng lớp, nhưng khác lớp thì được
         modelBuilder.Entity<Schedule>()
-            .HasIndex(s => s.LessonId)
+            .HasIndex(s => new { s.ClassId, s.LessonId })
             .IsUnique()
             .HasFilter("LessonId IS NOT NULL"); // Chỉ apply cho các row có LessonId
 

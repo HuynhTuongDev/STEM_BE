@@ -1,3 +1,4 @@
+using System.Text.Json;
 using STEM.Application.Dtos.Assignments;
 using STEM.Core.Repository;
 
@@ -38,7 +39,7 @@ public class GetMySubmissionHandler
 
         var attemptCount = await _submissionRepository.GetAttemptCountAsync(assignmentId, studentId, cancellationToken);
 
-        return new GetMySubmissionResponse
+        var response = new GetMySubmissionResponse
         {
             SubmissionId = submission.Id,
             AssignmentId = assignmentId,
@@ -57,8 +58,55 @@ public class GetMySubmissionHandler
             CanResubmit = assignment.AllowResubmit && (assignment.ResubmitLimit == null || attemptCount < assignment.ResubmitLimit.Value),
             RemainingAttempts = assignment.ResubmitLimit.HasValue
                 ? Math.Max(0, assignment.ResubmitLimit.Value - attemptCount)
-                : null
+                : null,
+            AutoGradeResultJson = submission.AutoGradeResultJson
         };
+
+        // Add quiz detail if this is a quiz assignment
+        if (assignment.AssignmentType == "quiz" && assignment.QuizDetail != null)
+        {
+            try
+            {
+                var quizDetail = assignment.QuizDetail;
+                var questions = new List<MySubmissionQuizQuestion>();
+                if (!string.IsNullOrEmpty(quizDetail.QuestionsJson))
+                {
+                    var parsedQuestions = JsonSerializer.Deserialize<List<JsonElement>>(quizDetail.QuestionsJson);
+                    if (parsedQuestions != null)
+                    {
+                        foreach (var q in parsedQuestions)
+                        {
+                            var question = new MySubmissionQuizQuestion
+                            {
+                                Id = q.GetProperty("id").GetString() ?? "",
+                                Text = q.GetProperty("text").GetString() ?? "",
+                                Type = q.TryGetProperty("type", out var t) ? t.GetString() ?? "single_choice" : "single_choice"
+                            };
+                            if (q.TryGetProperty("options", out var opts) && opts.ValueKind == JsonValueKind.Array)
+                            {
+                                question.Options = opts.EnumerateArray().Select(o => new MySubmissionQuizOption
+                                {
+                                    Id = o.GetProperty("id").GetString() ?? "",
+                                    Text = o.GetProperty("text").GetString() ?? ""
+                                }).ToList();
+                            }
+                            questions.Add(question);
+                        }
+                    }
+                }
+                response.QuizDetail = new MySubmissionQuizDetail
+                {
+                    Questions = questions,
+                    TimeLimitSeconds = quizDetail.TimeLimitSeconds,
+                    ShuffleQuestions = quizDetail.ShuffleQuestions
+                };
+            }
+            catch
+            {
+            }
+        }
+
+        return response;
     }
 }
 

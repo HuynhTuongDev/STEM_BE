@@ -54,6 +54,8 @@ public class UpdateScheduleHandler
 
         // Xử lý cập nhật LessonId
         Lesson? lesson = null;
+        
+        // Nếu có LessonId trong request, xử lý như cũ
         if (request.LessonId.HasValue)
         {
             var lessons = await _lessonRepository.FindAsync(l => l.Id == request.LessonId.Value, cancellationToken);
@@ -62,12 +64,12 @@ public class UpdateScheduleHandler
             if (lesson == null)
                 throw new KeyNotFoundException($"Không tìm thấy bài học với id {request.LessonId}.");
 
-            // Kiểm tra lesson đã được gán cho slot khác chưa (trừ slot hiện tại)
+            // Kiểm tra lesson đã được gán cho slot khác TRONG CÙNG LỚP chưa (trừ slot hiện tại)
             var existingSchedules = await _scheduleRepository.FindAsync(
-                s => s.LessonId == request.LessonId.Value && s.Id != scheduleId, cancellationToken);
+                s => s.LessonId == request.LessonId.Value && s.Id != scheduleId && s.ClassId == schedule.ClassId, cancellationToken);
 
             if (existingSchedules.Any())
-                throw new InvalidOperationException($"Bài học '{lesson.Title}' đã được gán cho slot khác.");
+                throw new InvalidOperationException($"Bài học '{lesson.Title}' đã được gán cho slot khác trong lớp này.");
 
             // Kiểm tra lesson có thuộc course của lớp không
             if (lesson.Module != null && lesson.Module.CourseId != classEntity.CourseId)
@@ -82,6 +84,13 @@ public class UpdateScheduleHandler
             // Cho phép xóa liên kết lesson bằng cách truyền null
             schedule.LessonId = null;
         }
+        
+        // Nếu schedule vẫn có LessonId (từ trước hoặc vừa được set), load lesson để trả về title
+        if (schedule.LessonId.HasValue && lesson == null)
+        {
+            var existingLessons = await _lessonRepository.FindAsync(l => l.Id == schedule.LessonId.Value, cancellationToken);
+            lesson = existingLessons.FirstOrDefault();
+        }
 
         schedule.UpdatedAt = DateTime.UtcNow;
 
@@ -94,7 +103,7 @@ public class UpdateScheduleHandler
             ClassCode = classEntity.ClassCode,
             ClassName = classEntity.Course?.Title ?? string.Empty,
             LessonId = schedule.LessonId,
-            LessonTitle = lesson?.Title ?? (schedule.LessonId.HasValue ? null : null),
+            LessonTitle = lesson?.Title,
             StartTime = schedule.StartTime,
             EndTime = schedule.EndTime,
             CreatedAt = schedule.CreatedAt,

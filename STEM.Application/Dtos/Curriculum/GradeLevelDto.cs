@@ -9,6 +9,7 @@ public class GradeLevelDto
     public string Description { get; set; } = string.Empty;
     public int DisplayOrder { get; set; }
     public int SyllabusCount { get; set; }
+    public int CourseCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

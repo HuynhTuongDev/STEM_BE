@@ -29,6 +29,7 @@ public class GetGradeLevelsHandler
                 Description = gl.Description,
                 DisplayOrder = gl.DisplayOrder,
                 SyllabusCount = await _repository.GetSyllabusCountAsync(gl.Id),
+                CourseCount = await _repository.GetCourseCountAsync(gl.Id),
                 CreatedAt = gl.CreatedAt,
                 UpdatedAt = gl.UpdatedAt
             });
@@ -62,6 +63,7 @@ public class GetGradeLevelByIdHandler
             Description = gradeLevel.Description,
             DisplayOrder = gradeLevel.DisplayOrder,
             SyllabusCount = await _repository.GetSyllabusCountAsync(id),
+            CourseCount = await _repository.GetCourseCountAsync(id),
             CreatedAt = gradeLevel.CreatedAt,
             UpdatedAt = gradeLevel.UpdatedAt
         };
