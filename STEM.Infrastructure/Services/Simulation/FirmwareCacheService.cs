@@ -22,7 +22,7 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
     // với 3.3.10, cùng nội dung source) phải bị bỏ, không được coi là hit —
     // nếu không học sinh sẽ nhận lại đúng firmware hay crash đó. Xem
     // VIRTUAL_LAB_PLAN.md mục 8.12/8.13.
-    private const string InstrumentationVersion = "ets_printf_v2_esp32_2_0_17";
+    private const string InstrumentationVersion = "ets_printf_v4_pca9685_esp32_2_0_17";
     private const string RunnerMode = "qemu";
     private const int CompileUserId = 0; // ISimulationCompileService.CompileAsync nhận currentUserId nhưng không dùng tới — xem QemuEsp32Runner.
 
@@ -42,6 +42,106 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
         }
         #define digitalWrite(pin, val) __sf_digitalWrite(pin, val)
         // ---- end StemFlow QEMU GPIO instrumentation ----
+
+        // ---- StemFlow I2C bus minimum viable runtime (auto-injected, VIRTUAL LAB
+        // RUNTIME CAPABILITY EXPANSION task, 2026-08-26) ----
+        // KHÔNG dùng thư viện Wire.h thật (chưa từng verify có sẵn trong sandbox
+        // compile này — cùng rủi ro đã tránh với Servo.h ở milestone trước) và
+        // KHÔNG mô phỏng timing I2C thật ở mức xung điện (QEMU không expose điều
+        // đó cho tầng firmware theo cách quan sát được — cùng lý do StemFlowDHT
+        // tồn tại thay vì DHT.h thật). Đây là MỘT BUS MODEL THẬT chạy THẬT bên
+        // trong firmware đã compile/boot qua QEMU thật — device address, đăng ký
+        // thiết bị, phát hiện trùng địa chỉ, phát hiện địa chỉ không tồn tại, và
+        // giao dịch đọc/ghi đều là logic C++ THẬT thực thi trên CPU thật của QEMU,
+        // không phải giá trị hardcode từ bên ngoài.
+        class StemFlowI2C {
+        public:
+          static bool registerDevice(uint8_t address) {
+            for (int i = 0; i < _deviceCount; i++) {
+              if (_addresses[i] == address) {
+                ets_printf("I2C: LOI dia chi trung lap 0x%02X\n", address);
+                return false;
+              }
+            }
+            if (_deviceCount >= MAX_DEVICES) {
+              ets_printf("I2C: LOI qua nhieu thiet bi tren bus (toi da %d)\n", MAX_DEVICES);
+              return false;
+            }
+            _addresses[_deviceCount] = address;
+            _deviceCount++;
+            ets_printf("I2C: da dang ky thiet bi 0x%02X\n", address);
+            return true;
+          }
+
+          static bool isRegistered(uint8_t address) {
+            for (int i = 0; i < _deviceCount; i++) {
+              if (_addresses[i] == address) return true;
+            }
+            return false;
+          }
+
+          static bool writeRegister(uint8_t address, uint8_t reg, uint8_t value) {
+            if (!isRegistered(address)) {
+              ets_printf("I2C: LOI ghi dia chi khong ton tai 0x%02X\n", address);
+              return false;
+            }
+            _lastReg[address] = reg;
+            _lastValue[address] = value;
+            ets_printf("I2C: ghi 0x%02X reg=%d value=%d\n", address, reg, value);
+            return true;
+          }
+
+          static int readRegister(uint8_t address, uint8_t reg) {
+            if (!isRegistered(address)) {
+              ets_printf("I2C: LOI doc dia chi khong ton tai 0x%02X\n", address);
+              return -1;
+            }
+            ets_printf("I2C: doc 0x%02X reg=%d value=%d\n", address, reg, _lastValue[address]);
+            return _lastValue[address];
+          }
+
+        private:
+          static const int MAX_DEVICES = 8;
+          static uint8_t _addresses[MAX_DEVICES];
+          static int _deviceCount;
+          static uint8_t _lastReg[128];
+          static uint8_t _lastValue[128];
+        };
+        uint8_t StemFlowI2C::_addresses[StemFlowI2C::MAX_DEVICES];
+        int StemFlowI2C::_deviceCount = 0;
+        uint8_t StemFlowI2C::_lastReg[128];
+        uint8_t StemFlowI2C::_lastValue[128];
+        // ---- end StemFlow I2C bus minimum viable runtime ----
+
+        // ---- StemFlow PCA9685 runtime model (STEP 3, 2026-08-26) ----
+        // KHÔNG dùng thư viện Adafruit_PWMServoDriver thật (chưa verify có sẵn
+        // trong sandbox — cùng lý do tránh Wire.h/Servo.h ở trên). Đi qua
+        // StemFlowI2C THẬT ở trên (registerDevice/writeRegister thật, không bỏ
+        // qua bus layer) — góc servo mỗi kênh là state THẬT do CHÍNH chương
+        // trình gọi setServoAngle() quyết định, không hardcode. servoId khớp
+        // đúng id linh kiện wokwi-servo trong diagram — CÙNG QUY ƯỚC với
+        // StemFlowDHT("dht1") (so khớp theo ID linh kiện, không theo pin vật lý)
+        // vì góc servo qua PCA9685 không có cách nào quan sát qua 1 chân GPIO
+        // đơn lẻ như digitalWrite (PWM_QEMU_GAP) — SF_PCA9685_EVENT là kênh
+        // quan sát duy nhất, tương tự SF_EVENT cho digitalWrite.
+        class StemFlowPCA9685 {
+        public:
+          StemFlowPCA9685(uint8_t address) : _address(address) {
+            StemFlowI2C::registerDevice(_address);
+          }
+
+          void setServoAngle(const char* servoId, int angle) {
+            int clamped = angle;
+            if (clamped < 0) clamped = 0;
+            if (clamped > 180) clamped = 180;
+            StemFlowI2C::writeRegister(_address, 0, (uint8_t)clamped);
+            ets_printf("SF_PCA9685_EVENT {\"address\":\"0x%02X\",\"servoId\":\"%s\",\"angle\":%d}\n", _address, servoId, clamped);
+          }
+
+        private:
+          uint8_t _address;
+        };
+        // ---- end StemFlow PCA9685 runtime model ----
 
         """;
 
@@ -115,7 +215,8 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
         string framework,
         Guid? buildCacheScopeId,
         CancellationToken cancellationToken,
-        string sensorHeader = "")
+        string sensorHeader = "",
+        IReadOnlyDictionary<string, string>? extraFiles = null)
     {
         var cacheDir = ResolveCacheDir(sourceCode, board, framework, sensorHeader);
         var cacheKey = Path.GetFileName(cacheDir);
@@ -127,7 +228,7 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
         // caller gốc có bỏ cuộc hay không — kết quả vẫn có ích cho cache.
         return _coordinator.GetOrCompileAsync(
             cacheKey,
-            () => CompileAndWriteCacheCoreAsync(sourceCode, board, framework, buildCacheScopeId, cacheDir, cacheKey, sensorHeader),
+            () => CompileAndWriteCacheCoreAsync(sourceCode, board, framework, buildCacheScopeId, cacheDir, cacheKey, sensorHeader, extraFiles),
             cancellationToken);
     }
 
@@ -138,7 +239,8 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
         Guid? buildCacheScopeId,
         string cacheDir,
         string cacheKey,
-        string sensorHeader)
+        string sensorHeader,
+        IReadOnlyDictionary<string, string>? extraFiles)
     {
         // Kiểm tra lại cache NGAY TRONG closure được ICompileCoordinator bảo vệ
         // (không phải trước khi gọi coordinator) — bắt đúng trường hợp: 1 lần
@@ -167,7 +269,8 @@ public sealed class FirmwareCacheService : IFirmwareCacheService
             SourceCode = instrumentedSource,
             Board = board,
             Framework = framework,
-            ProjectId = buildCacheScopeId?.ToString("N")
+            ProjectId = buildCacheScopeId?.ToString("N"),
+            ExtraFiles = extraFiles
         }, CompileUserId, CancellationToken.None);
 
         if (!compileResult.Success || string.IsNullOrEmpty(compileResult.FirmwareBase64))

@@ -75,6 +75,71 @@ public sealed class EducationalProgramAnalyzer
         @"^\s*(?:float|double)\s+(?<varname>[A-Za-z_]\w*)\s*=\s*(?<dhtname>[A-Za-z_]\w*)\s*\.\s*read(?<field>Temperature|Humidity)\s*\(\s*\)\s*$",
         RegexOptions.Compiled);
 
+    // EDUCATIONAL SYNTAX COMPATIBILITY HARDENING (2026-08-26): the shipped
+    // Flame Sensor sample ("bool detected = (digitalRead(PIN) == HIGH); ...
+    // if (detected) ...; digitalWrite(PIN, detected ? HIGH : LOW);") compiled
+    // fine but silently produced ZERO loop() instructions — none of the
+    // three shapes below existed. Rather than build a real variable/
+    // expression system, this adds ONE narrow symbolic alias: a `bool` local
+    // assigned from a `digitalRead(pin)` comparison is recorded as
+    // (name -> pin, expectedValueForTrue) and later USES of that name in
+    // `if (name)`/`if (!name)` or a `cond ? HIGH : LOW` digitalWrite are
+    // rewritten, at parse time, into the exact same digitalRead-condition
+    // shape IfDigitalReadConditionRegex already produces — zero new runtime
+    // instruction kinds, zero new execution paths, same live-read semantics.
+    // "bool x = (digitalRead(PIN) == HIGH);" and "bool x = digitalRead(PIN);"
+    // (bare, HIGH-is-true) both match; the wrapping "( ... )" is optional.
+    private static readonly Regex BoolDigitalReadAssignRegex = new(
+        @"^\s*(?:const\s+)?bool\s+(?<name>[A-Za-z_]\w*)\s*=\s*\(?\s*digitalRead\s*\(\s*(?<pin>[^\)]+)\s*\)\s*(?:==\s*(?<value>HIGH|LOW|true|false|1|0)\s*)?\)?\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // "if (name)" / "if (!name)" where name is a BoolDigitalReadAssignRegex
+    // alias — deliberately just a bare identifier, no operators, so it never
+    // collides with IfDigitalReadConditionRegex (literal "digitalRead(...)"
+    // text) or IfNumericConditionRegex (requires a comparison operator).
+    private static readonly Regex IfBoolAliasConditionRegex = new(
+        @"^\s*(?<negate>!\s*)?(?<name>[A-Za-z_]\w*)\s*$",
+        RegexOptions.Compiled);
+    // "digitalWrite(pin, aliasName ? HIGH : LOW)" (optionally negated) — the
+    // ternary counterpart of IfBoolAliasConditionRegex above. aliasName must
+    // resolve via the same boolAliases table or this simply doesn't match
+    // (falls through to the existing unsupported-statement path, same as
+    // today — no regression for names that aren't a known digitalRead alias).
+    private static readonly Regex DigitalWriteTernaryAliasRegex = new(
+        @"^\s*digitalWrite\s*\(\s*(?<pin>[^,]+?)\s*,\s*(?<negate>!\s*)?(?<name>[A-Za-z_]\w*)\s*\?\s*(?<trueval>HIGH|LOW|true|false|1|0)\s*:\s*(?<falseval>HIGH|LOW|true|false|1|0)\s*\)\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // "digitalWrite(pin, digitalRead(sensorPin) [== HIGH] ? HIGH : LOW)" — the
+    // inline-condition counterpart (no intermediate bool variable at all).
+    private static readonly Regex DigitalWriteTernaryInlineRegex = new(
+        @"^\s*digitalWrite\s*\(\s*(?<pin>[^,]+?)\s*,\s*\(?\s*(?<negate>!\s*)?digitalRead\s*\(\s*(?<condpin>[^\)]+)\s*\)\s*(?:==\s*(?<condvalue>HIGH|LOW|true|false|1|0)\s*)?\)?\s*\?\s*(?<trueval>HIGH|LOW|true|false|1|0)\s*:\s*(?<falseval>HIGH|LOW|true|false|1|0)\s*\)\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // Serial.print(variableName)/Serial.println(variableName) with a BARE
+    // identifier argument (no quotes, no operators) — previously baked into
+    // a static "<name>" placeholder string at parse time (never the actual
+    // runtime value). Matched separately from SerialRegex above so the
+    // analyzer can tell "string literal" apart from "identifier to resolve
+    // live" before falling back to the old placeholder behavior.
+    private static readonly Regex SerialVariableArgRegex = new(
+        @"^\s*[A-Za-z_]\w*\s*$",
+        RegexOptions.Compiled);
+    // Serial.print/println(aliasName ? "msgIfTrue" : "msgIfFalse") — the
+    // shipped alert-sensor sample family's actual shape ("Bai 8/9/11/12/13":
+    // Water Leak/Flame/PIR/Rain/Soil Moisture all share this exact
+    // buildAlertStarterCode() template). Distinct from the HIGH/LOW-valued
+    // DigitalWriteTernary*Regex above — here the two ternary branches are
+    // STRING LITERALS, so this rewrites into an If wrapping two Serial
+    // instructions instead of two DigitalWrite instructions. Without this,
+    // SerialRegex below still "matches" (its arg capture is permissive) but
+    // ExtractSerialMessage's placeholder fallback prints the literal source
+    // text every time — worse than silence, a permanently-wrong message.
+    private static readonly Regex SerialTernaryAliasRegex = new(
+        @"^\s*Serial\.(?<method>print|println)\s*\(\s*(?<negate>!\s*)?(?<name>[A-Za-z_]\w*)\s*\?\s*""(?<truemsg>[^""]*)""\s*:\s*""(?<falsemsg>[^""]*)""\s*\)\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // Same rewrite, inline "digitalRead(pin) [== HIGH]" condition instead of
+    // a named bool alias — symmetry with DigitalWriteTernaryInlineRegex.
+    private static readonly Regex SerialTernaryInlineRegex = new(
+        @"^\s*Serial\.(?<method>print|println)\s*\(\s*\(?\s*(?<negate>!\s*)?digitalRead\s*\(\s*(?<condpin>[^\)]+)\s*\)\s*(?:==\s*(?<condvalue>HIGH|LOW|true|false|1|0)\s*)?\)?\s*\?\s*""(?<truemsg>[^""]*)""\s*:\s*""(?<falsemsg>[^""]*)""\s*\)\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+
     public EducationalProgram Analyze(string sourceCode)
     {
         var errors = new List<string>();
@@ -105,6 +170,24 @@ public sealed class EducationalProgramAnalyzer
             dhtNames[match.Groups["name"].Value] = match.Groups["id"].Value;
         }
 
+        // Built INCREMENTALLY, in true source order, by ParseFlatInstructions
+        // itself as it walks setup()/loop() (see the BoolDigitalReadAssignRegex
+        // and AnalogReadAssignRegex handling there) — NOT pre-scanned as a
+        // separate whole-source pass. A naive whole-source split on ';' (like
+        // servoNames/dhtNames use, which is safe for THEM because \b-based
+        // regexes don't care what text surrounds a match) would mix in
+        // brace-only text from unrelated function boundaries for THESE two
+        // anchored (^...$) regexes — e.g. "}\nvoid loop() {\n  bool detected =
+        // ..." all as one segment, silently never matching. A single mutable
+        // Dictionary/HashSet threaded through the same recursive parse (and
+        // shared by reference across nested if/for/while bodies) means a
+        // usage sees exactly the declarations that textually precede it,
+        // matching how a person reads the code top-to-bottom — still no real
+        // scoping (a name declared inside one if-branch stays visible after
+        // it), consistent with everything else this interpreter already does.
+        var boolAliases = new Dictionary<string, (string Pin, string ExpectedValue)>(StringComparer.OrdinalIgnoreCase);
+        var numericVarNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         var setupBody = ExtractFunctionBody(cleanedSource, "setup");
         var loopBody = ExtractFunctionBody(cleanedSource, "loop");
 
@@ -119,8 +202,8 @@ public sealed class EducationalProgramAnalyzer
         }
 
         return new EducationalProgram(
-            ParseInstructions(setupBody ?? string.Empty, symbols, servoNames, dhtNames, warnings),
-            ParseInstructions(loopBody ?? string.Empty, symbols, servoNames, dhtNames, warnings),
+            ParseInstructions(setupBody ?? string.Empty, symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings),
+            ParseInstructions(loopBody ?? string.Empty, symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings),
             errors,
             warnings);
     }
@@ -130,6 +213,8 @@ public sealed class EducationalProgramAnalyzer
         IReadOnlyDictionary<string, string> symbols,
         IReadOnlySet<string> servoNames,
         IReadOnlyDictionary<string, string> dhtNames,
+        Dictionary<string, (string Pin, string ExpectedValue)> boolAliases,
+        HashSet<string> numericVarNames,
         ICollection<string> warnings)
     {
         var instructions = new List<EducationalInstruction>();
@@ -160,14 +245,14 @@ public sealed class EducationalProgramAnalyzer
                  TryReadControlBlock(source, index, "if", out header, out controlBody, out nextIndex)))
             {
                 instructions.AddRange(ParseFlatInstructions(
-                    source[segmentStart..index], symbols, servoNames, dhtNames, warnings));
+                    source[segmentStart..index], symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings));
 
                 if (source.AsSpan(index).StartsWith("for", StringComparison.Ordinal))
                 {
                     if (TryGetForIterationCount(header, symbols, out var iterationCount))
                     {
                         instructions.Add(EducationalInstruction.CountedLoop(
-                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, warnings),
+                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings),
                             iterationCount));
                     }
                     else
@@ -180,7 +265,7 @@ public sealed class EducationalProgramAnalyzer
                     if (header.Trim() is "true" or "1")
                     {
                         instructions.Add(EducationalInstruction.ForeverLoop(
-                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, warnings)));
+                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings)));
                     }
                     else
                     {
@@ -219,6 +304,19 @@ public sealed class EducationalProgramAnalyzer
                     }
 
                     var numericConditionMatch = conditionMatch.Success ? null : IfNumericConditionRegex.Match(header);
+                    // Only tried when neither digitalRead-inline nor numeric
+                    // condition matched, AND the bare header text resolves to
+                    // a known BoolDigitalReadAssignRegex alias — a plain
+                    // unrelated identifier (e.g. an unsupported toggle flag)
+                    // correctly falls through to the "Unsupported if
+                    // condition" warning below, same as before this change.
+                    var boolAliasMatch = conditionMatch.Success || (numericConditionMatch?.Success ?? false)
+                        ? null
+                        : IfBoolAliasConditionRegex.Match(header);
+                    var resolvedAlias = boolAliasMatch != null && boolAliasMatch.Success &&
+                        boolAliases.TryGetValue(boolAliasMatch.Groups["name"].Value, out var aliasFromIf)
+                        ? aliasFromIf
+                        : ((string Pin, string ExpectedValue)?)null;
 
                     if (conditionMatch.Success)
                     {
@@ -234,8 +332,8 @@ public sealed class EducationalProgramAnalyzer
                         instructions.Add(EducationalInstruction.If(
                             pin,
                             expected,
-                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, warnings),
-                            ParseInstructions(elseBody, symbols, servoNames, dhtNames, warnings)));
+                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings),
+                            ParseInstructions(elseBody, symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings)));
                     }
                     else if (numericConditionMatch != null && numericConditionMatch.Success &&
                              TryResolveInt(numericConditionMatch.Groups["threshold"].Value, symbols, out var threshold))
@@ -244,8 +342,22 @@ public sealed class EducationalProgramAnalyzer
                             numericConditionMatch.Groups["name"].Value,
                             numericConditionMatch.Groups["op"].Value,
                             threshold,
-                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, warnings),
-                            ParseInstructions(elseBody, symbols, servoNames, dhtNames, warnings)));
+                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings),
+                            ParseInstructions(elseBody, symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings)));
+                    }
+                    else if (resolvedAlias != null)
+                    {
+                        var expected = resolvedAlias.Value.ExpectedValue;
+                        if (boolAliasMatch!.Groups["negate"].Success)
+                        {
+                            expected = expected == "HIGH" ? "LOW" : "HIGH";
+                        }
+
+                        instructions.Add(EducationalInstruction.If(
+                            resolvedAlias.Value.Pin,
+                            expected,
+                            ParseInstructions(controlBody, symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings),
+                            ParseInstructions(elseBody, symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings)));
                     }
                     else
                     {
@@ -261,7 +373,7 @@ public sealed class EducationalProgramAnalyzer
             index++;
         }
 
-        instructions.AddRange(ParseFlatInstructions(source[segmentStart..], symbols, servoNames, dhtNames, warnings));
+        instructions.AddRange(ParseFlatInstructions(source[segmentStart..], symbols, servoNames, dhtNames, boolAliases, numericVarNames, warnings));
         return instructions;
     }
 
@@ -270,6 +382,8 @@ public sealed class EducationalProgramAnalyzer
         IReadOnlyDictionary<string, string> symbols,
         IReadOnlySet<string> servoNames,
         IReadOnlyDictionary<string, string> dhtNames,
+        Dictionary<string, (string Pin, string ExpectedValue)> boolAliases,
+        HashSet<string> numericVarNames,
         ICollection<string> warnings)
     {
         var instructions = new List<EducationalInstruction>();
@@ -278,10 +392,36 @@ public sealed class EducationalProgramAnalyzer
 
         foreach (var statement in statements)
         {
+            // The declaration itself ("bool detected = digitalRead(...) ==
+            // HIGH;") has no observable side effect in real Arduino either —
+            // registers into boolAliases (mutable, shared by reference with
+            // every recursive ParseInstructions/ParseFlatInstructions call
+            // for this whole Analyze() pass) so a LATER "if (detected)" or
+            // "digitalWrite(pin, detected ? A : B)" in true source order can
+            // resolve it — then emits no instruction, since a plain local
+            // bool declaration has no runtime side effect to reproduce.
+            var boolAliasDecl = BoolDigitalReadAssignRegex.Match(statement);
+            if (boolAliasDecl.Success)
+            {
+                var aliasPin = NormalizePin(Resolve(boolAliasDecl.Groups["pin"].Value, symbols));
+                var aliasExpected = boolAliasDecl.Groups["value"].Success
+                    ? NormalizeDigitalValue(boolAliasDecl.Groups["value"].Value)
+                    : "HIGH";
+                boolAliases[boolAliasDecl.Groups["name"].Value] = (aliasPin, aliasExpected);
+                continue;
+            }
+
             var dhtReadAssign = DhtReadAssignRegex.Match(statement);
             if (dhtReadAssign.Success &&
                 dhtNames.TryGetValue(dhtReadAssign.Groups["dhtname"].Value, out var dhtComponentId))
             {
+                // A DhtReadAssign writes into the SAME AnalogLocals slot an
+                // AnalogReadAssign would (see EducationalEventGenerator's
+                // DhtReadAssign case) — registering the varname here too
+                // means "Serial.print(temperature)" after "float temperature
+                // = dht.readTemperature();" resolves to the live reading
+                // instead of a static placeholder, same fix as analogRead.
+                numericVarNames.Add(dhtReadAssign.Groups["varname"].Value);
                 instructions.Add(EducationalInstruction.DhtReadAssign(
                     dhtComponentId,
                     dhtReadAssign.Groups["field"].Value,
@@ -289,12 +429,125 @@ public sealed class EducationalProgramAnalyzer
                 continue;
             }
 
+            // Must run before the plain SerialRegex check below: SerialRegex's
+            // arg capture is permissive enough to "match" a ternary-of-strings
+            // argument too, which would otherwise fall into
+            // ExtractSerialMessage's placeholder branch (prints the literal
+            // source text every time) instead of resolving live.
+            var serialTernaryAlias = SerialTernaryAliasRegex.Match(statement);
+            if (serialTernaryAlias.Success &&
+                boolAliases.TryGetValue(serialTernaryAlias.Groups["name"].Value, out var serialTernaryAliasValue))
+            {
+                var serialTernaryNewline = serialTernaryAlias.Groups["method"].Value.Equals("println", StringComparison.OrdinalIgnoreCase);
+                var serialTernaryExpected = serialTernaryAliasValue.ExpectedValue;
+                if (serialTernaryAlias.Groups["negate"].Success)
+                {
+                    serialTernaryExpected = serialTernaryExpected == "HIGH" ? "LOW" : "HIGH";
+                }
+
+                instructions.Add(EducationalInstruction.If(
+                    serialTernaryAliasValue.Pin,
+                    serialTernaryExpected,
+                    new[] { EducationalInstruction.Serial(serialTernaryAlias.Groups["truemsg"].Value, serialTernaryNewline) },
+                    new[] { EducationalInstruction.Serial(serialTernaryAlias.Groups["falsemsg"].Value, serialTernaryNewline) }));
+                continue;
+            }
+
+            var serialTernaryInline = SerialTernaryInlineRegex.Match(statement);
+            if (serialTernaryInline.Success)
+            {
+                var serialTernaryInlineNewline = serialTernaryInline.Groups["method"].Value.Equals("println", StringComparison.OrdinalIgnoreCase);
+                var serialTernaryInlineConditionPin = NormalizePin(Resolve(serialTernaryInline.Groups["condpin"].Value, symbols));
+                var serialTernaryInlineExpected = serialTernaryInline.Groups["condvalue"].Success
+                    ? NormalizeDigitalValue(serialTernaryInline.Groups["condvalue"].Value)
+                    : "HIGH";
+                if (serialTernaryInline.Groups["negate"].Success)
+                {
+                    serialTernaryInlineExpected = serialTernaryInlineExpected == "HIGH" ? "LOW" : "HIGH";
+                }
+
+                instructions.Add(EducationalInstruction.If(
+                    serialTernaryInlineConditionPin,
+                    serialTernaryInlineExpected,
+                    new[] { EducationalInstruction.Serial(serialTernaryInline.Groups["truemsg"].Value, serialTernaryInlineNewline) },
+                    new[] { EducationalInstruction.Serial(serialTernaryInline.Groups["falsemsg"].Value, serialTernaryInlineNewline) }));
+                continue;
+            }
+
             var serial = SerialRegex.Match(statement);
             if (serial.Success)
             {
-                instructions.Add(EducationalInstruction.Serial(
-                    ExtractSerialMessage(serial.Groups["arg"].Value),
-                    serial.Groups["method"].Value.Equals("println", StringComparison.OrdinalIgnoreCase)));
+                var rawArg = serial.Groups["arg"].Value;
+                var isNewline = serial.Groups["method"].Value.Equals("println", StringComparison.OrdinalIgnoreCase);
+                var variableArgMatch = SerialVariableArgRegex.Match(rawArg);
+                var variableName = variableArgMatch.Success ? rawArg.Trim() : null;
+
+                if (variableName != null && boolAliases.TryGetValue(variableName, out var serialBoolAlias))
+                {
+                    instructions.Add(EducationalInstruction.SerialBoolVariable(
+                        serialBoolAlias.Pin, serialBoolAlias.ExpectedValue, isNewline));
+                }
+                else if (variableName != null && numericVarNames.Contains(variableName))
+                {
+                    instructions.Add(EducationalInstruction.SerialNumericVariable(variableName, isNewline));
+                }
+                else
+                {
+                    instructions.Add(EducationalInstruction.Serial(ExtractSerialMessage(rawArg), isNewline));
+                }
+
+                continue;
+            }
+
+            // "digitalWrite(pin, aliasName ? HIGH : LOW)" — rewritten into the
+            // exact same shape a hand-written "if (aliasName) digitalWrite(pin,
+            // HIGH); else digitalWrite(pin, LOW);" would produce, reusing the
+            // existing live-read If instruction (see BoolDigitalReadAssignRegex
+            // comment above) instead of adding a new instruction kind. MUST run
+            // before DigitalReadRegex/AnalogReadRegex below: those use \b (not
+            // anchored), so they'd otherwise match the "digitalRead(...)"
+            // substring inside a ternary condition first and misparse the
+            // whole statement as a bare, side-effect-only digitalRead() call.
+            var ternaryAlias = DigitalWriteTernaryAliasRegex.Match(statement);
+            if (ternaryAlias.Success &&
+                boolAliases.TryGetValue(ternaryAlias.Groups["name"].Value, out var ternaryAliasValue))
+            {
+                var ternaryAliasOutPin = NormalizePin(Resolve(ternaryAlias.Groups["pin"].Value, symbols));
+                var ternaryAliasExpected = ternaryAliasValue.ExpectedValue;
+                if (ternaryAlias.Groups["negate"].Success)
+                {
+                    ternaryAliasExpected = ternaryAliasExpected == "HIGH" ? "LOW" : "HIGH";
+                }
+
+                instructions.Add(EducationalInstruction.If(
+                    ternaryAliasValue.Pin,
+                    ternaryAliasExpected,
+                    new[] { EducationalInstruction.DigitalWrite(ternaryAliasOutPin, NormalizeDigitalValue(ternaryAlias.Groups["trueval"].Value)) },
+                    new[] { EducationalInstruction.DigitalWrite(ternaryAliasOutPin, NormalizeDigitalValue(ternaryAlias.Groups["falseval"].Value)) }));
+                continue;
+            }
+
+            // Same rewrite, but the condition is an inline "digitalRead(pin)
+            // [== HIGH]" expression instead of a named bool alias — no
+            // intermediate variable at all.
+            var ternaryInline = DigitalWriteTernaryInlineRegex.Match(statement);
+            if (ternaryInline.Success)
+            {
+                var ternaryInlineOutPin = NormalizePin(Resolve(ternaryInline.Groups["pin"].Value, symbols));
+                var ternaryInlineConditionPin = NormalizePin(Resolve(ternaryInline.Groups["condpin"].Value, symbols));
+                var ternaryInlineExpected = ternaryInline.Groups["condvalue"].Success
+                    ? NormalizeDigitalValue(ternaryInline.Groups["condvalue"].Value)
+                    : "HIGH";
+                if (ternaryInline.Groups["negate"].Success)
+                {
+                    ternaryInlineExpected = ternaryInlineExpected == "HIGH" ? "LOW" : "HIGH";
+                }
+
+                instructions.Add(EducationalInstruction.If(
+                    ternaryInlineConditionPin,
+                    ternaryInlineExpected,
+                    new[] { EducationalInstruction.DigitalWrite(ternaryInlineOutPin, NormalizeDigitalValue(ternaryInline.Groups["trueval"].Value)) },
+                    new[] { EducationalInstruction.DigitalWrite(ternaryInlineOutPin, NormalizeDigitalValue(ternaryInline.Groups["falseval"].Value)) }));
                 continue;
             }
 
@@ -310,6 +563,10 @@ public sealed class EducationalProgramAnalyzer
             var analogReadAssign = AnalogReadAssignRegex.Match(statement);
             if (analogReadAssign.Success)
             {
+                // Registered the same incremental, source-order way as
+                // boolAliases above — a LATER Serial.print(name) resolves to
+                // the live AnalogLocals value instead of a static placeholder.
+                numericVarNames.Add(analogReadAssign.Groups["name"].Value);
                 instructions.Add(EducationalInstruction.AnalogReadAssign(
                     NormalizePin(Resolve(analogReadAssign.Groups["pin"].Value, symbols)),
                     analogReadAssign.Groups["name"].Value));
@@ -678,6 +935,20 @@ public sealed record EducationalInstruction(
     public static EducationalInstruction Serial(string message, bool newline) =>
         new(EducationalInstructionKind.Serial, Message: message, Newline: newline);
 
+    // Serial.print(aliasName)/Serial.println(aliasName) where aliasName is a
+    // BoolDigitalReadAssignRegex alias — re-reads the pin live at emit time
+    // (same reasoning as If) and prints "1"/"0", matching real Arduino's
+    // Serial.print(bool) behaviour, instead of the static "<aliasName>"
+    // placeholder the plain Serial() case above would otherwise bake in.
+    public static EducationalInstruction SerialBoolVariable(string pin, string expectedValueForTrue, bool newline) =>
+        new(EducationalInstructionKind.SerialBoolVariable, Pin: pin, Value: expectedValueForTrue, Newline: newline);
+
+    // Serial.print(varName)/Serial.println(varName) where varName was
+    // assigned via "int varName = analogRead(pin);" earlier — looks up
+    // AnalogLocals live at emit time instead of baking a placeholder.
+    public static EducationalInstruction SerialNumericVariable(string variableName, bool newline) =>
+        new(EducationalInstructionKind.SerialNumericVariable, Value: variableName, Newline: newline);
+
     public static EducationalInstruction Tone(string pin, int frequency, int durationMs) =>
         new(EducationalInstructionKind.Tone, Pin: pin, NumericValue: frequency, DurationMs: Math.Max(0, durationMs));
 
@@ -755,5 +1026,7 @@ public enum EducationalInstructionKind
     ForeverLoop,
     If,
     AnalogReadAssign,
-    DhtReadAssign
+    DhtReadAssign,
+    SerialBoolVariable,
+    SerialNumericVariable
 }

@@ -375,6 +375,53 @@ public static class SensorRuntimeHeaderGenerator
         return sb.ToString();
     }
 
+    // BUG THẬT đã vá (2026-08-23, live-verified qua compile thật trong Docker
+    // sandbox — "fatal error: StemFlowDHT.h: No such file or directory"): sample
+    // exercise nào dùng DHT11/DHT22 đều yêu cầu học sinh viết đúng
+    // `#include "StemFlowDHT.h"` (xem class StemFlowDHT ở Generate() phía trên,
+    // comment dòng 353-356 — API đã công bố CHỦ ĐÍCH bắt include file này).
+    // Nhưng preprocessor của arduino-cli cần file đó THẬT SỰ TỒN TẠI trên đĩa để
+    // resolve #include — dù class StemFlowDHT thật (với dữ liệu Sensor Scenario)
+    // đã được Generate() nhúng SẴN vào đầu sketch.ino (TRƯỚC dòng #include của
+    // học sinh, cùng 1 translation unit) — SimulationCompileService trước đây
+    // chỉ ghi mỗi sketch.ino, không bao giờ ghi thêm file nào khác, nên #include
+    // luôn fail dù class đã tồn tại đúng chỗ. Fix: ghi thêm 1 file STUB RỖNG
+    // (chỉ include-guard, KHÔNG định nghĩa lại class — tránh lỗi "redefinition")
+    // tên đúng StemFlowDHT.h vào cùng thư mục sketch, chỉ để #include resolve
+    // được — dùng CHUNG cho MỌI lab có DHT11/DHT22, không hardcode riêng LAB10.
+    public static IReadOnlyDictionary<string, string>? BuildExtraFiles(VirtualLabRuntimeDiagramSnapshot snapshot)
+    {
+        var hasDht = snapshot.Components.Any(component =>
+            component.Type.Equals(Dht22Type, StringComparison.OrdinalIgnoreCase) ||
+            component.Type.Equals(Dht11Type, StringComparison.OrdinalIgnoreCase));
+
+        if (!hasDht)
+        {
+            return null;
+        }
+
+        return new Dictionary<string, string>
+        {
+            [DhtHeaderStubFileName] = DhtHeaderStubContent
+        };
+    }
+
+    public const string DhtHeaderStubFileName = "StemFlowDHT.h";
+
+    private const string DhtHeaderStubContent = """
+        #ifndef STEMFLOW_DHT_H
+        #define STEMFLOW_DHT_H
+        // StemFlowDHT.h — file STUB RỖNG, CHỦ ĐÍCH không định nghĩa gì ở đây.
+        //
+        // StemFlowDHT THẬT (đọc dữ liệu Sensor Scenario/timeline đã cấu hình) được
+        // SensorRuntimeHeaderGenerator.Generate() tự nhúng vào ĐẦU sketch.ino, TRƯỚC
+        // dòng #include "StemFlowDHT.h" của sketch — file này chỉ cần TỒN TẠI để
+        // preprocessor resolve #include thành công. KHÔNG được định nghĩa lại kiểu
+        // đó ở đây (sẽ gây lỗi "redefinition").
+        #endif // STEMFLOW_DHT_H
+
+        """;
+
     private static void AppendDistanceArray(StringBuilder sb, string arrayName, List<SensorTimelineEntry>? timeline)
     {
         var entries = (timeline ?? new List<SensorTimelineEntry>())

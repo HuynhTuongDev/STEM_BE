@@ -12,10 +12,24 @@
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <!-- CLOSE REMAINING FINAL-LAB GAPS task (2026-08-25) — needed ONLY to
+         construct a real StemDbContext for SimulationCompileService's
+         constructor in the new QEMU integration test harness (never actually
+         queried in these tests since LabId is never set on the compile
+         request, so this never touches real data — purely a constructor
+         dependency, no test writes to any real database). Test-only. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\STEM.Application\STEM.Application.csproj" />
+    <!-- CLOSE REMAINING FINAL-LAB GAPS task — FirmwareCacheService/
+         SimulationCompileService (the real QEMU compile pipeline) live in
+         STEM.Infrastructure; the new QEMU integration tests construct these
+         for real (real Docker/arduino-cli compile + real QEMU boot), not a
+         fake/mock, per the explicit "đi qua production code càng nhiều
+         càng tốt" requirement. -->
+    <ProjectReference Include="..\..\STEM.Infrastructure\STEM.Infrastructure.csproj" />
   </ItemGroup>
 
   <ItemGroup>

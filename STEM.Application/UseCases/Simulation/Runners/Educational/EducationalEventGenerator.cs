@@ -223,6 +223,34 @@ public sealed class EducationalEventGenerator
                 }, cancellationToken);
                 return null;
 
+            // Serial.print(aliasName) for a "bool aliasName = digitalRead(pin)
+            // == X;" local — re-reads the pin live (same helper the plain If
+            // case below uses) and prints "1"/"0", matching real Arduino's
+            // Serial.print(bool).
+            case EducationalInstructionKind.SerialBoolVariable:
+                var actualForSerial = ReadDigitalConditionValue(state, instruction.Pin!);
+                var boolAsText = actualForSerial.Equals(instruction.Value, StringComparison.OrdinalIgnoreCase) ? "1" : "0";
+                await EmitAsync(state, onEventEmitted, "serial", state.Time, new Dictionary<string, object?>
+                {
+                    ["message"] = boolAsText,
+                    ["newline"] = instruction.Newline
+                }, cancellationToken);
+                return null;
+
+            // Serial.print(varName) for an "int varName = analogRead(pin);"
+            // local — looks up the same AnalogLocals slot AnalogReadAssign
+            // just wrote, live, instead of a static parse-time placeholder.
+            case EducationalInstructionKind.SerialNumericVariable:
+                var numericForSerial = state.AnalogLocals.TryGetValue(instruction.Value!, out var storedNumeric)
+                    ? storedNumeric
+                    : 0;
+                await EmitAsync(state, onEventEmitted, "serial", state.Time, new Dictionary<string, object?>
+                {
+                    ["message"] = numericForSerial.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    ["newline"] = instruction.Newline
+                }, cancellationToken);
+                return null;
+
             case EducationalInstructionKind.Tone:
                 await EmitAsync(state, onEventEmitted, "pin-state", state.Time, new Dictionary<string, object?>
                 {
@@ -421,6 +449,24 @@ public sealed class EducationalEventGenerator
             default:
                 return null;
         }
+    }
+
+    // Same live digitalRead-condition resolution as the If case above
+    // (button > digital sensor > INPUT_PULLUP default), factored out standalone
+    // for SerialBoolVariable so it doesn't need to duplicate If's branching —
+    // If's own inline copy is left untouched on purpose (proven, already
+    // covered by existing tests; this is an additive read-only helper).
+    private static string ReadDigitalConditionValue(EducationalRunState state, string pin)
+    {
+        var pinMode = state.PinModes.TryGetValue(pin, out var mode) ? mode : null;
+        var button = state.FindButtons(pin).FirstOrDefault();
+        var digitalSensor = state.FindDigitalSensors(pin).FirstOrDefault();
+        return button?.Read(state.Context.ComponentInputs, pinMode) ??
+            (digitalSensor != null
+                ? ((digitalSensor.TryReadLiveInput(state.Context.ComponentInputs) ??
+                    state.ReadDigitalSensorScenario(digitalSensor.PartId, digitalSensor.UseMotionField, defaultValue: false))
+                   ? "HIGH" : "LOW")
+                : (pinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW"));
     }
 
     // Chờ THẬT (Task.Delay, không phải cộng dồn state.Time) — đây là điểm

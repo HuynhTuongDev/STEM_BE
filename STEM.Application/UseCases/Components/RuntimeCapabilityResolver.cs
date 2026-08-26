@@ -31,6 +31,12 @@ public static class RuntimeCapabilityResolver
             // input.
             ["wokwi-l298n"] = new(RuntimeCapabilities.Output, null),
             ["wokwi-rgb-led"] = new(RuntimeCapabilities.Output, null),
+            // FanModel.cs/DroneMotorModel.cs (STANDARDIZE MOTOR / ROTATING
+            // COMPONENT ANIMATION task, 2026-08-24) — same QEMU-only Output
+            // shape as L298N/RGB LED above, closing the same
+            // RuntimeCapabilityResolver gap for these 2 new adapters.
+            ["wokwi-fan"] = new(RuntimeCapabilities.Output, null),
+            ["wokwi-drone-motor"] = new(RuntimeCapabilities.Output, null),
 
             // RUNTIME + INTERACTIVE COVERAGE BOOST milestone — these all
             // already had real, working, ENABLED (SimulationRunner:Qemu:

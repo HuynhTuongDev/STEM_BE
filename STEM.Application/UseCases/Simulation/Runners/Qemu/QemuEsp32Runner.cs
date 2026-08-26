@@ -113,10 +113,16 @@ public sealed class QemuEsp32Runner : ISimulationRunner
         // FirmwareCacheService.ResolveCacheDir). Tính rẻ (parse JSON string,
         // không I/O) — an toàn để làm trong phần đồng bộ của RunAsync.
         var sensorHeader = string.Empty;
+        IReadOnlyDictionary<string, string>? extraFiles = null;
         if (_configuration.GetValue("SimulationRunner:Qemu:EnableSensorInputScenario", false))
         {
             var scenario = SensorRuntimeHeaderGenerator.TryParseScenario(diagramAnalysis.DiagramJson);
             sensorHeader = SensorRuntimeHeaderGenerator.Generate(snapshot, scenario) ?? string.Empty;
+            // DHT fix (2026-08-23): "#include \"StemFlowDHT.h\"" trong sketch học sinh
+            // (StemFlowDHT.h) cần file thật tồn tại để preprocessor resolve, dù class
+            // StemFlowDHT thật đã được Generate() nhúng sẵn ở trên — xem
+            // SensorRuntimeHeaderGenerator.BuildExtraFiles.
+            extraFiles = SensorRuntimeHeaderGenerator.BuildExtraFiles(snapshot);
         }
 
         // WiFi/Cloud — Virtual Cloud Runtime Phase 1 (xem
@@ -134,7 +140,7 @@ public sealed class QemuEsp32Runner : ISimulationRunner
         _registry.Register(context.ProjectId, runCts);
 
         _ = Task.Run(
-            () => ExecuteInBackgroundAsync(context.SourceCode, board, snapshot, context, runCts, sensorHeader),
+            () => ExecuteInBackgroundAsync(context.SourceCode, board, snapshot, context, runCts, sensorHeader, extraFiles),
             CancellationToken.None);
 
         return new SimulationRunResult
@@ -152,7 +158,8 @@ public sealed class QemuEsp32Runner : ISimulationRunner
         VirtualLabRuntimeDiagramSnapshot snapshot,
         SimulationRunContext context,
         CancellationTokenSource runCts,
-        string sensorHeader)
+        string sensorHeader,
+        IReadOnlyDictionary<string, string>? extraFiles)
     {
         // Scope riêng cho LẦN CHẠY NÀY — IFirmwareCacheService (phụ thuộc
         // ISimulationCompileService, Scoped vì phụ thuộc StemDbContext) KHÔNG được
@@ -209,7 +216,7 @@ public sealed class QemuEsp32Runner : ISimulationRunner
                 var buildCacheScopeId = Guid.TryParse(context.ProjectId, out var parsedScopeId)
                     ? parsedScopeId
                     : (Guid?)null;
-                compileResult = await firmwareCache.CompileAndCacheAsync(sourceCode, board, "arduino", buildCacheScopeId, cancellationToken, sensorHeader);
+                compileResult = await firmwareCache.CompileAndCacheAsync(sourceCode, board, "arduino", buildCacheScopeId, cancellationToken, sensorHeader, extraFiles);
 
                 if (!compileResult.Success || string.IsNullOrEmpty(compileResult.FirmwareBase64))
                 {
@@ -487,6 +494,41 @@ public sealed class QemuEsp32Runner : ISimulationRunner
             // nên thứ tự không quan trọng, nhưng để rõ ràng vẫn xử lý riêng ở đây).
             // KHÔNG increment eventsEmitted (giống nhánh raw-serial-passthrough bên
             // dưới) — cloud event không ảnh hưởng heuristic suspiciousEarlyExit.
+            // VIRTUAL LAB RUNTIME CAPABILITY EXPANSION (STEP 3, 2026-08-26) —
+            // servoId already IS the diagram componentId (StemFlowPCA9685's
+            // caller passes it directly, same "match by componentId string, not
+            // physical pin" convention already established for StemFlowDHT) —
+            // no ComponentIndex/netlist lookup needed, unlike LED/Buzzer/Fan
+            // which resolve via GPIO pin. Checked before the generic SF_EVENT
+            // parse below (same reason SF_CLOUD_EVENT is checked first: distinct
+            // marker string, no risk of collision, but order still documents
+            // precedence).
+            if (TryParseSfPca9685Event(line, out var pca9685Address, out var servoComponentId, out var servoAngle))
+            {
+                var pcaTime = stopwatch.ElapsedMilliseconds;
+                eventsEmitted++;
+                await EmitAsync(eventStore, broadcaster, context.ProjectId, new SimulationEventResponse
+                {
+                    Type = "part-state",
+                    Time = pcaTime,
+                    Payload = new Dictionary<string, object?>
+                    {
+                        // partId/component/state/angle: EXACT same convention as
+                        // ServoModel.cs's ToAngleEvent (Educational runner) so
+                        // LabSandboxPage.tsx's single existing
+                        // `component === 'servo' && payload.state === 'angle'`
+                        // branch handles both runners without a new FE branch.
+                        ["partId"] = servoComponentId,
+                        ["component"] = "servo",
+                        ["state"] = "angle",
+                        ["angle"] = servoAngle,
+                        ["address"] = pca9685Address,
+                        ["driver"] = "pca9685"
+                    }
+                }, cancellationToken);
+                continue;
+            }
+
             if (TryParseSfCloudEvent(line, out var cloudComponentId, out var cloudTopic, out var cloudValue))
             {
                 var cloudTime = stopwatch.ElapsedMilliseconds;
@@ -581,6 +623,16 @@ public sealed class QemuEsp32Runner : ISimulationRunner
             foreach (var buzzer in componentIndex.FindBuzzers(pin))
             {
                 await EmitAsync(eventStore, broadcaster, context.ProjectId, buzzer.ToDigitalEvent(time, value), cancellationToken);
+            }
+
+            foreach (var fan in componentIndex.FindFans(pin))
+            {
+                await EmitAsync(eventStore, broadcaster, context.ProjectId, fan.ToDigitalEvent(time, value), cancellationToken);
+            }
+
+            foreach (var droneMotor in componentIndex.FindDroneMotors(pin))
+            {
+                await EmitAsync(eventStore, broadcaster, context.ProjectId, droneMotor.ToDigitalEvent(time, value), cancellationToken);
             }
 
             // L298N: state động cơ phụ thuộc CẶP chân IN (không phải 1 chân
@@ -811,6 +863,44 @@ public sealed class QemuEsp32Runner : ISimulationRunner
         }
     }
 
+    // VIRTUAL LAB RUNTIME CAPABILITY EXPANSION (STEP 3) — parses
+    // StemFlowPCA9685's SF_PCA9685_EVENT lines. angle is always an int (0-180,
+    // already clamped by StemFlowPCA9685::setServoAngle before printing).
+    private static bool TryParseSfPca9685Event(string line, out string address, out string servoId, out int angle)
+    {
+        address = string.Empty;
+        servoId = string.Empty;
+        angle = 0;
+
+        var markerIndex = line.IndexOf("SF_PCA9685_EVENT ", StringComparison.Ordinal);
+        if (markerIndex < 0)
+        {
+            return false;
+        }
+
+        try
+        {
+            var jsonPart = line[(markerIndex + "SF_PCA9685_EVENT ".Length)..].Trim();
+            using var doc = JsonDocument.Parse(jsonPart);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("address", out var addressEl) ||
+                !root.TryGetProperty("servoId", out var servoIdEl) ||
+                !root.TryGetProperty("angle", out var angleEl))
+            {
+                return false;
+            }
+
+            address = addressEl.GetString() ?? string.Empty;
+            servoId = servoIdEl.GetString() ?? string.Empty;
+            angle = angleEl.GetInt32();
+            return address.Length > 0 && servoId.Length > 0;
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+    }
+
     // WiFi/Cloud Phase 1 — value có thể là số (publish float/int) hoặc chuỗi
     // (dự phòng, hiện StemFlowCloud chỉ publish số) -> giữ kiểu gốc từ JSON
     // (double/string/bool) thay vì ép hết về string, để FE nhận đúng kiểu qua
@@ -901,6 +991,8 @@ public sealed class QemuEsp32Runner : ISimulationRunner
     {
         private readonly Dictionary<string, List<LedModel>> _ledsByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<BuzzerModel>> _buzzersByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<FanModel>> _fansByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<DroneMotorModel>> _droneMotorsByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, (L298nModel Model, int InIndex)> _l298nByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, (RgbLedModel Model, string Channel)> _rgbLedByPin = new(StringComparer.OrdinalIgnoreCase);
 
@@ -917,6 +1009,16 @@ public sealed class QemuEsp32Runner : ISimulationRunner
                          TryFindPin(component, new[] { "1", "2" }, out var buzzerPin))
                 {
                     Add(_buzzersByPin, buzzerPin, new BuzzerModel(component.Id, buzzerPin));
+                }
+                else if (component.Type.Equals("wokwi-fan", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "IN" }, out var fanPin))
+                {
+                    Add(_fansByPin, fanPin, new FanModel(component.Id, fanPin));
+                }
+                else if (component.Type.Equals("wokwi-drone-motor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "IN" }, out var droneMotorPin))
+                {
+                    Add(_droneMotorsByPin, droneMotorPin, new DroneMotorModel(component.Id, droneMotorPin));
                 }
                 else if (component.Type.Equals("wokwi-l298n", StringComparison.OrdinalIgnoreCase))
                 {
@@ -945,6 +1047,8 @@ public sealed class QemuEsp32Runner : ISimulationRunner
 
         public IReadOnlyCollection<LedModel> FindLeds(string pin) => Find(_ledsByPin, pin);
         public IReadOnlyCollection<BuzzerModel> FindBuzzers(string pin) => Find(_buzzersByPin, pin);
+        public IReadOnlyCollection<FanModel> FindFans(string pin) => Find(_fansByPin, pin);
+        public IReadOnlyCollection<DroneMotorModel> FindDroneMotors(string pin) => Find(_droneMotorsByPin, pin);
 
         public bool TryFindL298nInPin(string pin, out L298nModel model, out int inIndex)
         {

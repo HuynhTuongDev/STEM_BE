@@ -125,6 +125,15 @@ public class CompileSimulationRequest
     // tại 1 thời điểm chỉ có tối đa 1 lần chạy nền (và do đó 1 lần compile)
     // cho mỗi projectId.
     public string? ProjectId { get; set; }
+
+    // Optional — file phụ (tên -> nội dung) cần ghi THÊM vào cùng thư mục sketch
+    // TRƯỚC khi compile, bên cạnh sketch.ino (xem SimulationCompileService).
+    // Dùng cho các custom header mà sketch học sinh #include (vd StemFlowDHT.h,
+    // xem SensorRuntimeHeaderGenerator.BuildExtraFiles) — preprocessor cần file
+    // thật tồn tại trên đĩa để resolve #include, dù nội dung thật (class) đã
+    // được nhúng sẵn vào đầu sourceCode. Null/rỗng (mặc định) = giữ nguyên hành
+    // vi cũ 100% (chỉ ghi sketch.ino) cho mọi caller hiện có.
+    public IReadOnlyDictionary<string, string>? ExtraFiles { get; set; }
 }
 
 public class CompileSimulationError

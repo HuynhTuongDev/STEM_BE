@@ -103,7 +103,13 @@ public class VirtualLabDiagramService
                 "C1", "C2", "C3", "C4", "C5", "C6", "C7", "C8", "C9", "C10"),
             ["wokwi-7segment"] = PinSet("COM.1", "COM.2", "A", "B", "C", "D", "E", "F", "G", "DP"),
             ["wokwi-relay-module"] = PinSet("VCC", "IN", "GND", "NO", "COM", "NC"),
-            ["wokwi-fan"] = PinSet("+", "-"),
+            // "IN" (2026-08-24, TASK "STANDARDIZE MOTOR / ROTATING COMPONENT
+            // ANIMATION") — trước đây Fan chỉ có "+"/"-" (cực nguồn thuần tuý,
+            // không có cách nào cho firmware bật/tắt qua GPIO). Thêm 1 chân
+            // điều khiển digitalWrite, giống hệt Relay's "IN" — xem FanModel.cs.
+            // Không mô phỏng PWM tốc độ (QEMU không đọc được analogWrite/
+            // ledcWrite).
+            ["wokwi-fan"] = PinSet("+", "-", "IN"),
             ["wokwi-water-pump"] = PinSet("+", "-"),
             ["wokwi-water-leak-sensor"] = PinSet("VCC", "GND", "S"),
             ["wokwi-rain-sensor"] = PinSet("VCC", "GND", "DO", "AO"),
@@ -119,6 +125,18 @@ public class VirtualLabDiagramService
             // không có trong Wokwi, tự định nghĩa theo module thực tế phổ biến —
             // xem robotKitComponents.ts (FE) để biết nguồn tham khảo.
             ["wokwi-mpu6050"] = PinSet("VCC", "GND", "SCL", "SDA", "XDA", "XCL", "AD0", "INT"),
+            // VIRTUAL LAB RUNTIME CAPABILITY EXPANSION (2026-08-26, STEP 3):
+            // real I2C bus (StemFlowI2C) + PCA9685 model (StemFlowPCA9685) now
+            // exist in FirmwareCacheService's instrumentation preamble — SDA/SCL
+            // wiring is validated exactly like DHT (see Require rule below), same
+            // "wiring-validation-only, real linkage is by componentId string"
+            // pattern already established for StemFlowDHT. No CH0-15 pins here —
+            // servos driven via PCA9685 don't wire PWM to this part; each servo
+            // still wires PWM to its OWN ESP32 GPIO (wiring-validation-only,
+            // never toggled in code) so the EXISTING Servo wiring rule needs no
+            // change at all — the real angle linkage is StemFlowPCA9685's
+            // setServoAngle(servoId, angle) matching the servo's diagram id.
+            ["wokwi-pca9685"] = PinSet("VCC", "GND", "SDA", "SCL"),
             ["wokwi-esc"] = PinSet("SIG", "GND", "BATT+", "BATT-", "OUT+", "OUT-"),
             ["wokwi-heating-element"] = PinSet("+", "-"),
             ["wokwi-ph-sensor"] = PinSet("VCC", "GND", "PO"),
@@ -126,7 +144,15 @@ public class VirtualLabDiagramService
             // Line Tracking đa kênh (module TCRT5000 3/5 mắt) — BỔ SUNG bên
             // cạnh wokwi-line-tracking-sensor (1 kênh) cũ, không thay thế.
             ["wokwi-line-tracking-3ch"] = PinSet("VCC", "GND", "OUT1", "OUT2", "OUT3"),
-            ["wokwi-line-tracking-5ch"] = PinSet("VCC", "GND", "OUT1", "OUT2", "OUT3", "OUT4", "OUT5")
+            ["wokwi-line-tracking-5ch"] = PinSet("VCC", "GND", "OUT1", "OUT2", "OUT3", "OUT4", "OUT5"),
+
+            // wokwi-drone-motor (2026-08-24, TASK "STANDARDIZE MOTOR / ROTATING
+            // COMPONENT ANIMATION") — trước đây KHÔNG có SupportedPins nào
+            // (visual-only thuần cơ khí, không vào netlist). Thêm 1 chân IN
+            // nhị phân (giống Fan/Relay — đơn giản hoá có chủ đích, KHÔNG mô
+            // phỏng ESC 3 pha/PWM tốc độ thật) để có tín hiệu ON/OFF thật
+            // driving animation cánh quạt — xem DroneMotorModel.cs.
+            ["wokwi-drone-motor"] = PinSet("IN")
         };
 
     public VirtualLabDiagramAnalysis Analyze(string diagramJson, string? fallbackBoardType = null)
@@ -479,6 +505,21 @@ public class VirtualLabDiagramService
                 Require(part, "DHT VCC must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
                 Require(part, "DHT GND must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
             }
+            else if (part.Type.Equals("wokwi-pca9685", StringComparison.OrdinalIgnoreCase))
+            {
+                // I2C bus wiring — SDA/SCL must reach an ESP32 GPIO (same
+                // reachability check as any digital pin; this repo has no
+                // shared-bus/multi-drop net modeling beyond "does it reach a
+                // GPIO", matching STEP 2's MVP scope). Real address
+                // registration/duplicate-detection is a RUNTIME concern
+                // (StemFlowI2C::registerDevice, exercised in
+                // I2cBus_RealScenario_* and Pca9685_RealScenario_* tests), not
+                // a static diagram check.
+                Require(part, "PCA9685 SDA must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "SDA" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "PCA9685 SCL must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "SCL" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+                Require(part, "PCA9685 VCC must connect to 3V3/5V.", HasReachable(part.Id, new[] { "VCC" }, connectedPinToNet, partsById, IsPower), errors);
+                Require(part, "PCA9685 GND must connect to GND.", HasReachable(part.Id, new[] { "GND" }, connectedPinToNet, partsById, IsGround), errors);
+            }
             else if (part.Type.Equals("wokwi-hc-sr04", StringComparison.OrdinalIgnoreCase))
             {
                 Require(part, "Ultrasonic TRIG must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "TRIG" }, connectedPinToNet, partsById, IsBoardGpio), errors);
@@ -550,6 +591,38 @@ public class VirtualLabDiagramService
                 // thẳng vào GPIO), nên passed = phủ định của nó.
                 var wiredDirectlyToGpio = HasReachable(part.Id, new[] { "terminal1", "terminal2" }, connectedPinToNet, partsById, IsBoardGpio);
                 Require(part, "Không được nối động cơ DC trực tiếp vào GPIO ESP32 — phải qua OUT của L298N Motor Driver.", !wiredDirectlyToGpio, errors);
+            }
+            else if (part.Type.Equals("wokwi-battery-pack", StringComparison.OrdinalIgnoreCase))
+            {
+                // CLOSE REMAINING FINAL-LAB GAPS (STEP 4): phát hiện trường hợp
+                // đơn giản nhất — Battery Pack có mặt trên canvas nhưng (+)/(-)
+                // hoàn toàn chưa được nối dây, nghĩa là không cấp nguồn cho bất
+                // kỳ thứ gì. Cố ý KHÔNG kiểm tra đầu dây kia là đúng loại linh
+                // kiện (VIN của L298N, v.v.) — việc đó đã được validate từ phía
+                // linh kiện tiêu thụ điện (L298N VIN/GND ở trên dùng
+                // IsPowerOrBatteryPositive/IsGroundOrBatteryNegative) — không
+                // xây dựng thêm 1 polarity/net-propagation engine đầy đủ ở đây.
+                Require(part, "Battery Pack (+) chưa được nối — pin đang không cấp nguồn cho mạch nào.", connectedPinToNet.ContainsKey(ToPinToken(part.Id, "+")), errors);
+                Require(part, "Battery Pack (-) chưa được nối — pin đang không có đường về GND.", connectedPinToNet.ContainsKey(ToPinToken(part.Id, "-")), errors);
+            }
+            else if (part.Type.Equals("wokwi-fan", StringComparison.OrdinalIgnoreCase))
+            {
+                // IN đọc thật qua digitalWrite (FanModel.cs), giống hệt Relay's
+                // IN ở trên. "+"/"-" vẫn là cực nguồn thuần tuý, không validate
+                // ở đây (giống DC Motor/Battery Pack — không có net-propagation
+                // engine để mô phỏng dòng điện thật qua đó).
+                Require(part, "Fan IN must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "IN" }, connectedPinToNet, partsById, IsBoardGpio), errors);
+            }
+            else if (part.Type.Equals("wokwi-drone-motor", StringComparison.OrdinalIgnoreCase))
+            {
+                // SIMPLIFIED_ELECTRICAL_MODEL (audited 2026-08-24, see
+                // DroneMotorModel.cs's full comment) — IN nhị phân qua
+                // digitalWrite, KHÔNG qua ESC (wokwi-esc đã có pinout đúng
+                // trong SupportedPins ở trên nhưng chưa có wiring rule/runtime
+                // model riêng — audit finding, không phải thiếu sót vô tình).
+                // Đơn giản hoá có chủ đích, không mô phỏng ESC 3 pha/PWM tốc
+                // độ thật.
+                Require(part, "Drone Motor IN must reach an ESP32 GPIO.", HasReachable(part.Id, new[] { "IN" }, connectedPinToNet, partsById, IsBoardGpio), errors);
             }
             else if (part.Type.Equals("wokwi-rgb-led", StringComparison.OrdinalIgnoreCase))
             {
