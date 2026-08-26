@@ -1,5 +1,4 @@
 using Microsoft.EntityFrameworkCore;
-using STEM.Application.Dtos.Users;
 using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Users;
@@ -193,5 +192,29 @@ public class UserRepository : Repository<User>, IUserRepository
             .ToListAsync(cancellationToken);
 
         return (users, totalCount);
+    }
+
+    public async Task<IEnumerable<User>> GetBySchoolIdAsync(int schoolId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Include(u => u.Role)
+            .Include(u => u.School)
+            .Where(u => u.SchoolId == schoolId)
+            .OrderBy(u => u.RoleId)
+            .ThenBy(u => u.FullName)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<(int TeacherCount, int StudentCount)> GetTeacherStudentCountBySchoolAsync(int schoolId, CancellationToken cancellationToken = default)
+    {
+        var users = await _dbSet
+            .Include(u => u.Role)
+            .Where(u => u.SchoolId == schoolId)
+            .ToListAsync(cancellationToken);
+
+        var teacherCount = users.Count(u => u.RoleId == 3); // RoleId 3 = Teacher
+        var studentCount = users.Count(u => u.RoleId == 4); // RoleId 4 = Student
+
+        return (teacherCount, studentCount);
     }
 }

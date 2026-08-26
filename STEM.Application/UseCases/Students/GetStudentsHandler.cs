@@ -12,15 +12,18 @@ public class GetStudentsHandler
     private readonly IUserRepository _userRepository;
     private readonly IRepository<Role> _roleRepository;
     private readonly IRepository<Enrollment> _enrollmentRepository;
+    private readonly ISubmissionRepository _submissionRepository;
 
     public GetStudentsHandler(
         IUserRepository userRepository,
         IRepository<Role> roleRepository,
-        IRepository<Enrollment> enrollmentRepository)
+        IRepository<Enrollment> enrollmentRepository,
+        ISubmissionRepository submissionRepository)
     {
         _userRepository = userRepository;
         _roleRepository = roleRepository;
         _enrollmentRepository = enrollmentRepository;
+        _submissionRepository = submissionRepository;
     }
 
     public async Task<StudentsListResponse> Handle(GetStudentsRequest request, int currentUserId, CancellationToken cancellationToken = default)
@@ -50,8 +53,9 @@ public class GetStudentsHandler
             };
         }
 
-        var students = (await _userRepository.FindAsync(user => user.RoleId == studentRole.Id && user.SchoolId == currentUser.SchoolId, cancellationToken))
-            .ToList();
+        var schoolId = currentUser.SchoolId!.Value;
+        var allUsers = await _userRepository.FindAsync(user => user.RoleId == studentRole.Id, cancellationToken);
+        var students = allUsers.Where(user => user.SchoolId == schoolId).ToList();
 
         if (request.IsActive.HasValue)
         {
@@ -69,6 +73,31 @@ public class GetStudentsHandler
         }
 
         var total = students.Count;
+
+        // Calculate aggregate counts from ALL students
+        var totalActiveStudents = students.Count(s => s.IsActive);
+
+        var allStudentIds = students.Select(s => s.Id).ToList();
+
+        // Get all enrollments for stats
+        var allEnrollments = allStudentIds.Count == 0
+            ? new List<Enrollment>()
+            : (await _enrollmentRepository.FindAsync(e => allStudentIds.Contains(e.StudentId), cancellationToken)).ToList();
+
+        var enrollmentCountsByStudent = allEnrollments
+            .GroupBy(e => e.StudentId)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.ClassId).Distinct().Count());
+
+        var totalEnrolledClasses = enrollmentCountsByStudent.Values.Sum();
+
+        // Get scores
+        var studentScores = allStudentIds.Count == 0
+            ? new Dictionary<int, double>()
+            : await _submissionRepository.GetAverageScoresByStudentIdsAsync(allStudentIds, cancellationToken);
+
+        var totalWithScores = studentScores.Count(s => s.Value > 0);
+        var totalWithoutScores = total - totalWithScores;
+
         var pagedStudents = students
             .OrderBy(student => student.FullName)
             .ThenBy(student => student.Id)
@@ -90,6 +119,10 @@ public class GetStudentsHandler
             Total = total,
             PageNumber = pageNumber,
             PageSize = pageSize,
+            TotalActiveStudents = totalActiveStudents,
+            TotalEnrolledClasses = totalEnrolledClasses,
+            TotalWithScores = totalWithScores,
+            TotalWithoutScores = totalWithoutScores,
             Data = pagedStudents.Select(student => new StudentResponse
             {
                 Id = student.Id,

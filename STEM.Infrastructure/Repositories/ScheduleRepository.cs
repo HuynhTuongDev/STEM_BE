@@ -17,6 +17,7 @@ public class ScheduleRepository : Repository<Schedule>, IScheduleRepository
         return await _dbSet
             .Include(s => s.Class)
                 .ThenInclude(c => c.Course)
+            .Include(s => s.Lesson)
             .Where(s => s.ClassId == classId)
             .OrderBy(s => s.StartTime)
             .ToListAsync(cancellationToken);

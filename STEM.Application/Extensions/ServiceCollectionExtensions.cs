@@ -20,6 +20,7 @@ using STEM.Application.UseCases.Simulation.Runners.Educational;
 using STEM.Application.UseCases.Simulation.Runners.Mock;
 using STEM.Application.UseCases.Simulation.Runners.Qemu;
 using STEM.Application.UseCases.Simulation.Runtime;
+using STEM.Application.UseCases.Curriculum;
 using FluentValidation;
 using STEM.Application.Validators;
 using STEM.Core.Repository;
@@ -131,15 +132,28 @@ public static class ServiceCollectionExtensions
         services.AddScoped<UpdateCourseHandler>();
         services.AddScoped<DeleteCourseHandler>();
 
-        // Syllabus Handlers
+        // Syllabus Handlers (from Syllabuses folder)
         services.AddScoped<GetSyllabusesListHandler>();
         services.AddScoped<GetSyllabusDetailHandler>();
         services.AddScoped<GetSyllabusStructureHandler>();
-        services.AddScoped<CreateSyllabusHandler>();
-        services.AddScoped<UpdateSyllabusHandler>();
-        services.AddScoped<ArchiveSyllabusHandler>();
         services.AddScoped<GetGradeLevelsListHandler>();
         services.AddScoped<GetSystemLogsListHandler>();
+
+        // Curriculum Handlers (from Curriculum folder - fully qualified to avoid ambiguity)
+        services.AddScoped<UseCases.Curriculum.GetSyllabiHandler>();
+        services.AddScoped<UseCases.Curriculum.GetSyllabusByIdHandler>();
+        services.AddScoped<UseCases.Curriculum.CreateSyllabusHandler>();
+        services.AddScoped<UseCases.Curriculum.UpdateSyllabusHandler>();
+        services.AddScoped<UseCases.Curriculum.DeleteSyllabusHandler>();
+        services.AddScoped<UseCases.Curriculum.PublishSyllabusHandler>();
+        services.AddScoped<UseCases.Curriculum.ArchiveSyllabusHandler>();
+        services.AddScoped<UseCases.Curriculum.UnpublishSyllabusHandler>();
+        services.AddScoped<UseCases.Curriculum.RestoreSyllabusHandler>();
+        services.AddScoped<UseCases.Curriculum.GetGradeLevelsHandler>();
+        services.AddScoped<UseCases.Curriculum.GetGradeLevelByIdHandler>();
+        services.AddScoped<UseCases.Curriculum.CreateGradeLevelHandler>();
+        services.AddScoped<UseCases.Curriculum.UpdateGradeLevelHandler>();
+        services.AddScoped<UseCases.Curriculum.DeleteGradeLevelHandler>();
 
         // Class Handlers
         services.AddScoped<GetClassesListHandler>();
@@ -150,6 +164,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<AssignStudentsToClassHandler>();
         services.AddScoped<RemoveStudentFromClassHandler>();
         services.AddScoped<GetAvailableStudentsHandler>();
+        services.AddScoped<GetStudentTemplateHandler>();
+        services.AddScoped<ImportStudentsHandler>();
 
         // Schedule Handlers
         services.AddScoped<CreateScheduleHandler>();
@@ -157,6 +173,23 @@ public static class ServiceCollectionExtensions
         services.AddScoped<DeleteScheduleHandler>();
         services.AddScoped<GetTeacherScheduleHandler>();
         services.AddScoped<GetStudentScheduleHandler>();
+
+        // Module Handlers
+        services.AddScoped<GetModulesHandler>();
+        services.AddScoped<GetModuleByIdHandler>();
+        services.AddScoped<CreateModuleHandler>();
+        services.AddScoped<UpdateModuleHandler>();
+        services.AddScoped<DeleteModuleHandler>();
+        services.AddScoped<ReorderModulesHandler>();
+        services.AddScoped<GetModulesByClassHandler>();
+        
+        // Lesson Handlers
+        services.AddScoped<GetLessonsHandler>();
+        services.AddScoped<GetLessonByIdHandler>();
+        services.AddScoped<CreateLessonHandler>();
+        services.AddScoped<UpdateLessonHandler>();
+        services.AddScoped<DeleteLessonHandler>();
+        services.AddScoped<ReorderLessonsHandler>();
 
         // Validators - register all validators from assembly
         services.AddValidatorsFromAssemblyContaining<CreateUserBySchoolAdminValidator>();

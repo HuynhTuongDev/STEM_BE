@@ -19,6 +19,7 @@ public class ClassRepository : Repository<Class>, IClassRepository
     {
         return await _context.Classes
             .Include(c => c.School)
+            .Include(c => c.GradeLevel)
             .Include(c => c.Course)
             .Include(c => c.Teacher)
             .Where(c => c.CourseId == courseId)
@@ -179,6 +180,7 @@ public class ClassRepository : Repository<Class>, IClassRepository
     {
         var query = _context.Classes
             .Include(c => c.School)
+            .Include(c => c.GradeLevel)
             .Include(c => c.Course)
             .Include(c => c.Teacher)
             .Include(c => c.Enrollments)
@@ -216,10 +218,11 @@ public class ClassRepository : Repository<Class>, IClassRepository
     {
         return await _context.Classes
             .Include(c => c.School)
+            .Include(c => c.GradeLevel)
             .Include(c => c.Course)
             .Include(c => c.Teacher)
             .Include(c => c.Enrollments).ThenInclude(e => e.Student)
-            .Include(c => c.Schedules)
+            .Include(c => c.Schedules).ThenInclude(s => s.Lesson)
             .Include(c => c.Announcements)
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
     }
@@ -233,6 +236,7 @@ public class ClassRepository : Repository<Class>, IClassRepository
         var query = _context.Schedules
             .Include(s => s.Class)
                 .ThenInclude(c => c.Course)
+            .Include(s => s.Lesson)
             .Where(s => s.Class.TeacherId == teacherId)
             .AsQueryable();
 
@@ -250,6 +254,7 @@ public class ClassRepository : Repository<Class>, IClassRepository
     public async Task<IEnumerable<Schedule>> GetSchedulesAsync(int classId, CancellationToken cancellationToken = default)
     {
         return await _context.Schedules
+            .Include(s => s.Lesson)
             .Where(s => s.ClassId == classId)
             .ToListAsync(cancellationToken);
     }
@@ -321,6 +326,13 @@ public class ClassRepository : Repository<Class>, IClassRepository
             .Where(a => a.ClassId == classId)
             .OrderByDescending(a => a.DueDate)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Course?> GetCourseByIdAsync(int courseId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Courses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == courseId, cancellationToken);
     }
 
 }

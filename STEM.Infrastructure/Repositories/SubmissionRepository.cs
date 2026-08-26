@@ -143,6 +143,35 @@ public class SubmissionRepository : Repository<Submission>, ISubmissionRepositor
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<Dictionary<int, double>> GetAverageScoresByStudentIdsAsync(
+        IEnumerable<int> studentIds,
+        CancellationToken cancellationToken = default)
+    {
+        var studentIdList = studentIds.ToList();
+        if (!studentIdList.Any())
+            return new Dictionary<int, double>();
+
+        var studentIdSet = studentIdList.ToHashSet();
+
+        var gradedSubmissions = await _dbSet
+            .Where(s => s.StudentId.HasValue && studentIdSet.Contains(s.StudentId.Value))
+            .Where(s =>
+                s.Status == SubmissionStatuses.Graded &&
+                s.FinalScore.HasValue &&
+                s.Assignment != null &&
+                (s.Assignment.AssignmentType == AssignmentTypes.TextReport ||
+                 s.Assignment.AssignmentType == AssignmentTypes.PracticalSimulation))
+            .GroupBy(s => s.StudentId!.Value)
+            .Select(g => new
+            {
+                StudentId = g.Key,
+                Average = g.Average(s => (double)s.FinalScore!)
+            })
+            .ToListAsync(cancellationToken);
+
+        return gradedSubmissions.ToDictionary(x => x.StudentId, x => x.Average);
+    }
+
     private IQueryable<Submission> BuildDetailsQuery()
     {
         return _dbSet

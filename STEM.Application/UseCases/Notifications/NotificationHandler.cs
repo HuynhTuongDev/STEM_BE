@@ -1,4 +1,5 @@
 using STEM.Application.Dtos.Notifications;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
@@ -15,14 +16,14 @@ public class NotificationHandler
 
     public async Task<IEnumerable<NotificationResponse>> GetNotificationsByUserId(int userId, CancellationToken cancellationToken = default)
     {
-        var notifications = await _notificationRepository.GetByUserIdAsync(userId, cancellationToken);
+        var notifications = await _notificationRepository.GetByUserIdAsync(userId.ToString(), 0, 100, cancellationToken: cancellationToken);
         return notifications.Select(n => new NotificationResponse
         {
             Id = n.Id,
             UserId = n.UserId,
             Title = n.Title,
             Content = n.Content,
-            Type = n.Type,
+            Type = n.Type.ToString(),
             IsRead = n.IsRead,
             CreatedAt = n.CreatedAt
         });

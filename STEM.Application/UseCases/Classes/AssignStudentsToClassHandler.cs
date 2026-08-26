@@ -64,11 +64,35 @@ public class AssignStudentsToClassHandler
             .Select(e => e.StudentId)
             .ToHashSet();
 
-        // Check schedule conflicts for students NOT already enrolled
+        // Check for same-course enrollment conflicts (ALWAYS reject)
+        var courseConflictStudents = new List<StudentCourseEnrollment>();
         var studentsToCheck = request.StudentIds.Except(existingEnrollmentStudentIds).ToList();
-        var conflictingStudents = new List<StudentScheduleConflict>();
 
         foreach (var studentId in studentsToCheck)
+        {
+            var existingCourseEnrollment = await _enrollmentFullRepository.GetExistingCourseEnrollmentAsync(
+                studentId, classEntity.CourseId, classId);
+
+            if (existingCourseEnrollment != null)
+            {
+                courseConflictStudents.Add(existingCourseEnrollment);
+            }
+        }
+
+        // ALWAYS reject if any course conflicts exist
+        if (courseConflictStudents.Any())
+        {
+            var conflictInfo = string.Join(", ", courseConflictStudents.Select(c =>
+                $"{validStudents.First(s => s.Id == c.StudentId).FullName} (đã học {c.CourseName} tại lớp {c.ClassCode})"));
+            throw new ArgumentException($"Học sinh đã học khóa học này tại lớp khác: {conflictInfo}");
+        }
+
+        // Check schedule conflicts for students NOT already enrolled and NOT course-conflicted
+        var courseConflictStudentIds = courseConflictStudents.Select(c => c.ClassId).ToHashSet();
+        var studentsForScheduleCheck = studentsToCheck.Except(courseConflictStudentIds).ToList();
+        var conflictingStudents = new List<StudentScheduleConflict>();
+
+        foreach (var studentId in studentsForScheduleCheck)
         {
             var canAdd = await _enrollmentFullRepository.CanAddStudentToClassAsync(studentId, classId);
             if (!canAdd)
@@ -98,15 +122,17 @@ public class AssignStudentsToClassHandler
             }
         }
 
-        // If strict mode is enabled, reject if any conflicts exist
+        // If strict mode is enabled, reject if any schedule conflicts exist
         if (request.StrictMode && conflictingStudents.Any())
         {
             throw new ArgumentException($"Có {conflictingStudents.Count} học sinh bị trùng lịch: {string.Join(", ", conflictingStudents.Select(c => c.StudentName))}");
         }
 
-        // Calculate new enrollments (exclude already enrolled AND conflicting if not strict mode)
+        // Calculate new enrollments (exclude already enrolled and schedule-conflicted if not strict mode)
         var conflictingStudentIds = conflictingStudents.Select(c => c.StudentId).ToHashSet();
-        var newStudentIds = studentsToCheck.Except(conflictingStudentIds).ToList();
+        var newStudentIds = studentsToCheck
+            .Except(conflictingStudentIds)
+            .ToList();
 
         if (newStudentIds.Any())
         {
@@ -159,7 +185,7 @@ public class AssignStudentsToClassHandler
             TotalRequested = request.StudentIds.Count,
             SuccessCount = newStudentIds.Count,
             AlreadyEnrolledCount = existingEnrollmentStudentIds.Count,
-            ConflictCount = conflictingStudents.Count,
+            ConflictCount = conflictingStudents.Count + courseConflictStudents.Count,
             AlreadyEnrolledStudentIds = existingEnrollmentStudentIds.ToList(),
             AddedStudents = addedStudents,
             ConflictingStudents = conflictingStudents

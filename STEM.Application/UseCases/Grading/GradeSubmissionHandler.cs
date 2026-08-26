@@ -63,7 +63,7 @@ public class GradeSubmissionHandler
                 UserId = submission.StudentId.Value,
                 Title = "Bài đã được chấm",
                 Content = $"\"{submission.Assignment?.Title}\" đã được chấm — {submission.Score} điểm.",
-                Type = "GradeReport"
+                Type = NotificationType.GradeReport
             }, cancellationToken);
             await _notificationRepository.SaveChangesAsync(cancellationToken);
         }

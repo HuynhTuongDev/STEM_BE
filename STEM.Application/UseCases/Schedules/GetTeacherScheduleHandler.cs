@@ -37,6 +37,12 @@ public class GetTeacherScheduleHandler
 
         var schedules = await _classRepository.GetSchedulesByTeacherAsync(currentUserId, fromDateUtc, toDateUtc, cancellationToken);
 
+        // DEBUG: Log course info
+        foreach (var s in schedules)
+        {
+            Console.WriteLine($"[GetTeacherSchedule] ScheduleId={s.Id}, ClassCode={s.Class?.ClassCode}, CourseTitle={s.Class?.Course?.Title}");
+        }
+
         return schedules.Select((s, index) => new ScheduleCalendarResponse
         {
             Id = s.Id,

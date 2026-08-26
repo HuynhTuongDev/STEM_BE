@@ -17,17 +17,17 @@ public class SyllabusesController : ControllerBase
     private readonly GetSyllabusesListHandler _getSyllabusesListHandler;
     private readonly GetSyllabusDetailHandler _getSyllabusDetailHandler;
     private readonly GetSyllabusStructureHandler _getSyllabusStructureHandler;
-    private readonly CreateSyllabusHandler _createSyllabusHandler;
-    private readonly UpdateSyllabusHandler _updateSyllabusHandler;
-    private readonly ArchiveSyllabusHandler _archiveSyllabusHandler;
+    private readonly STEM.Application.UseCases.Curriculum.CreateSyllabusHandler _createSyllabusHandler;
+    private readonly STEM.Application.UseCases.Curriculum.UpdateSyllabusHandler _updateSyllabusHandler;
+    private readonly STEM.Application.UseCases.Curriculum.ArchiveSyllabusHandler _archiveSyllabusHandler;
 
     public SyllabusesController(
         GetSyllabusesListHandler getSyllabusesListHandler,
         GetSyllabusDetailHandler getSyllabusDetailHandler,
         GetSyllabusStructureHandler getSyllabusStructureHandler,
-        CreateSyllabusHandler createSyllabusHandler,
-        UpdateSyllabusHandler updateSyllabusHandler,
-        ArchiveSyllabusHandler archiveSyllabusHandler)
+        STEM.Application.UseCases.Curriculum.CreateSyllabusHandler createSyllabusHandler,
+        STEM.Application.UseCases.Curriculum.UpdateSyllabusHandler updateSyllabusHandler,
+        STEM.Application.UseCases.Curriculum.ArchiveSyllabusHandler archiveSyllabusHandler)
     {
         _getSyllabusesListHandler = getSyllabusesListHandler;
         _getSyllabusDetailHandler = getSyllabusDetailHandler;
@@ -104,18 +104,13 @@ public class SyllabusesController : ControllerBase
     [HttpPost]
     [Authorize(Policy = "MasterOnly")]
     public async Task<IActionResult> CreateSyllabus(
-        [FromBody] CreateSyllabusRequest request,
+        [FromBody] STEM.Application.Dtos.Curriculum.CreateSyllabusRequest request,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var currentUserId = GetCurrentUserId();
-            var resultId = await _createSyllabusHandler.Handle(request, currentUserId, cancellationToken);
+            var resultId = await _createSyllabusHandler.Handle(request, cancellationToken);
             return Ok(new { success = true, data = new { id = resultId } });
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
         }
         catch (ArgumentException ex)
         {
@@ -139,21 +134,16 @@ public class SyllabusesController : ControllerBase
     [Authorize(Policy = "MasterOnly")]
     public async Task<IActionResult> UpdateSyllabus(
         int id,
-        [FromBody] UpdateSyllabusRequest request,
+        [FromBody] STEM.Application.Dtos.Curriculum.UpdateSyllabusRequest request,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var currentUserId = GetCurrentUserId();
-            var success = await _updateSyllabusHandler.Handle(id, request, currentUserId, cancellationToken);
+            var success = await _updateSyllabusHandler.Handle(id, request, cancellationToken);
             if (!success)
                 return NotFound(new { success = false, message = "Syllabus not found." });
 
             return Ok(new { success = true, message = "Syllabus updated successfully." });
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
         }
         catch (ArgumentException ex)
         {
@@ -179,28 +169,19 @@ public class SyllabusesController : ControllerBase
     {
         try
         {
-            var currentUserId = GetCurrentUserId();
-            var success = await _archiveSyllabusHandler.Handle(id, currentUserId, cancellationToken);
+            var success = await _archiveSyllabusHandler.Handle(id, cancellationToken);
             if (!success)
                 return NotFound(new { success = false, message = "Syllabus not found." });
 
             return Ok(new { success = true, message = "Syllabus archived successfully." });
         }
-        catch (UnauthorizedAccessException)
+        catch (InvalidOperationException ex)
         {
-            return Forbid();
+            return BadRequest(new { success = false, message = ex.Message });
         }
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "An error occurred while archiving syllabus.", error = ex.Message });
         }
-    }
-
-    private int GetCurrentUserId()
-    {
-        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-        if (int.TryParse(userIdClaim, out int userId))
-            return userId;
-        throw new UnauthorizedAccessException("User is not authenticated properly.");
     }
 }

@@ -35,7 +35,10 @@ public class JwtProvider : IJwtProvider
             new Claim(JwtRegisteredClaimNames.Email, user.Email),
             new Claim(ClaimTypes.Name, displayName),
             new Claim("name", displayName),
-            new Claim(ClaimTypes.Role, user.Role?.Name ?? user.RoleId.ToString())
+            new Claim(ClaimTypes.Role, user.Role?.Name ?? user.RoleId.ToString()),
+            new Claim("RoleId", user.RoleId.ToString()),
+            new Claim("SchoolId", user.SchoolId?.ToString() ?? "0"),
+            new Claim("SchoolName", user.School?.Name ?? "")
         };
 
         var token = new JwtSecurityToken(

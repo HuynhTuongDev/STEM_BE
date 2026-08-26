@@ -93,7 +93,7 @@ public class AttendanceRepository : Repository<AttendanceRecord>, IAttendanceRep
         return (records, totalCount);
     }
 
-    public async Task AddRangeAsync(IEnumerable<AttendanceRecord> records, CancellationToken cancellationToken = default)
+    public new async Task AddRangeAsync(IEnumerable<AttendanceRecord> records, CancellationToken cancellationToken = default)
     {
         await _context.AttendanceRecords.AddRangeAsync(records, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);

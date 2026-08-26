@@ -3,6 +3,7 @@ namespace STEM.Application.Dtos.Schedules;
 public class CreateScheduleRequest
 {
     public int ClassId { get; set; }
+    public int? LessonId { get; set; } // Optional: gán lesson cho slot
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
 }
@@ -10,6 +11,7 @@ public class CreateScheduleRequest
 public class UpdateScheduleRequest
 {
     public int Id { get; set; }
+    public int? LessonId { get; set; } // Optional: cập nhật lesson cho slot
     public DateTime? StartTime { get; set; }
     public DateTime? EndTime { get; set; }
 }
@@ -20,6 +22,8 @@ public class ScheduleResponse
     public int ClassId { get; set; }
     public string ClassCode { get; set; } = string.Empty;
     public string ClassName { get; set; } = string.Empty;
+    public int? LessonId { get; set; }
+    public string? LessonTitle { get; set; }
     public DateTime StartTime { get; set; }
     public DateTime EndTime { get; set; }
     public DateTime CreatedAt { get; set; }
@@ -65,6 +69,8 @@ public class ScheduleCalendarResponse
     public string ClassCode { get; set; } = string.Empty;
     public string ClassName { get; set; } = string.Empty;
     public string Color { get; set; } = "#3b82f6";
+    public int? LessonId { get; set; }
+    public string? LessonTitle { get; set; }
 }
 
 public class GetScheduleRequest
@@ -105,6 +111,8 @@ public class SlotSchedule
 public class ScheduleItem
 {
     public int Id { get; set; }
+    public int? LessonId { get; set; }
+    public string? LessonTitle { get; set; }
     public string ClassCode { get; set; } = string.Empty;
     public string ClassName { get; set; } = string.Empty;
     public string StartTime { get; set; } = string.Empty;

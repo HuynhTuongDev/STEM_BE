@@ -8,6 +8,8 @@ using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Components;
 using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Curriculum;
+using STEM.Core.Entities.Payments;
 using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Simulations;
@@ -23,8 +25,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
 
     public DbSet<School> Schools => Set<School>();
 
-    public DbSet<GradeLevel> GradeLevels => Set<GradeLevel>();
-    public DbSet<Syllabus> Syllabuses => Set<Syllabus>();
     public DbSet<Course> Courses => Set<Course>();
     public DbSet<Module> Modules => Set<Module>();
     public DbSet<Lesson> Lessons => Set<Lesson>();
@@ -58,6 +58,19 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Rubric> Rubrics => Set<Rubric>();
 
     public DbSet<Notification> Notifications => Set<Notification>();
+
+    // Payment entities
+    public DbSet<PaymentPackage> PaymentPackages => Set<PaymentPackage>();
+    public DbSet<Payment> Payments => Set<Payment>();
+    public DbSet<TokenAccount> TokenAccounts => Set<TokenAccount>();
+    public DbSet<TokenTransaction> TokenTransactions => Set<TokenTransaction>();
+    public DbSet<TokenAllocation> TokenAllocations => Set<TokenAllocation>();
+
+    // Curriculum entities (Master Admin)
+    public DbSet<Syllabus> Syllabuses => Set<Syllabus>();
+    public DbSet<GradeLevel> GradeLevels => Set<GradeLevel>();
+
+    // System audit logs
     public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -114,13 +127,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(c => c.CourseId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Class -> Teacher
-        modelBuilder.Entity<Class>()
-            .HasOne(c => c.Teacher)
-            .WithMany()
-            .HasForeignKey(c => c.TeacherId)
-            .OnDelete(DeleteBehavior.Restrict);
-
         // Class -> GradeLevel
         modelBuilder.Entity<Class>()
             .HasOne(c => c.GradeLevel)
@@ -128,26 +134,19 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(c => c.GradeLevelId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Syllabus -> GradeLevel
-        modelBuilder.Entity<Syllabus>()
-            .HasOne(s => s.GradeLevel)
-            .WithMany(g => g.Syllabuses)
-            .HasForeignKey(s => s.GradeLevelId)
-            .OnDelete(DeleteBehavior.SetNull);
+        // Class -> Teacher
+        modelBuilder.Entity<Class>()
+            .HasOne(c => c.Teacher)
+            .WithMany()
+            .HasForeignKey(c => c.TeacherId)
+            .OnDelete(DeleteBehavior.Restrict);
 
-        // Course -> School
-        modelBuilder.Entity<Course>()
-            .HasOne(c => c.School)
-            .WithMany(s => s.Courses)
-            .HasForeignKey(c => c.SchoolId)
-            .OnDelete(DeleteBehavior.SetNull);
-
-        // Course -> Syllabus
+        // Course -> Syllabus (Master Admin curriculum)
         modelBuilder.Entity<Course>()
             .HasOne(c => c.Syllabus)
             .WithMany(s => s.Courses)
             .HasForeignKey(c => c.SyllabusId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Module -> Course
         modelBuilder.Entity<Module>()
@@ -163,23 +162,14 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(l => l.ModuleId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Lesson -> Lab
-        modelBuilder.Entity<Lesson>()
-            .HasOne(l => l.Lab)
-            .WithMany()
-            .HasForeignKey(l => l.LabId)
+        // === CURRICULUM (MASTER ADMIN) ===
+        
+        // Syllabus -> GradeLevel
+        modelBuilder.Entity<Syllabus>()
+            .HasOne(s => s.GradeLevel)
+            .WithMany(g => g.Syllabi)
+            .HasForeignKey(s => s.GradeLevelId)
             .OnDelete(DeleteBehavior.SetNull);
-
-        // Schedule -> Lesson
-        modelBuilder.Entity<Schedule>()
-            .HasOne(s => s.Lesson)
-            .WithMany()
-            .HasForeignKey(s => s.LessonId)
-            .OnDelete(DeleteBehavior.SetNull);
-
-        modelBuilder.Entity<Schedule>()
-            .HasIndex(s => s.LessonId)
-            .IsUnique();
 
         // SubmissionFile -> FileEntity
         modelBuilder.Entity<SubmissionFile>()
@@ -250,6 +240,20 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany(c => c.Schedules)
             .HasForeignKey(s => s.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Schedule -> Lesson (optional, one-to-one: mỗi lesson chỉ gán cho 1 slot)
+        modelBuilder.Entity<Schedule>()
+            .HasOne(s => s.Lesson)
+            .WithMany()
+            .HasForeignKey(s => s.LessonId)
+            .OnDelete(DeleteBehavior.Restrict); // Không xóa lesson khi xóa schedule
+
+        // Unique composite index: mỗi lesson chỉ được gán cho 1 slot TRONG MỘT LỚP
+        // (ClassId, LessonId) đảm bảo cùng lesson không trùng trong cùng lớp, nhưng khác lớp thì được
+        modelBuilder.Entity<Schedule>()
+            .HasIndex(s => new { s.ClassId, s.LessonId })
+            .IsUnique()
+            .HasFilter("LessonId IS NOT NULL"); // Chỉ apply cho các row có LessonId
 
         // Assignment -> Class
         modelBuilder.Entity<Assignment>()
@@ -532,8 +536,18 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<LabClassAssignment>()
+            .HasOne(assignment => assignment.Schedule)
+            .WithMany()
+            .HasForeignKey(assignment => assignment.ScheduleId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<LabClassAssignment>()
             .HasIndex(assignment => new { assignment.LabId, assignment.ClassId })
             .IsUnique();
+
+        modelBuilder.Entity<LabClassAssignment>()
+            .HasIndex(assignment => assignment.ScheduleId);
 
         // LabProgress
         modelBuilder.Entity<LabProgress>()
@@ -784,110 +798,175 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             new ComponentGlueRegistry { ComponentType = "wokwi-line-tracking-5ch", Label = "Line Tracking Sensor (5 kênh)", Supported = true, PinRequirementsJson = """{"pins":[{"name":"VCC","kind":"power"},{"name":"GND","kind":"ground"},{"name":"OUT1","kind":"digital_input"},{"name":"OUT2","kind":"digital_input"},{"name":"OUT3","kind":"digital_input"},{"name":"OUT4","kind":"digital_input"},{"name":"OUT5","kind":"digital_input"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime },
             new ComponentGlueRegistry { ComponentType = "wokwi-lcd2004", Label = "LCD 20x4 I2C", Supported = true, PinRequirementsJson = """{"pins":[{"name":"GND","kind":"ground"},{"name":"VCC","kind":"power"},{"name":"SDA","kind":"i2c"},{"name":"SCL","kind":"i2c"}]}""", CreatedAt = libSeedTime, UpdatedAt = libSeedTime });
 
-        // ComponentDefinition / ComponentSource — Multi-Provider Component
-        // Registry (acquisition side). Deliberately separate tables from
-        // ComponentGlueRegistry above (kept as-is, unrelated primary key
-        // shape — string canonical type vs Guid identity here).
-        modelBuilder.Entity<ComponentDefinition>()
-            .HasIndex(component => component.CanonicalKey)
-            .IsUnique();
+        // Payment Package configurations
+        modelBuilder.Entity<PaymentPackage>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Name).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Description).HasMaxLength(1000);
+            entity.Property(e => e.Price).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Currency).HasMaxLength(10).HasDefaultValue("VND");
+            entity.Property(e => e.Features).HasColumnType("jsonb");
+        });
 
-        modelBuilder.Entity<ComponentDefinition>()
-            .Property(component => component.CanonicalKey)
-            .HasMaxLength(120);
+        // Payment configurations
+        modelBuilder.Entity<Payment>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedOnAdd();
+            entity.Property(e => e.TransactionId).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Currency).HasMaxLength(10).HasDefaultValue("VND");
+            entity.Property(e => e.GatewayTransactionId).HasMaxLength(100);
+            entity.Property(e => e.PaymentLinkId).HasMaxLength(100);
+            entity.Property(e => e.CheckoutUrl).HasMaxLength(500);
+            entity.Property(e => e.Metadata).HasColumnType("jsonb");
+            entity.HasIndex(e => e.TransactionId).IsUnique();
+            entity.HasIndex(e => e.PaymentLinkId);
+            entity.HasIndex(e => e.SchoolId);
 
-        modelBuilder.Entity<ComponentDefinition>()
-            .Property(component => component.Name)
-            .HasMaxLength(200);
+            entity.HasOne(e => e.Package)
+                .WithMany(p => p.Payments)
+                .HasForeignKey(e => e.PackageId)
+                .OnDelete(DeleteBehavior.Restrict);
 
-        modelBuilder.Entity<ComponentDefinition>()
-            .Property(component => component.Status)
-            .HasMaxLength(30);
+            entity.HasOne(e => e.School)
+                .WithMany()
+                .HasForeignKey(e => e.SchoolId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
 
-        modelBuilder.Entity<ComponentDefinition>()
-            .Property(component => component.SimulationComponentType)
-            .HasMaxLength(80);
+        // Token Account configurations
+        modelBuilder.Entity<TokenAccount>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.HasIndex(e => e.SchoolId).IsUnique();
 
-        modelBuilder.Entity<ComponentDefinition>()
-            .Property(component => component.PinsJson)
-            .HasColumnType("jsonb");
+            entity.HasOne(e => e.School)
+                .WithMany()
+                .HasForeignKey(e => e.SchoolId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
 
-        modelBuilder.Entity<ComponentSource>()
-            .HasOne(source => source.Component)
-            .WithMany(component => component.Sources)
-            .HasForeignKey(source => source.ComponentId)
-            .OnDelete(DeleteBehavior.Cascade);
+        // Token Transaction configurations
+        modelBuilder.Entity<TokenTransaction>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Description).HasMaxLength(500);
+            entity.Property(e => e.ReferenceId).HasMaxLength(100);
+            entity.Property(e => e.Metadata).HasColumnType("jsonb");
+            entity.HasIndex(e => e.AccountId);
+            entity.HasIndex(e => e.PaymentId);
 
-        modelBuilder.Entity<ComponentSource>()
-            .HasIndex(source => new { source.Provider, source.ExternalId })
-            .IsUnique();
+            entity.HasOne(e => e.Payment)
+                .WithMany(p => p.Transactions)
+                .HasForeignKey(e => e.PaymentId)
+                .OnDelete(DeleteBehavior.SetNull);
 
-        modelBuilder.Entity<ComponentSource>()
-            .Property(source => source.Provider)
-            .HasMaxLength(60);
+            entity.HasOne(e => e.Account)
+                .WithMany(a => a.Transactions)
+                .HasForeignKey(e => e.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
 
-        modelBuilder.Entity<ComponentSource>()
-            .Property(source => source.ExternalId)
-            .HasMaxLength(300);
+        // Token Allocation configurations
+        modelBuilder.Entity<TokenAllocation>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Notes).HasMaxLength(500);
+            entity.Property(e => e.RevocationReason).HasMaxLength(500);
+            entity.HasIndex(e => new { e.AccountId, e.UserId });
+            entity.HasIndex(e => e.UserId);
 
-        modelBuilder.Entity<ComponentSource>()
-            .Property(source => source.LicenseStatus)
-            .HasMaxLength(30);
+            entity.HasOne(e => e.Account)
+                .WithMany(a => a.Allocations)
+                .HasForeignKey(e => e.AccountId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-        modelBuilder.Entity<ComponentSource>()
-            .Property(source => source.AssetsJson)
-            .HasColumnType("jsonb");
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
 
-        // SystemLog — append-only audit trail, no navigation to User (actor
-        // may be deleted/deactivated later; the log must still exist), so a
-        // plain FK-by-value rather than a modeled relationship/navigation.
-        modelBuilder.Entity<SystemLog>()
-            .HasKey(l => l.Id);
+            entity.HasOne(e => e.AllocatedByUser)
+                .WithMany()
+                .HasForeignKey(e => e.AllocatedByUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
 
-        modelBuilder.Entity<SystemLog>()
-            .Property(l => l.Level)
-            .HasMaxLength(20);
-
-        modelBuilder.Entity<SystemLog>()
-            .Property(l => l.Action)
-            .HasMaxLength(80);
-
-        modelBuilder.Entity<SystemLog>()
-            .Property(l => l.ActorRole)
-            .HasMaxLength(60);
-
-        modelBuilder.Entity<SystemLog>()
-            .Property(l => l.EntityType)
-            .HasMaxLength(60);
-
-        modelBuilder.Entity<SystemLog>()
-            .Property(l => l.EntityId)
-            .HasMaxLength(60);
-
-        modelBuilder.Entity<SystemLog>()
-            .Property(l => l.MetadataJson)
-            .HasColumnType("jsonb");
-
-        modelBuilder.Entity<SystemLog>()
-            .Property(l => l.IpAddress)
-            .HasMaxLength(64);
-
-        modelBuilder.Entity<SystemLog>()
-            .HasOne<User>()
-            .WithMany()
-            .HasForeignKey(l => l.ActorUserId)
-            .OnDelete(DeleteBehavior.SetNull);
-
-        modelBuilder.Entity<SystemLog>()
-            .HasIndex(l => l.CreatedAt);
-
-        modelBuilder.Entity<SystemLog>()
-            .HasIndex(l => l.Action);
-
-        modelBuilder.Entity<SystemLog>()
-            .HasIndex(l => l.ActorUserId);
-
-        modelBuilder.Entity<SystemLog>()
-            .HasIndex(l => new { l.EntityType, l.EntityId });
+        // Seed default payment packages - based on student limit
+        var now = DateTime.UtcNow;
+        var endOfMonth = new DateTime(now.Year, now.Month, DateTime.DaysInMonth(now.Year, now.Month), 23, 59, 59, DateTimeKind.Utc);
+        var packageSeedTime = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        modelBuilder.Entity<PaymentPackage>().HasData(
+            new PaymentPackage
+            {
+                Id = 1,
+                Name = "Starter",
+                Description = "Dành cho trường có quy mô nhỏ",
+                Price = 299000,
+                Currency = "VND",
+                TokenAmount = 4000000,
+                StudentLimit = 50,
+                IsActive = true,
+                IsFeatured = false,
+                Features = "[\"Hỗ trợ AI cơ bản\", \"Tối đa 50 học sinh\", \"Báo cáo hàng tháng\"]",
+                DisplayOrder = 1,
+                ExpiresAt = endOfMonth,
+                CreatedAt = packageSeedTime,
+                UpdatedAt = packageSeedTime
+            },
+            new PaymentPackage
+            {
+                Id = 2,
+                Name = "Professional",
+                Description = "Dành cho trường có quy mô trung bình",
+                Price = 499000,
+                Currency = "VND",
+                TokenAmount = 8000000,
+                StudentLimit = 200,
+                IsActive = true,
+                IsFeatured = true,
+                Features = "[\"Hỗ trợ AI nâng cao\", \"Tối đa 200 học sinh\", \"Báo cáo chi tiết\", \"Ưu tiên hỗ trợ kỹ thuật\"]",
+                DisplayOrder = 2,
+                ExpiresAt = endOfMonth,
+                CreatedAt = packageSeedTime,
+                UpdatedAt = packageSeedTime
+            },
+            new PaymentPackage
+            {
+                Id = 3,
+                Name = "Enterprise",
+                Description = "Dành cho trường có quy mô lớn",
+                Price = 899000,
+                Currency = "VND",
+                TokenAmount = 16000000,
+                StudentLimit = 500,
+                IsActive = true,
+                IsFeatured = false,
+                Features = "[\"Hỗ trợ AI toàn diện\", \"Tối đa 500 học sinh\", \"Báo cáo & phân tích nâng cao\", \"Hỗ trợ 24/7\"]",
+                DisplayOrder = 3,
+                ExpiresAt = endOfMonth,
+                CreatedAt = packageSeedTime,
+                UpdatedAt = packageSeedTime
+            },
+            new PaymentPackage
+            {
+                Id = 4,
+                Name = "Unlimited",
+                Description = "Không giới hạn học sinh",
+                Price = 1999000,
+                Currency = "VND",
+                TokenAmount = 50000000,
+                StudentLimit = 999999,
+                IsActive = true,
+                IsFeatured = false,
+                Features = "[\"Hỗ trợ AI toàn diện\", \"Không giới hạn học sinh\", \"Báo cáo & phân tích nâng cao\", \"Hỗ trợ 24/7\", \"API tùy chỉnh\"]",
+                DisplayOrder = 4,
+                ExpiresAt = endOfMonth,
+                CreatedAt = packageSeedTime,
+                UpdatedAt = packageSeedTime
+            }
+        );
     }
 }

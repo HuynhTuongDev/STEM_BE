@@ -4,6 +4,8 @@ using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 using FluentValidation;
 
+using static STEM.Core.Entities.Users.RoleNames;
+
 namespace STEM.Application.UseCases.Classes;
 
 public class CreateClassHandler
@@ -39,16 +41,14 @@ public class CreateClassHandler
         if (currentUser == null)
             throw new UnauthorizedAccessException("Người dùng không tồn tại.");
 
-        if (currentUser.Role?.Name != RoleNames.SchoolAdministrator && currentUser.Role?.Name != RoleNames.MasterAdministrator)
+        if (!RoleNames.IsSchoolAdmin(currentUser.Role?.Name) && !RoleNames.IsMasterAdmin(currentUser.Role?.Name))
             throw new UnauthorizedAccessException("Chỉ Quản trị viên trường mới được tạo lớp học.");
 
         var course = await _courseRepository.GetByIdAsync(request.CourseId, cancellationToken);
         if (course == null)
             throw new ArgumentException("Không tìm thấy khóa học.");
 
-        if (course.SchoolId != currentUser.SchoolId && currentUser.Role?.Name != RoleNames.MasterAdministrator)
-            throw new ArgumentException("Khóa học không thuộc trường của bạn.");
-
+        // Course giờ không còn SchoolId, SchoolAdmin vẫn tạo được lớp với course
         var teacher = await _userRepository.GetByIdAsync(request.TeacherId, cancellationToken);
         if (teacher == null)
             throw new ArgumentException("Không tìm thấy giáo viên.");
@@ -59,23 +59,25 @@ public class CreateClassHandler
         if (teacher.SchoolId != currentUser.SchoolId && currentUser.Role?.Name != RoleNames.MasterAdministrator)
             throw new ArgumentException("Giáo viên không thuộc trường của bạn.");
 
-        var schoolId = currentUser.SchoolId ?? course.SchoolId;
-        if (!schoolId.HasValue || schoolId.Value == 0)
+        if (!currentUser.SchoolId.HasValue || currentUser.SchoolId.Value == 0)
             throw new InvalidOperationException("Không xác định được trường cho lớp học.");
 
-        var schoolExists = await _schoolRepository.ExistsAsync(schoolId.Value, cancellationToken);
+        var schoolId = currentUser.SchoolId.Value;
+
+        var schoolExists = await _schoolRepository.ExistsAsync(schoolId, cancellationToken);
         if (!schoolExists)
             throw new InvalidOperationException($"Trường với ID {schoolId} không tồn tại.");
 
         var existingClass = (await _classRepository.GetClassesPagedAsync(1, 100, request.ClassCode, null, null, schoolId, cancellationToken)).Classes
-            .FirstOrDefault(c => c.ClassCode == request.ClassCode && c.SchoolId == schoolId.Value);
+            .FirstOrDefault(c => c.ClassCode == request.ClassCode && c.SchoolId == schoolId);
         if (existingClass != null)
             throw new ArgumentException("Mã lớp đã tồn tại trong trường của bạn.");
 
         var classEntity = new Class
         {
             ClassCode = request.ClassCode,
-            SchoolId = schoolId.Value,
+            SchoolId = schoolId,
+            GradeLevelId = request.GradeLevelId,
             CourseId = request.CourseId,
             TeacherId = request.TeacherId,
             StartDate = NormalizeToUtc(request.StartDate),

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using STEM.Application.Dtos.Classes;
 using STEM.Application.UseCases.Classes;
 using STEM.Core.Entities.Users;
+using STEM.Core.Repository;
 using System.Security.Claims;
 
 namespace STEM.Api.Controllers;
@@ -21,6 +22,9 @@ public class ClassesController : ControllerBase
     private readonly AssignStudentsToClassHandler _assignStudentsToClassHandler;
     private readonly RemoveStudentFromClassHandler _removeStudentFromClassHandler;
     private readonly GetAvailableStudentsHandler _getAvailableStudentsHandler;
+    private readonly GetStudentTemplateHandler _getStudentTemplateHandler;
+    private readonly ImportStudentsHandler _importStudentsHandler;
+    private readonly IUserRepository _userRepository;
 
     public ClassesController(
         GetClassesListHandler getClassesListHandler,
@@ -30,7 +34,10 @@ public class ClassesController : ControllerBase
         DeleteClassHandler deleteClassHandler,
         AssignStudentsToClassHandler assignStudentsToClassHandler,
         RemoveStudentFromClassHandler removeStudentFromClassHandler,
-        GetAvailableStudentsHandler getAvailableStudentsHandler)
+        GetAvailableStudentsHandler getAvailableStudentsHandler,
+        GetStudentTemplateHandler getStudentTemplateHandler,
+        ImportStudentsHandler importStudentsHandler,
+        IUserRepository userRepository)
     {
         _getClassesListHandler = getClassesListHandler;
         _getClassDetailHandler = getClassDetailHandler;
@@ -40,6 +47,9 @@ public class ClassesController : ControllerBase
         _assignStudentsToClassHandler = assignStudentsToClassHandler;
         _removeStudentFromClassHandler = removeStudentFromClassHandler;
         _getAvailableStudentsHandler = getAvailableStudentsHandler;
+        _getStudentTemplateHandler = getStudentTemplateHandler;
+        _importStudentsHandler = importStudentsHandler;
+        _userRepository = userRepository;
     }
 
     [HttpGet]
@@ -60,34 +70,6 @@ public class ClassesController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy danh sách lớp học.", error = ex.Message });
-        }
-    }
-
-    [HttpGet("my-classes/{id:int}")]
-    [Authorize(Roles = RoleNames.Teacher)]
-    public async Task<IActionResult> GetMyClasses(
-        int id,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var currentUserId = GetCurrentUserId();
-            if (id <= 0)
-                return BadRequest(new { success = false, message = "TeacherId is required." });
-
-            if (id != currentUserId)
-                return Forbid();
-
-            var result = await _getClassesListHandler.HandleTeacherClasses(id, currentUserId, cancellationToken);
-            return Ok(new { success = true, data = result });
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "ÄÃ£ xáº£y ra lá»—i khi láº¥y danh sÃ¡ch lá»›p há»c cá»§a giÃ¡o viÃªn.", error = ex.Message });
         }
     }
 
@@ -265,6 +247,33 @@ public class ClassesController : ControllerBase
     }
 
     /// <summary>
+    /// Remove student from class (POST method for FE compatibility)
+    /// </summary>
+    [HttpDelete("{classId}/students/remove")]
+    [Authorize(Policy = "SchoolAdminOnly")]
+    public async Task<IActionResult> RemoveStudentFromClassPost(int classId, [FromBody] RemoveStudentRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            await _removeStudentFromClassHandler.Handle(classId, request.StudentId, currentUserId, cancellationToken);
+            return Ok(new { success = true, message = "Đã xóa học sinh khỏi lớp thành công." });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi xóa học sinh khỏi lớp.", error = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Get available students for a class (students who can be added without schedule conflicts)
     /// </summary>
     [HttpGet("{classId}/available-students")]
@@ -328,10 +337,98 @@ public class ClassesController : ControllerBase
     }
 
     /// <summary>
-    /// Get my enrolled classes (for students)
+    /// Download student template Excel file
+    /// </summary>
+    [HttpGet("{classId}/students/template")]
+    [Authorize(Policy = "SchoolAdminOnly")]
+    public async Task<IActionResult> GetStudentTemplate(
+        int classId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var template = await _getStudentTemplateHandler.Handle(classId, currentUserId, cancellationToken);
+            return Ok(new { success = true, data = template });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy template.", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Import students from Excel file
+    /// </summary>
+    [HttpPost("{classId}/students/import")]
+    [Authorize(Policy = "SchoolAdminOnly")]
+    [RequestSizeLimit(10 * 1024 * 1024)]
+    public async Task<IActionResult> ImportStudents(
+        int classId,
+        IFormFile file,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { success = false, message = "Vui lòng chọn file Excel." });
+
+            if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) &&
+                !file.FileName.EndsWith(".xls", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { success = false, message = "File phải là định dạng Excel (.xlsx, .xls)." });
+
+            var currentUserId = GetCurrentUserId();
+            var studentIds = new List<int>();
+
+            using var stream = new MemoryStream();
+            await file.CopyToAsync(stream, cancellationToken);
+            stream.Position = 0;
+
+            using var workbook = new ClosedXML.Excel.XLWorkbook(stream);
+            var worksheet = workbook.Worksheet(1);
+            var rows = worksheet.RangeUsed()?.RowsUsed().Skip(1); // Skip header row
+
+            if (rows == null)
+                return BadRequest(new { success = false, message = "File Excel không có dữ liệu." });
+
+            foreach (var row in rows)
+            {
+                var idCell = row.Cell(1).Value;
+                if (!idCell.IsBlank && int.TryParse(idCell.ToString(), out int studentId))
+                {
+                    studentIds.Add(studentId);
+                }
+            }
+
+            if (!studentIds.Any())
+                return BadRequest(new { success = false, message = "Không tìm thấy ID học sinh nào trong file." });
+
+            var result = await _importStudentsHandler.Handle(classId, studentIds, currentUserId, cancellationToken);
+            return Ok(new { success = true, data = result });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi import học sinh.", error = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Get my classes (for students and teachers)
     /// </summary>
     [HttpGet("my-classes")]
-    [Authorize(Roles = RoleNames.Student)]
+    [Authorize(Policy = "StudentAndAbove")]
     public async Task<IActionResult> GetMyClasses(
         [FromQuery] int pageNumber = 1,
         [FromQuery] int pageSize = 10,
@@ -341,13 +438,23 @@ public class ClassesController : ControllerBase
         try
         {
             var currentUserId = GetCurrentUserId();
+            var roleName = GetCurrentUserRole();
             var request = new GetClassesRequest
             {
                 PageNumber = pageNumber,
                 PageSize = pageSize,
                 Status = status
             };
-            var result = await _getClassesListHandler.HandleStudentClasses(currentUserId, request, cancellationToken);
+
+            object result;
+            if (roleName == RoleNames.Teacher)
+            {
+                result = await _getClassesListHandler.HandleTeacherClasses(currentUserId, request, cancellationToken);
+            }
+            else
+            {
+                result = await _getClassesListHandler.HandleStudentClasses(currentUserId, request, cancellationToken);
+            }
             return Ok(new { success = true, data = result });
         }
         catch (UnauthorizedAccessException)
@@ -361,10 +468,10 @@ public class ClassesController : ControllerBase
     }
 
     /// <summary>
-    /// Get class detail for student
+    /// Get class detail for student or teacher
     /// </summary>
     [HttpGet("{classId}/detail")]
-    [Authorize(Roles = RoleNames.Student)]
+    [Authorize(Policy = "StudentAndAbove")]
     public async Task<IActionResult> GetClassDetailForStudent(
         int classId,
         CancellationToken cancellationToken = default)
@@ -372,7 +479,18 @@ public class ClassesController : ControllerBase
         try
         {
             var currentUserId = GetCurrentUserId();
-            var result = await _getClassDetailHandler.HandleForStudent(classId, currentUserId, cancellationToken);
+            var currentUser = await _userRepository.GetByIdAsync(currentUserId);
+            var roleName = currentUser?.Role?.Name;
+
+            object result;
+            if (roleName == RoleNames.Student)
+            {
+                result = await _getClassDetailHandler.HandleForStudent(classId, currentUserId, cancellationToken);
+            }
+            else
+            {
+                result = await _getClassDetailHandler.HandleForTeacher(classId, currentUserId, cancellationToken);
+            }
             return Ok(new { success = true, data = result });
         }
         catch (KeyNotFoundException ex)
@@ -420,11 +538,46 @@ public class ClassesController : ControllerBase
         }
     }
 
+    /// <summary>
+    /// Get modules and lessons for a class (for teachers and students)
+    /// </summary>
+    [HttpGet("{classId}/curriculum")]
+    [Authorize(Policy = "StudentAndAbove")]
+    public async Task<IActionResult> GetClassCurriculum(
+        int classId,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var result = await _getClassDetailHandler.HandleGetCurriculum(classId, currentUserId, cancellationToken);
+            return Ok(new { success = true, data = result });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy giáo trình.", error = ex.Message });
+        }
+    }
+
     private int GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (int.TryParse(userIdClaim, out int userId))
             return userId;
         throw new UnauthorizedAccessException("Người dùng chưa được xác thực.");
+    }
+
+    private string GetCurrentUserRole()
+    {
+        var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+        return roleClaim ?? string.Empty;
     }
 }

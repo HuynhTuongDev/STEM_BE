@@ -1,4 +1,5 @@
 using STEM.Application.Dtos.Syllabuses;
+using STEM.Core.Interfaces;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Syllabuses;

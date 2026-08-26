@@ -47,6 +47,30 @@ public class SubmissionResponse
     public decimal MaxScore { get; set; }
     public string AssignmentType { get; set; } = string.Empty;
     public List<RubricCriterionResponse>? RubricCriteria { get; set; }
+
+    // Quiz details for review
+    public GradingQuizDetail? QuizDetail { get; set; }
+}
+
+public class GradingQuizDetail
+{
+    public List<GradingQuizQuestion> Questions { get; set; } = new();
+    public int? TimeLimitSeconds { get; set; }
+    public bool ShuffleQuestions { get; set; }
+}
+
+public class GradingQuizQuestion
+{
+    public string Id { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public List<GradingQuizOption>? Options { get; set; }
+}
+
+public class GradingQuizOption
+{
+    public string Id { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
 }
 
 public class PagedSubmissionResponse

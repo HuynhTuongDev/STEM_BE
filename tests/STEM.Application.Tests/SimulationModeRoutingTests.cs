@@ -5,6 +5,7 @@ using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Simulation;
 using STEM.Application.UseCases.Simulation.Abstractions;
 using STEM.Application.UseCases.Simulation.Runtime;
+using STEM.Core.Entities.Common;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 using STEM.Infrastructure.Services;
@@ -63,8 +64,10 @@ public sealed class SimulationModeRoutingTests
 
     private sealed class ThrowingNotificationRepository : INotificationRepository
     {
-        public Task<IEnumerable<STEM.Core.Entities.Common.Notification>> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IEnumerable<STEM.Core.Entities.Common.Notification>> GetByUserIdAsync(string userId, int skip, int take, NotificationType? type = null, NotificationStatus? status = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task MarkAsReadAsync(int id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task MarkAllAsReadAsync(string userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<int> GetUnreadCountAsync(string userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<STEM.Core.Entities.Common.Notification?> GetByIdAsync(int id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IEnumerable<STEM.Core.Entities.Common.Notification>> GetAllAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IEnumerable<STEM.Core.Entities.Common.Notification>> FindAsync(System.Linq.Expressions.Expression<Func<STEM.Core.Entities.Common.Notification, bool>> predicate, CancellationToken cancellationToken = default) => throw new NotSupportedException();

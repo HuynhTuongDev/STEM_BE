@@ -1,5 +1,5 @@
 using STEM.Application.Dtos.Syllabuses;
-using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Curriculum;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Syllabuses;

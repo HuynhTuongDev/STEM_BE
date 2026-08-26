@@ -633,7 +633,7 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
                 UserId = assignment.Class.TeacherId,
                 Title = "Bài nộp mới",
                 Content = $"{studentName} đã nộp bài \"{assignment.Title}\".",
-                Type = "SubmissionReceived"
+                Type = NotificationType.SubmissionReceived
             }, cancellationToken);
             await _notificationRepository.SaveChangesAsync(cancellationToken);
         }

@@ -5,6 +5,7 @@ using STEM.Core.Entities.Schools;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 using System.Security.Claims;
+using System.Linq;
 
 namespace STEM.Api.Controllers;
 
@@ -46,18 +47,21 @@ public class DashboardController : ControllerBase
             var now = DateTime.UtcNow;
             var stats = new Dictionary<string, object>();
 
-            // Master Admin stats
-            stats["totalSchools"] = allSchools.Count(s => s.Status == SchoolStatus.Approved);
-            stats["pendingSchoolRequests"] = allSchools.Count(s => s.Status == SchoolStatus.Pending);
-            stats["lockedSchools"] = allSchools.Count(s => s.Status == SchoolStatus.Rejected);
-            stats["totalUsers"] = allUsers.Count();
-            stats["totalCourses"] = allCourses.Count();
-
-            // School Admin / Teacher / Student stats - filter by SchoolId
-            if (user?.SchoolId != null)
+            // Master Admin stats (user without SchoolId = Master Admin)
+            if (user?.SchoolId == null)
+            {
+                stats["totalSchools"] = allSchools.Count(s => s.Status == SchoolStatus.Approved);
+                stats["pendingSchoolRequests"] = allSchools.Count(s => s.Status == SchoolStatus.Pending);
+                stats["lockedSchools"] = allSchools.Count(s => s.Status == SchoolStatus.Rejected);
+                stats["totalUsers"] = allUsers.Count();
+                stats["totalCourses"] = allCourses.Count();
+            }
+            // School Admin stats (filter by SchoolId)
+            else
             {
                 var schoolId = user.SchoolId.Value;
 
+                stats["totalUsers"] = allUsers.Count(u => u.SchoolId == schoolId);
                 stats["totalTeachers"] = allUsers.Count(u => u.SchoolId == schoolId && u.RoleId == 3);
                 stats["totalStudents"] = allUsers.Count(u => u.SchoolId == schoolId && u.RoleId == 4);
 
@@ -79,10 +83,21 @@ public class DashboardController : ControllerBase
     {
         try
         {
+            var userId = GetCurrentUserId();
+            var user = await _userRepository.GetByIdAsync(userId, cancellationToken);
+
             var activities = new List<object>();
+            var isMasterAdmin = user?.SchoolId == null;
 
             var schools = (await _schoolRepository.GetAllAsync(cancellationToken)).ToList();
             var users = (await _userRepository.GetAllAsync(cancellationToken)).ToList();
+
+            // Filter schools for School Admin
+            if (!isMasterAdmin)
+            {
+                schools = schools.Where(s => s.Id == user!.SchoolId).ToList();
+                users = users.Where(u => u.SchoolId == user!.SchoolId).ToList();
+            }
 
             foreach (var school in schools.OrderByDescending(s => s.CreatedAt).Take(limit))
             {
@@ -97,16 +112,16 @@ public class DashboardController : ControllerBase
                 });
             }
 
-            foreach (var user in users.OrderByDescending(u => u.CreatedAt).Take(limit))
+            foreach (var userItem in users.OrderByDescending(u => u.CreatedAt).Take(limit))
             {
                 activities.Add(new
                 {
-                    id = $"user-{user.Id}",
+                    id = $"user-{userItem.Id}",
                     type = "user",
-                    title = $"Người dùng mới: {user.FullName}",
-                    description = user.Email,
-                    timestamp = user.CreatedAt.ToString("o"),
-                    user = new { name = user.FullName }
+                    title = $"Người dùng mới: {userItem.FullName}",
+                    description = userItem.Email,
+                    timestamp = userItem.CreatedAt.ToString("o"),
+                    user = new { name = userItem.FullName }
                 });
             }
 
@@ -144,8 +159,8 @@ public class DashboardController : ControllerBase
             if (user == null)
                 return Unauthorized(new { success = false, message = "Không tìm thấy người dùng" });
 
-            // DEBUG
-            Console.WriteLine($"[DEBUG] UserId: {userId}, SchoolId: {user.SchoolId}, Role: {user.Role?.Name}");
+            var isMasterAdmin = user.SchoolId == null;
+            var dbContext = HttpContext.RequestServices.GetService<StemDbContext>();
 
             var chartData = new Dictionary<string, object>();
 
@@ -153,7 +168,6 @@ public class DashboardController : ControllerBase
             if (user.SchoolId != null)
             {
                 var schoolId = user.SchoolId.Value;
-                var dbContext = HttpContext.RequestServices.GetService<StemDbContext>();
                 if (dbContext != null)
                 {
                     var filteredEnrollments = dbContext.Enrollments
@@ -204,16 +218,26 @@ public class DashboardController : ControllerBase
 
             chartData["schoolsGrowth"] = schoolsGrowth;
 
-            // User distribution by role
-            var allUsers = (await _userRepository.GetAllAsync(cancellationToken)).ToList();
-            var userDistribution = new[]
+            // User distribution by role using DbContext directly
+            if (dbContext != null)
             {
-                new { name = "Master Admin", value = allUsers.Count(u => u.RoleId == 1) },
-                new { name = "School Admin", value = allUsers.Count(u => u.RoleId == 2) },
-                new { name = "Giáo viên", value = allUsers.Count(u => u.RoleId == 3) },
-                new { name = "Học sinh", value = allUsers.Count(u => u.RoleId == 4) },
-            };
-            chartData["usersByRole"] = userDistribution;
+                var userDistributionQuery = dbContext.Users.AsQueryable();
+
+                // Filter by school for School Admin
+                if (!isMasterAdmin && user.SchoolId.HasValue)
+                {
+                    userDistributionQuery = userDistributionQuery.Where(u => u.SchoolId == user.SchoolId.Value);
+                }
+
+                var userDistribution = userDistributionQuery
+                    .Include(u => u.Role)
+                    .AsEnumerable()
+                    .GroupBy(u => u.Role?.Name ?? "Unknown")
+                    .Select(g => new { name = g.Key, value = g.Count() })
+                    .ToList();
+
+                chartData["usersByRole"] = userDistribution.ToArray();
+            }
 
             return Ok(new { success = true, data = chartData });
         }

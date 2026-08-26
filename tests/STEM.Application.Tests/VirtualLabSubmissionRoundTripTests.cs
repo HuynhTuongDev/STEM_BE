@@ -63,8 +63,10 @@ public sealed class VirtualLabSubmissionRoundTripTests
 
     private sealed class ThrowingNotificationRepository : INotificationRepository
     {
-        public Task<IEnumerable<Notification>> GetByUserIdAsync(int userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IEnumerable<Notification>> GetByUserIdAsync(string userId, int skip, int take, NotificationType? type = null, NotificationStatus? status = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task MarkAsReadAsync(int id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task MarkAllAsReadAsync(string userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<int> GetUnreadCountAsync(string userId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<Notification?> GetByIdAsync(int id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IEnumerable<Notification>> GetAllAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IEnumerable<Notification>> FindAsync(System.Linq.Expressions.Expression<Func<Notification, bool>> predicate, CancellationToken cancellationToken = default) => throw new NotSupportedException();

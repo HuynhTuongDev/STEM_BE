@@ -83,6 +83,29 @@ public class GetMySubmissionResponse
     public DateTime SubmittedAt { get; set; }
     public bool CanResubmit { get; set; }
     public int? RemainingAttempts { get; set; }
+    public string? AutoGradeResultJson { get; set; }
+    public MySubmissionQuizDetail? QuizDetail { get; set; }
+}
+
+public class MySubmissionQuizDetail
+{
+    public List<MySubmissionQuizQuestion> Questions { get; set; } = new();
+    public int? TimeLimitSeconds { get; set; }
+    public bool ShuffleQuestions { get; set; }
+}
+
+public class MySubmissionQuizQuestion
+{
+    public string Id { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public List<MySubmissionQuizOption>? Options { get; set; }
+}
+
+public class MySubmissionQuizOption
+{
+    public string Id { get; set; } = string.Empty;
+    public string Text { get; set; } = string.Empty;
 }
 
 public class GetMySubmissionsResponse
