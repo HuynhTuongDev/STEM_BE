@@ -22,6 +22,16 @@ public class SubmissionRepository : Repository<Submission>, ISubmissionRepositor
                 cancellationToken);
     }
 
+    public async Task<IEnumerable<Submission>> GetAllByAssignmentAndStudentAsync(
+        int assignmentId,
+        int studentId,
+        CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Where(submission => submission.AssignmentId == assignmentId && submission.StudentId == studentId)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task<int> GetAttemptCountAsync(
         int assignmentId,
         int studentId,
@@ -31,6 +41,19 @@ public class SubmissionRepository : Repository<Submission>, ISubmissionRepositor
             .CountAsync(
                 submission => submission.AssignmentId == assignmentId && submission.StudentId == studentId,
                 cancellationToken);
+    }
+
+    public async Task<decimal> GetBestScoreAsync(
+        int assignmentId,
+        int studentId,
+        CancellationToken cancellationToken = default)
+    {
+        var scores = await _dbSet
+            .Where(s => s.AssignmentId == assignmentId && s.StudentId == studentId)
+            .Select(s => s.FinalScore ?? 0m)
+            .ToListAsync(cancellationToken);
+
+        return scores.Count == 0 ? 0m : scores.Max();
     }
 
     public async Task<IEnumerable<Submission>> GetByAssignmentIdAsync(
@@ -73,34 +96,39 @@ public class SubmissionRepository : Repository<Submission>, ISubmissionRepositor
 
         if (assignmentId.HasValue)
         {
-            query = query.Where(submission => submission.AssignmentId == assignmentId.Value);
+            var assignmentIdValue = assignmentId.Value;
+            query = query.Where(submission => submission.AssignmentId == assignmentIdValue);
         }
 
         if (classId.HasValue)
         {
+            var classIdValue = classId.Value;
             query = query.Where(submission =>
-                submission.Assignment != null && submission.Assignment.ClassId == classId.Value);
+                submission.Assignment != null && submission.Assignment.ClassId == classIdValue);
         }
 
         if (studentId.HasValue)
         {
-            query = query.Where(submission => submission.StudentId == studentId.Value);
+            var studentIdValue = studentId.Value;
+            query = query.Where(submission => submission.StudentId == studentIdValue);
         }
 
         if (schoolId.HasValue)
         {
+            var schoolIdValue = schoolId.Value;
             query = query.Where(submission =>
                 submission.Assignment != null &&
                 submission.Assignment.Class != null &&
-                submission.Assignment.Class.SchoolId == schoolId.Value);
+                submission.Assignment.Class.SchoolId == schoolIdValue);
         }
 
         if (teacherId.HasValue)
         {
+            var teacherIdValue = teacherId.Value;
             query = query.Where(submission =>
                 submission.Assignment != null &&
                 submission.Assignment.Class != null &&
-                submission.Assignment.Class.TeacherId == teacherId.Value);
+                submission.Assignment.Class.TeacherId == teacherIdValue);
         }
 
         var totalCount = await query.CountAsync(cancellationToken);

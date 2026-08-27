@@ -12,12 +12,12 @@ public class ModuleRepository : Repository<Module>, IModuleRepository
     {
     }
 
-    public async Task<Module?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+    public new async Task<Module?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _dbSet.FindAsync(new object[] { id }, cancellationToken);
     }
 
-    public async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default)
+    public new async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _dbSet.AnyAsync(m => m.Id == id, cancellationToken);
     }
@@ -45,7 +45,7 @@ public class ModuleRepository : Repository<Module>, IModuleRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<Module> AddAsync(Module module, CancellationToken cancellationToken = default)
+    public new async Task<Module> AddAsync(Module module, CancellationToken cancellationToken = default)
     {
         await _dbSet.AddAsync(module, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);

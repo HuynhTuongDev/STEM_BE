@@ -32,7 +32,8 @@ public class AttendanceRepository : Repository<AttendanceRecord>, IAttendanceRep
 
         if (scheduleId.HasValue)
         {
-            query = query.Where(record => record.ScheduleId == scheduleId.Value);
+            var scheduleIdValue = scheduleId.Value;
+            query = query.Where(record => record.ScheduleId == scheduleIdValue);
         }
 
         return await query.ToListAsync(cancellationToken);
@@ -57,27 +58,32 @@ public class AttendanceRepository : Repository<AttendanceRecord>, IAttendanceRep
 
         if (classId.HasValue)
         {
-            query = query.Where(record => record.ClassId == classId.Value);
+            var classIdValue = classId.Value;
+            query = query.Where(record => record.ClassId == classIdValue);
         }
 
         if (studentId.HasValue)
         {
-            query = query.Where(record => record.StudentId == studentId.Value);
+            var studentIdValue = studentId.Value;
+            query = query.Where(record => record.StudentId == studentIdValue);
         }
 
         if (attendanceDate.HasValue)
         {
-            query = query.Where(record => record.AttendanceDate == attendanceDate.Value);
+            var attendanceDateValue = attendanceDate.Value;
+            query = query.Where(record => record.AttendanceDate == attendanceDateValue);
         }
 
         if (schoolId.HasValue)
         {
-            query = query.Where(record => record.Class != null && record.Class.SchoolId == schoolId.Value);
+            var schoolIdValue = schoolId.Value;
+            query = query.Where(record => record.Class != null && record.Class.SchoolId == schoolIdValue);
         }
 
         if (teacherId.HasValue)
         {
-            query = query.Where(record => record.Class != null && record.Class.TeacherId == teacherId.Value);
+            var teacherIdValue = teacherId.Value;
+            query = query.Where(record => record.Class != null && record.Class.TeacherId == teacherIdValue);
         }
 
         var totalCount = await query.CountAsync(cancellationToken);

@@ -628,8 +628,8 @@ public class LabService : ILabService
         if (roleName == RoleNames.SchoolAdministrator)
         {
             return user.SchoolId.HasValue &&
-                (lab.CreatedBy?.SchoolId == user.SchoolId.Value ||
-                 lab.ClassAssignments.Any(assignment => assignment.Class?.SchoolId == user.SchoolId.Value));
+                (lab.CreatedBy?.SchoolId == user.SchoolId!.Value ||
+                 lab.ClassAssignments.Any(assignment => assignment.Class?.SchoolId == user.SchoolId!.Value));
         }
 
         if (roleName == RoleNames.Teacher)
@@ -647,7 +647,7 @@ public class LabService : ILabService
 
         if (roleName == RoleNames.SchoolAdministrator)
         {
-            return user.SchoolId.HasValue && classEntity.SchoolId == user.SchoolId.Value;
+            return user.SchoolId.HasValue && classEntity.SchoolId == user.SchoolId!.Value;
         }
 
         if (roleName == RoleNames.Teacher)

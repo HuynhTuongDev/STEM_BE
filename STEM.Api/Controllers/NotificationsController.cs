@@ -19,26 +19,29 @@ public class NotificationsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetNotifications(int userId, CancellationToken cancellationToken = default)
+    public async Task<IActionResult> GetNotifications(int? userId, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
     {
         try
         {
             var currentUserRole = User.FindFirstValue(ClaimTypes.Role);
-            var currentUserId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var currentUserIdStr = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var currentUserId = int.Parse(currentUserIdStr ?? "0");
+            
+            Console.WriteLine($"[DEBUG] GetNotifications: token userId={currentUserIdStr}, role={currentUserRole}, param userId={userId}");
 
-            // Access Control: 
-            // 1. School Admin can access any user's notifications
-            // 2. Other users (e.g. Students) can only access their own notifications
-            if (currentUserRole != RoleNames.SchoolAdministrator && currentUserId != userId.ToString())
+            // Use current user's ID if userId not provided, or if not SchoolAdmin
+            var targetUserId = (userId ?? currentUserId);
+            if (currentUserRole != RoleNames.SchoolAdministrator && targetUserId != currentUserId)
             {
                 return Forbid();
             }
 
-            var notifications = await _notificationHandler.GetNotificationsByUserId(userId, cancellationToken);
+            var notifications = await _notificationHandler.GetNotificationsByUserId(targetUserId, page, pageSize, cancellationToken);
             return Ok(new { success = true, data = notifications });
         }
         catch (Exception ex)
         {
+            Console.WriteLine($"[ERROR] GetNotifications: {ex}");
             return StatusCode(500, new { success = false, message = ex.Message });
         }
     }
@@ -78,6 +81,22 @@ public class NotificationsController : ControllerBase
         catch (UnauthorizedAccessException)
         {
             return Forbid();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = ex.Message });
+        }
+    }
+
+    [HttpPatch("mark-all-as-read")]
+    public async Task<IActionResult> MarkAllAsRead(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "0");
+
+            await _notificationHandler.MarkAllAsRead(currentUserId, cancellationToken);
+            return Ok(new { success = true, message = "All notifications marked as read" });
         }
         catch (Exception ex)
         {

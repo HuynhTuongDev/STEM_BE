@@ -12,12 +12,12 @@ public class LessonRepository : Repository<Lesson>, ILessonRepository
     {
     }
 
-    public async Task<Lesson?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+    public new async Task<Lesson?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _dbSet.FindAsync(new object[] { id }, cancellationToken);
     }
 
-    public async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default)
+    public new async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _dbSet.AnyAsync(l => l.Id == id, cancellationToken);
     }
@@ -63,7 +63,7 @@ public class LessonRepository : Repository<Lesson>, ILessonRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<Lesson> AddAsync(Lesson lesson, CancellationToken cancellationToken = default)
+    public new async Task<Lesson> AddAsync(Lesson lesson, CancellationToken cancellationToken = default)
     {
         await _dbSet.AddAsync(lesson, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);

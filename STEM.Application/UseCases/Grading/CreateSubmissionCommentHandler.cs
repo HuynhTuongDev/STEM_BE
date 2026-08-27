@@ -99,7 +99,7 @@ public class CreateSubmissionCommentHandler
             UserId = recipientId,
             Title = "Bình luận mới",
             Content = $"{author.FullName} đã bình luận trên bài nộp \"{submission.Assignment!.Title}\".",
-            Type = NotificationType.SubmissionComment
+            Type = NotificationType.TeacherFeedback
         }, cancellationToken);
         await _notificationRepository.SaveChangesAsync(cancellationToken);
     }

@@ -66,7 +66,7 @@ public class RejectResubmitRequestHandler
             UserId = resubmitRequest.StudentId,
             Title = "Yêu cầu nộp lại bị từ chối",
             Content = $"Giáo viên đã từ chối yêu cầu nộp lại bài \"{resubmitRequest.Assignment?.Title}\".",
-            Type = NotificationType.ResubmitRequestReviewed
+            Type = NotificationType.ResubmissionRejected
         }, cancellationToken);
         await _notificationRepository.SaveChangesAsync(cancellationToken);
 

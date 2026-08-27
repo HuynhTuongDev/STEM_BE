@@ -40,6 +40,6 @@ public class GetAssignmentDetailHandler
         }
 
         var revealAnswers = currentUser.Role?.Name != RoleNames.Student;
-        return AssignmentResponseMapper.Map(assignment, revealAnswers);
+        return AssignmentResponseMapper.Map(assignment, classEntityFromParam: assignment.Class, revealAnswers: revealAnswers);
     }
 }

@@ -53,6 +53,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IWokwiService, WokwiService>();
         services.AddTransient<IEmailService, EmailService>();
+        services.AddScoped<INotificationService, NotificationService>();
 
         // Curriculum Repositories
         services.AddScoped<ISyllabusRepository, SyllabusRepository>();
@@ -75,6 +76,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFirmwareCacheService, FirmwareCacheService>();
         services.AddSingleton<IPrecompileTriggerService, PrecompileTriggerService>();
         services.AddHostedService<TokenExpirationBackgroundService>();
+        services.AddHostedService<NotificationBackgroundService>();
+        services.AddHostedService<ProgressAlertBackgroundService>();
+        services.AddHostedService<SchoolAdminNotificationBackgroundService>();
         services.AddScoped<IAiQuotaUsageStore, AiQuotaUsageStore>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 

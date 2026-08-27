@@ -10,6 +10,10 @@ public class TokenAccount : BaseEntity
     public int TokensUsed { get; set; }
     public DateTime? ExpiresAt { get; set; }
     public DateTime? LastPurchaseAt { get; set; }
+    
+    // Computed properties for background service compatibility
+    public int Balance => TokensRemaining;
+    public int TotalAllocated => TokensRemaining + TokensUsed;
 
     public School? School { get; set; }
     public ICollection<TokenTransaction> Transactions { get; set; } = new List<TokenTransaction>();

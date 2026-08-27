@@ -1,7 +1,9 @@
 using STEM.Application.Dtos.Classes;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
+using STEM.Application.Interfaces;
 using FluentValidation;
 
 using static STEM.Core.Entities.Users.RoleNames;
@@ -15,19 +17,22 @@ public class CreateClassHandler
     private readonly IUserRepository _userRepository;
     private readonly ISchoolRepository _schoolRepository;
     private readonly IValidator<CreateClassRequest> _validator;
+    private readonly INotificationService _notificationService;
 
     public CreateClassHandler(
         IClassRepository classRepository,
         ICourseRepository courseRepository,
         IUserRepository userRepository,
         ISchoolRepository schoolRepository,
-        IValidator<CreateClassRequest> validator)
+        IValidator<CreateClassRequest> validator,
+        INotificationService notificationService)
     {
         _classRepository = classRepository;
         _courseRepository = courseRepository;
         _userRepository = userRepository;
         _schoolRepository = schoolRepository;
         _validator = validator;
+        _notificationService = notificationService;
     }
 
     public async Task<int> Handle(
@@ -88,6 +93,12 @@ public class CreateClassHandler
 
         await _classRepository.AddAsync(classEntity, cancellationToken);
         await _classRepository.SaveChangesAsync(cancellationToken);
+
+        // N-16: Notify teacher about new class assigned
+        var title = $"Bạn được phân công dạy lớp mới {classEntity.ClassCode}";
+        var content = $"Bạn được phân công dạy lớp {classEntity.ClassCode} - {course.Title}. Thời gian: {classEntity.StartDate:dd/MM/yyyy} đến {classEntity.EndDate:dd/MM/yyyy}.";
+        
+        await _notificationService.SendAsync(request.TeacherId, title, content, NotificationType.NewClassAvailable, cancellationToken);
 
         return classEntity.Id;
     }

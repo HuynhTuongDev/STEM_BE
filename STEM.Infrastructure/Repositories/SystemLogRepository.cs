@@ -50,7 +50,10 @@ public class SystemLogRepository : ISystemLogRepository
             query = query.Where(l => l.Level == level);
 
         if (actorUserId.HasValue)
-            query = query.Where(l => l.ActorUserId == actorUserId.Value);
+        {
+            var actorUserIdValue = actorUserId.Value;
+            query = query.Where(l => l.ActorUserId == actorUserIdValue);
+        }
 
         if (!string.IsNullOrWhiteSpace(entityType))
             query = query.Where(l => l.EntityType == entityType);
@@ -59,10 +62,16 @@ public class SystemLogRepository : ISystemLogRepository
             query = query.Where(l => l.EntityId == entityId);
 
         if (from.HasValue)
-            query = query.Where(l => l.CreatedAt >= from.Value);
+        {
+            var fromValue = from.Value;
+            query = query.Where(l => l.CreatedAt >= fromValue);
+        }
 
         if (to.HasValue)
-            query = query.Where(l => l.CreatedAt <= to.Value);
+        {
+            var toValue = to.Value;
+            query = query.Where(l => l.CreatedAt <= toValue);
+        }
 
         var totalCount = await query.CountAsync(cancellationToken);
 

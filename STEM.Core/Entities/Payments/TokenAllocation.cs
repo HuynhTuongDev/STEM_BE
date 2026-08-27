@@ -14,7 +14,6 @@ public class TokenAllocation : BaseEntity
     public bool IsActive { get; set; } = true;
     public DateTime? RevokedAt { get; set; }
     public string? RevocationReason { get; set; }
-    public DateTime? UpdatedAt { get; set; }
 
     public TokenAccount? Account { get; set; }
     public User? User { get; set; }

@@ -54,7 +54,8 @@ public class ResubmitRequestRepository : Repository<ResubmitRequest>, IResubmitR
 
         if (assignmentId.HasValue)
         {
-            query = query.Where(request => request.AssignmentId == assignmentId.Value);
+            var assignmentIdValue = assignmentId.Value;
+            query = query.Where(request => request.AssignmentId == assignmentIdValue);
         }
 
         if (!string.IsNullOrWhiteSpace(status))
@@ -64,23 +65,26 @@ public class ResubmitRequestRepository : Repository<ResubmitRequest>, IResubmitR
 
         if (studentId.HasValue)
         {
-            query = query.Where(request => request.StudentId == studentId.Value);
+            var studentIdValue = studentId.Value;
+            query = query.Where(request => request.StudentId == studentIdValue);
         }
 
         if (teacherId.HasValue)
         {
+            var teacherIdValue = teacherId.Value;
             query = query.Where(request =>
                 request.Assignment != null &&
                 request.Assignment.Class != null &&
-                request.Assignment.Class.TeacherId == teacherId.Value);
+                request.Assignment.Class.TeacherId == teacherIdValue);
         }
 
         if (schoolId.HasValue)
         {
+            var schoolIdValue = schoolId.Value;
             query = query.Where(request =>
                 request.Assignment != null &&
                 request.Assignment.Class != null &&
-                request.Assignment.Class.SchoolId == schoolId.Value);
+                request.Assignment.Class.SchoolId == schoolIdValue);
         }
 
         return await query

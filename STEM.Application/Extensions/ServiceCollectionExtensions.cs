@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Auth;
 using STEM.Application.UseCases.LoginHistory;
 using STEM.Application.UseCases.Notifications;
@@ -24,6 +25,8 @@ using STEM.Application.UseCases.Curriculum;
 using FluentValidation;
 using STEM.Application.Validators;
 using STEM.Core.Repository;
+using STEM.Core.Entities.Classes;
+using STEM.Application.Dtos.Classes;
 using STEM.Application.Dtos.Auth;
 
 namespace STEM.Application.Extensions;
@@ -87,7 +90,13 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetAttendanceHandler>();
 
         // Assignment Handlers
-        services.AddScoped<CreateAssignmentHandler>();
+        services.AddScoped<CreateAssignmentHandler>(sp => new CreateAssignmentHandler(
+            sp.GetRequiredService<IAssignmentRepository>(),
+            sp.GetRequiredService<IClassRepository>(),
+            sp.GetRequiredService<IUserRepository>(),
+            sp.GetRequiredService<IEnrollmentRepository>(),
+            sp.GetRequiredService<INotificationService>()
+        ));
         services.AddScoped<GetAssignmentsHandler>();
         services.AddScoped<GetAssignmentDetailHandler>();
         services.AddScoped<UpdateAssignmentHandler>(sp => new UpdateAssignmentHandler(
@@ -97,9 +106,19 @@ public static class ServiceCollectionExtensions
             sp.GetRequiredService<IRubricRepository>()
         ));
         services.AddScoped<DeleteAssignmentHandler>();
-        services.AddScoped<SubmitQuizAssignmentHandler>();
+        services.AddScoped<SubmitQuizAssignmentHandler>(sp => new SubmitQuizAssignmentHandler(
+            sp.GetRequiredService<IAssignmentRepository>(),
+            sp.GetRequiredService<ISubmissionRepository>(),
+            sp.GetRequiredService<IUserRepository>(),
+            sp.GetRequiredService<INotificationService>()
+        ));
         services.AddScoped<SubmitReportAssignmentHandler>();
-        services.AddScoped<SubmitSimulationAssignmentHandler>();
+        services.AddScoped<SubmitSimulationAssignmentHandler>(sp => new SubmitSimulationAssignmentHandler(
+            sp.GetRequiredService<IAssignmentRepository>(),
+            sp.GetRequiredService<ISubmissionRepository>(),
+            sp.GetRequiredService<IUserRepository>(),
+            sp.GetRequiredService<INotificationService>()
+        ));
         services.AddScoped<GetMySubmissionHandler>();
         services.AddScoped<GetMySubmissionsHandler>();
 
@@ -158,11 +177,37 @@ public static class ServiceCollectionExtensions
         // Class Handlers
         services.AddScoped<GetClassesListHandler>();
         services.AddScoped<GetClassDetailHandler>();
-        services.AddScoped<CreateClassHandler>();
-        services.AddScoped<UpdateClassHandler>();
+        services.AddScoped<CreateClassHandler>(sp => new CreateClassHandler(
+            sp.GetRequiredService<IClassRepository>(),
+            sp.GetRequiredService<ICourseRepository>(),
+            sp.GetRequiredService<IUserRepository>(),
+            sp.GetRequiredService<ISchoolRepository>(),
+            sp.GetRequiredService<IValidator<CreateClassRequest>>(),
+            sp.GetRequiredService<INotificationService>()
+        ));
+        services.AddScoped<UpdateClassHandler>(sp => new UpdateClassHandler(
+            sp.GetRequiredService<IClassRepository>(),
+            sp.GetRequiredService<ICourseRepository>(),
+            sp.GetRequiredService<IUserRepository>(),
+            sp.GetRequiredService<IValidator<UpdateClassRequest>>(),
+            sp.GetRequiredService<INotificationService>()
+        ));
         services.AddScoped<DeleteClassHandler>();
-        services.AddScoped<AssignStudentsToClassHandler>();
-        services.AddScoped<RemoveStudentFromClassHandler>();
+        services.AddScoped<AssignStudentsToClassHandler>(sp => new AssignStudentsToClassHandler(
+            sp.GetRequiredService<IClassRepository>(),
+            sp.GetRequiredService<IUserRepository>(),
+            sp.GetRequiredService<IRepository<Enrollment>>(),
+            sp.GetRequiredService<IEnrollmentRepository>(),
+            sp.GetRequiredService<IAttendanceRepository>(),
+            sp.GetRequiredService<INotificationService>()
+        ));
+        services.AddScoped<RemoveStudentFromClassHandler>(sp => new RemoveStudentFromClassHandler(
+            sp.GetRequiredService<IClassRepository>(),
+            sp.GetRequiredService<IUserRepository>(),
+            sp.GetRequiredService<IRepository<Enrollment>>(),
+            sp.GetRequiredService<IAttendanceRepository>(),
+            sp.GetRequiredService<INotificationService>()
+        ));
         services.AddScoped<GetAvailableStudentsHandler>();
         services.AddScoped<GetStudentTemplateHandler>();
         services.AddScoped<ImportStudentsHandler>();

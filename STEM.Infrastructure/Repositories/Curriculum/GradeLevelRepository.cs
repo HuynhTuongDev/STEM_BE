@@ -10,17 +10,17 @@ public class GradeLevelRepository : Repository<GradeLevel>, IGradeLevelRepositor
     {
     }
 
-    public async Task<GradeLevel?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+    public new async Task<GradeLevel?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _dbSet.FindAsync(new object[] { id }, cancellationToken);
     }
 
-    public async Task<IEnumerable<GradeLevel>> GetAllAsync(CancellationToken cancellationToken = default)
+    public new async Task<IEnumerable<GradeLevel>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         return await _dbSet.ToListAsync(cancellationToken);
     }
 
-    public async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default)
+    public new async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _dbSet.AnyAsync(g => g.Id == id, cancellationToken);
     }
@@ -37,7 +37,7 @@ public class GradeLevelRepository : Repository<GradeLevel>, IGradeLevelRepositor
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<GradeLevel> AddAsync(GradeLevel gradeLevel, CancellationToken cancellationToken = default)
+    public new async Task<GradeLevel> AddAsync(GradeLevel gradeLevel, CancellationToken cancellationToken = default)
     {
         await _dbSet.AddAsync(gradeLevel, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
@@ -66,7 +66,10 @@ public class GradeLevelRepository : Repository<GradeLevel>, IGradeLevelRepositor
     {
         var query = _dbSet.Where(g => g.Code == code);
         if (excludeId.HasValue)
-            query = query.Where(g => g.Id != excludeId.Value);
+        {
+            var excludeIdValue = excludeId.Value;
+            query = query.Where(g => g.Id != excludeIdValue);
+        }
 
         return await query.AnyAsync(cancellationToken);
     }

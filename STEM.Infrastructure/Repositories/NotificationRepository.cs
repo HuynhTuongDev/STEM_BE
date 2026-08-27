@@ -27,10 +27,16 @@ public class NotificationRepository : Repository<Notification>, INotificationRep
         }
 
         if (type.HasValue)
-            query = query.Where(n => n.Type == type.Value);
+        {
+            var typeValue = type.Value;
+            query = query.Where(n => n.Type == typeValue);
+        }
 
         if (status.HasValue)
-            query = query.Where(n => status.Value == NotificationStatus.Read ? n.IsRead : !n.IsRead);
+        {
+            var statusValue = status.Value;
+            query = query.Where(n => statusValue == NotificationStatus.Read ? n.IsRead : !n.IsRead);
+        }
 
         return await query
             .OrderByDescending(n => n.CreatedAt)

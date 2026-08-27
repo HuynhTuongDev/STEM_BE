@@ -67,7 +67,7 @@ public class LabAiAssistHandler
         }
 
         // 2. Lấy TokenAccount của school
-        var account = await _accountRepository.GetBySchoolIdAsync(user.SchoolId.Value, cancellationToken);
+        var account = await _accountRepository.GetBySchoolIdAsync(user.SchoolId!.Value, cancellationToken);
         if (account == null)
         {
             return new LabAiAssistResponse

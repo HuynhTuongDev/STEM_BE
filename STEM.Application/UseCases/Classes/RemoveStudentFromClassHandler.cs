@@ -1,7 +1,9 @@
 using STEM.Application.Dtos.Classes;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
+using STEM.Application.Interfaces;
 
 using static STEM.Core.Entities.Users.RoleNames;
 
@@ -12,15 +14,21 @@ public class RemoveStudentFromClassHandler
     private readonly IClassRepository _classRepository;
     private readonly IUserRepository _userRepository;
     private readonly IRepository<Enrollment> _enrollmentRepository;
+    private readonly IAttendanceRepository _attendanceRepository;
+    private readonly INotificationService _notificationService;
 
     public RemoveStudentFromClassHandler(
         IClassRepository classRepository,
         IUserRepository userRepository,
-        IRepository<Enrollment> enrollmentRepository)
+        IRepository<Enrollment> enrollmentRepository,
+        IAttendanceRepository attendanceRepository,
+        INotificationService notificationService)
     {
         _classRepository = classRepository;
         _userRepository = userRepository;
         _enrollmentRepository = enrollmentRepository;
+        _attendanceRepository = attendanceRepository;
+        _notificationService = notificationService;
     }
 
     public async Task Handle(int classId, int studentId, int currentUserId, CancellationToken cancellationToken = default)
@@ -34,7 +42,7 @@ public class RemoveStudentFromClassHandler
         if (!IsMasterAdmin(roleName) && !IsSchoolAdmin(roleName) && !IsTeacher(roleName))
             throw new UnauthorizedAccessException("Chỉ quản trị viên và giáo viên mới được xóa học sinh khỏi lớp học.");
 
-        var classEntity = await _classRepository.GetByIdAsync(classId, cancellationToken);
+        var classEntity = await _classRepository.GetByIdWithDetailsAsync(classId, cancellationToken);
         if (classEntity == null)
             throw new KeyNotFoundException("Không tìm thấy lớp học.");
 
@@ -46,7 +54,23 @@ public class RemoveStudentFromClassHandler
         if (target == null)
             throw new KeyNotFoundException("Học sinh này chưa được thêm vào lớp học.");
 
+        // Delete attendance records for this student in this class
+        var attendanceRecords = await _attendanceRepository.FindAsync(
+            a => a.ClassId == classId && a.StudentId == studentId, cancellationToken);
+        foreach (var attendance in attendanceRecords)
+        {
+            _attendanceRepository.Delete(attendance);
+        }
+        await _attendanceRepository.SaveChangesAsync(cancellationToken);
+
         _enrollmentRepository.Delete(target);
         await _enrollmentRepository.SaveChangesAsync(cancellationToken);
+
+        // N-14: Notify student about class removal
+        var courseName = classEntity.Course?.Title ?? "khóa học";
+        var title = "Bạn đã bị xóa khỏi lớp";
+        var content = $"Bạn đã bị xóa khỏi lớp {classEntity.ClassCode} - {courseName}.";
+
+        await _notificationService.SendAsync(studentId, title, content, NotificationType.ClassRemoved, cancellationToken);
     }
 }

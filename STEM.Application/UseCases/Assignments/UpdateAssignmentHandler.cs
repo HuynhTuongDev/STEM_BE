@@ -95,7 +95,6 @@ public class UpdateAssignmentHandler
 
         // Reload assignment to get the new RubricId
         var updatedAssignment = await _assignmentRepository.GetByIdAsync(assignment.Id, cancellationToken);
-        updatedAssignment!.Class = targetClass;
-        return AssignmentResponseMapper.Map(updatedAssignment);
+        return AssignmentResponseMapper.Map(updatedAssignment!, targetClass);
     }
 }

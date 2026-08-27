@@ -10,7 +10,7 @@ public class SyllabusRepository : Repository<Syllabus>, ISyllabusRepository
     {
     }
 
-    public async Task<Syllabus?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
+    public new async Task<Syllabus?> GetByIdAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _dbSet.FindAsync(new object[] { id }, cancellationToken);
     }
@@ -25,7 +25,7 @@ public class SyllabusRepository : Repository<Syllabus>, ISyllabusRepository
             .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
     }
 
-    public async Task<IEnumerable<Syllabus>> GetAllAsync(CancellationToken cancellationToken = default)
+    public new async Task<IEnumerable<Syllabus>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         return await _dbSet
             .Include(s => s.GradeLevel)
@@ -82,7 +82,7 @@ public class SyllabusRepository : Repository<Syllabus>, ISyllabusRepository
             .ToListAsync(cancellationToken);
     }
 
-    public async Task<Syllabus> AddAsync(Syllabus syllabus, CancellationToken cancellationToken = default)
+    public new async Task<Syllabus> AddAsync(Syllabus syllabus, CancellationToken cancellationToken = default)
     {
         await _dbSet.AddAsync(syllabus, cancellationToken);
         await _context.SaveChangesAsync(cancellationToken);
@@ -107,7 +107,7 @@ public class SyllabusRepository : Repository<Syllabus>, ISyllabusRepository
         return true;
     }
 
-    public async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default)
+    public new async Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _dbSet.AnyAsync(s => s.Id == id, cancellationToken);
     }
@@ -182,7 +182,10 @@ public class SyllabusRepository : Repository<Syllabus>, ISyllabusRepository
         }
 
         if (gradeLevelId.HasValue)
-            query = query.Where(s => s.GradeLevelId == gradeLevelId.Value);
+        {
+            var gradeLevelIdValue = gradeLevelId.Value;
+            query = query.Where(s => s.GradeLevelId == gradeLevelIdValue);
+        }
 
         if (!string.IsNullOrWhiteSpace(status))
             query = query.Where(s => s.Status == status);
@@ -217,7 +220,7 @@ public class SyllabusRepository : Repository<Syllabus>, ISyllabusRepository
             .FirstOrDefaultAsync(s => s.Id == id, cancellationToken);
     }
 
-    public async Task SaveChangesAsync(CancellationToken cancellationToken = default)
+    public new async Task SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         await _context.SaveChangesAsync(cancellationToken);
     }

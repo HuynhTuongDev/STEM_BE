@@ -162,6 +162,13 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(l => l.ModuleId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // Lesson -> Lab
+        modelBuilder.Entity<Lesson>()
+            .HasOne(l => l.Lab)
+            .WithMany()
+            .HasForeignKey(l => l.LabId)
+            .OnDelete(DeleteBehavior.SetNull);
+
         // === CURRICULUM (MASTER ADMIN) ===
         
         // Syllabus -> GradeLevel
@@ -439,6 +446,28 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany()
             .HasForeignKey(n => n.UserId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // SystemLogs (append-only audit trail)
+        modelBuilder.Entity<SystemLog>(entity =>
+        {
+            entity.ToTable("SystemLogs");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Level).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Action).HasMaxLength(80).IsRequired();
+            entity.Property(e => e.ActorRole).HasMaxLength(60);
+            entity.Property(e => e.EntityType).HasMaxLength(60);
+            entity.Property(e => e.EntityId).HasMaxLength(60);
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+            entity.Property(e => e.IpAddress).HasMaxLength(64);
+            entity.HasIndex(e => e.Action);
+            entity.HasIndex(e => e.ActorUserId);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => new { e.EntityType, e.EntityId });
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(e => e.ActorUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
 
         // AiQuotaUsage
         modelBuilder.Entity<AiQuotaUsage>()
@@ -843,7 +872,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             entity.HasIndex(e => e.SchoolId).IsUnique();
 
             entity.HasOne(e => e.School)
-                .WithMany()
+                .WithMany(s => s.TokenAccounts)
                 .HasForeignKey(e => e.SchoolId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

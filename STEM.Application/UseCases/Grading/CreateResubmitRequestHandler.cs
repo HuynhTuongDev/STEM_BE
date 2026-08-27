@@ -100,7 +100,7 @@ public class CreateResubmitRequestHandler
                 UserId = assignment.Class.TeacherId,
                 Title = "Yêu cầu nộp lại",
                 Content = $"{currentUser.FullName} xin phép nộp lại bài \"{assignment.Title}\".",
-                Type = NotificationType.ResubmitRequest
+                Type = NotificationType.ResubmissionRequest
             }, cancellationToken);
             await _notificationRepository.SaveChangesAsync(cancellationToken);
         }

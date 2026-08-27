@@ -59,7 +59,7 @@ public class DashboardController : ControllerBase
             // School Admin stats (filter by SchoolId)
             else
             {
-                var schoolId = user.SchoolId.Value;
+                var schoolId = user.SchoolId!.Value;
 
                 stats["totalUsers"] = allUsers.Count(u => u.SchoolId == schoolId);
                 stats["totalTeachers"] = allUsers.Count(u => u.SchoolId == schoolId && u.RoleId == 3);
@@ -167,7 +167,7 @@ public class DashboardController : ControllerBase
             // School Admin: Enrollment trend by month (last 6 months from current month)
             if (user.SchoolId != null)
             {
-                var schoolId = user.SchoolId.Value;
+                var schoolId = user.SchoolId!.Value;
                 if (dbContext != null)
                 {
                     var filteredEnrollments = dbContext.Enrollments
@@ -226,7 +226,7 @@ public class DashboardController : ControllerBase
                 // Filter by school for School Admin
                 if (!isMasterAdmin && user.SchoolId.HasValue)
                 {
-                    userDistributionQuery = userDistributionQuery.Where(u => u.SchoolId == user.SchoolId.Value);
+                    userDistributionQuery = userDistributionQuery.Where(u => u.SchoolId == user.SchoolId!.Value);
                 }
 
                 var userDistribution = userDistributionQuery

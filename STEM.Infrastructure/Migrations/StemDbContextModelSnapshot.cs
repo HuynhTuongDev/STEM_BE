@@ -50,7 +50,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("AssignmentId")
                         .IsUnique();
 
-                    b.ToTable("Rubrics");
+                    b.ToTable("Rubrics", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Classes.Announcement", b =>
@@ -82,7 +82,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("ClassId");
 
-                    b.ToTable("Announcements");
+                    b.ToTable("Announcements", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Classes.AttendanceRecord", b =>
@@ -134,7 +134,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("ClassId", "StudentId", "AttendanceDate")
                         .IsUnique();
 
-                    b.ToTable("AttendanceRecords");
+                    b.ToTable("AttendanceRecords", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Classes.Class", b =>
@@ -183,7 +183,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("TeacherId");
 
-                    b.ToTable("Classes");
+                    b.ToTable("Classes", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Classes.Enrollment", b =>
@@ -215,7 +215,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("StudentId");
 
-                    b.ToTable("Enrollments");
+                    b.ToTable("Enrollments", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Classes.Schedule", b =>
@@ -252,7 +252,7 @@ namespace STEM.Infrastructure.Migrations
                         .IsUnique()
                         .HasFilter("LessonId IS NOT NULL");
 
-                    b.ToTable("Schedules");
+                    b.ToTable("Schedules", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Common.Notification", b =>
@@ -290,170 +290,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("Notifications");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Common.SystemLog", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<string>("ActorRole")
-                        .HasMaxLength(60)
-                        .HasColumnType("character varying(60)");
-
-                    b.Property<int?>("ActorUserId")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("EntityId")
-                        .HasMaxLength(60)
-                        .HasColumnType("character varying(60)");
-
-                    b.Property<string>("EntityType")
-                        .HasMaxLength(60)
-                        .HasColumnType("character varying(60)");
-
-                    b.Property<string>("IpAddress")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Level")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)");
-
-                    b.Property<string>("MetadataJson")
-                        .HasColumnType("jsonb");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Action");
-
-                    b.HasIndex("ActorUserId");
-
-                    b.HasIndex("CreatedAt");
-
-                    b.HasIndex("EntityType", "EntityId");
-
-                    b.ToTable("SystemLogs");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Components.ComponentDefinition", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CanonicalKey")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<string>("Category")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)");
-
-                    b.Property<string>("PinsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("SimulationComponentType")
-                        .HasMaxLength(80)
-                        .HasColumnType("character varying(80)");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("CanonicalKey")
-                        .IsUnique();
-
-                    b.ToTable("ComponentDefinitions");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Components.ComponentSource", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("AssetsJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("Checksum")
-                        .HasColumnType("text");
-
-                    b.Property<Guid>("ComponentId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ExternalId")
-                        .IsRequired()
-                        .HasMaxLength(300)
-                        .HasColumnType("character varying(300)");
-
-                    b.Property<string>("ExternalVersion")
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("ImportedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<DateTime?>("LastSyncedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("License")
-                        .HasColumnType("text");
-
-                    b.Property<string>("LicenseStatus")
-                        .IsRequired()
-                        .HasMaxLength(30)
-                        .HasColumnType("character varying(30)");
-
-                    b.Property<string>("Provider")
-                        .IsRequired()
-                        .HasMaxLength(60)
-                        .HasColumnType("character varying(60)");
-
-                    b.Property<string>("SourceUrl")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("ComponentId");
-
-                    b.HasIndex("Provider", "ExternalId")
-                        .IsUnique();
-
-                    b.ToTable("ComponentSources");
+                    b.ToTable("Notifications", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Courses.Course", b =>
@@ -510,7 +347,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("SyllabusId");
 
-                    b.ToTable("Courses");
+                    b.ToTable("Courses", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Courses.Lesson", b =>
@@ -570,7 +407,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("ModuleId");
 
-                    b.ToTable("Lessons");
+                    b.ToTable("Lessons", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Courses.Module", b =>
@@ -616,7 +453,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("CourseId");
 
-                    b.ToTable("Modules");
+                    b.ToTable("Modules", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Curriculum.GradeLevel", b =>
@@ -653,7 +490,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("GradeLevels");
+                    b.ToTable("GradeLevels", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Curriculum.Syllabus", b =>
@@ -708,7 +545,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("GradeLevelId");
 
-                    b.ToTable("Syllabuses");
+                    b.ToTable("Syllabuses", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Payments.Payment", b =>
@@ -799,7 +636,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("TransactionId")
                         .IsUnique();
 
-                    b.ToTable("Payments");
+                    b.ToTable("Payments", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Payments.PaymentPackage", b =>
@@ -861,7 +698,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("PaymentPackages");
+                    b.ToTable("PaymentPackages", (string)null);
 
                     b.HasData(
                         new
@@ -975,7 +812,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("SchoolId")
                         .IsUnique();
 
-                    b.ToTable("TokenAccounts");
+                    b.ToTable("TokenAccounts", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Payments.TokenAllocation", b =>
@@ -1032,7 +869,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("AccountId", "UserId");
 
-                    b.ToTable("TokenAllocations");
+                    b.ToTable("TokenAllocations", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Payments.TokenTransaction", b =>
@@ -1081,7 +918,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("PaymentId");
 
-                    b.ToTable("TokenTransactions");
+                    b.ToTable("TokenTransactions", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.Assignment", b =>
@@ -1141,7 +978,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("ClassId");
 
-                    b.ToTable("Assignments");
+                    b.ToTable("Assignments", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.AssignmentQuizDetail", b =>
@@ -1176,7 +1013,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("AssignmentId")
                         .IsUnique();
 
-                    b.ToTable("AssignmentQuizDetails");
+                    b.ToTable("AssignmentQuizDetails", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.AssignmentReportDetail", b =>
@@ -1216,7 +1053,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("AssignmentId")
                         .IsUnique();
 
-                    b.ToTable("AssignmentReportDetails");
+                    b.ToTable("AssignmentReportDetails", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.AssignmentSimulationDetail", b =>
@@ -1272,7 +1109,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("AssignmentId")
                         .IsUnique();
 
-                    b.ToTable("AssignmentSimulationDetails");
+                    b.ToTable("AssignmentSimulationDetails", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.Metric", b =>
@@ -1300,7 +1137,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("AssignmentId");
 
-                    b.ToTable("Metrics");
+                    b.ToTable("Metrics", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.ResubmitRequest", b =>
@@ -1355,7 +1192,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("StudentId");
 
-                    b.ToTable("ResubmitRequests");
+                    b.ToTable("ResubmitRequests", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.Submission", b =>
@@ -1427,7 +1264,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("StudentId");
 
-                    b.ToTable("Submissions");
+                    b.ToTable("Submissions", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.SubmissionComment", b =>
@@ -1461,7 +1298,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("SubmissionId");
 
-                    b.ToTable("SubmissionComments");
+                    b.ToTable("SubmissionComments", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Projects.SubmissionFile", b =>
@@ -1549,7 +1386,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Schools");
+                    b.ToTable("Schools", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.AiQuotaUsage", b =>
@@ -1578,7 +1415,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("UserId", "UsageDate")
                         .IsUnique();
 
-                    b.ToTable("AiQuotaUsages");
+                    b.ToTable("AiQuotaUsages", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.ComponentGlueRegistry", b =>
@@ -1607,7 +1444,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasKey("ComponentType");
 
-                    b.ToTable("ComponentGlueRegistry");
+                    b.ToTable("ComponentGlueRegistry", (string)null);
 
                     b.HasData(
                         new
@@ -2305,7 +2142,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("Status");
 
-                    b.ToTable("Labs");
+                    b.ToTable("Labs", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.LabClassAssignment", b =>
@@ -2335,7 +2172,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("LabId", "ClassId")
                         .IsUnique();
 
-                    b.ToTable("LabClassAssignments");
+                    b.ToTable("LabClassAssignments", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.LabProgress", b =>
@@ -2372,7 +2209,7 @@ namespace STEM.Infrastructure.Migrations
                     b.HasIndex("LabId", "StudentId")
                         .IsUnique();
 
-                    b.ToTable("LabProgresses");
+                    b.ToTable("LabProgresses", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Simulations.VirtualLabProject", b =>
@@ -2430,7 +2267,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("LabId");
 
-                    b.ToTable("VirtualLabProjects");
+                    b.ToTable("VirtualLabProjects", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Users.LoginHistory", b =>
@@ -2462,7 +2299,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("LoginHistories");
+                    b.ToTable("LoginHistories", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Users.RefreshToken", b =>
@@ -2493,7 +2330,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("RefreshTokens");
+                    b.ToTable("RefreshTokens", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Users.Role", b =>
@@ -2516,7 +2353,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Roles");
+                    b.ToTable("Roles", (string)null);
 
                     b.HasData(
                         new
@@ -2619,7 +2456,7 @@ namespace STEM.Infrastructure.Migrations
 
                     b.HasIndex("SchoolId");
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Assessments.Rubric", b =>
@@ -2759,25 +2596,6 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("STEM.Core.Entities.Common.SystemLog", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Users.User", null)
-                        .WithMany()
-                        .HasForeignKey("ActorUserId")
-                        .OnDelete(DeleteBehavior.SetNull);
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Components.ComponentSource", b =>
-                {
-                    b.HasOne("STEM.Core.Entities.Components.ComponentDefinition", "Component")
-                        .WithMany("Sources")
-                        .HasForeignKey("ComponentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Component");
-                });
-
             modelBuilder.Entity("STEM.Core.Entities.Courses.Course", b =>
                 {
                     b.HasOne("STEM.Core.Entities.Schools.School", null)
@@ -2799,8 +2617,6 @@ namespace STEM.Infrastructure.Migrations
                         .HasForeignKey("ModuleId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Lab");
 
                     b.Navigation("Module");
                 });
@@ -3153,11 +2969,6 @@ namespace STEM.Infrastructure.Migrations
                     b.Navigation("Enrollments");
 
                     b.Navigation("Schedules");
-                });
-
-            modelBuilder.Entity("STEM.Core.Entities.Components.ComponentDefinition", b =>
-                {
-                    b.Navigation("Sources");
                 });
 
             modelBuilder.Entity("STEM.Core.Entities.Courses.Course", b =>

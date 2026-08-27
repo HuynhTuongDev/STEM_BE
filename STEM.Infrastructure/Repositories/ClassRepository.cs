@@ -187,13 +187,22 @@ public class ClassRepository : Repository<Class>, IClassRepository
             .AsQueryable();
 
         if (schoolId.HasValue)
-            query = query.Where(c => c.SchoolId == schoolId.Value);
+        {
+            var schoolIdValue = schoolId.Value;
+            query = query.Where(c => c.SchoolId == schoolIdValue);
+        }
 
         if (courseId.HasValue)
-            query = query.Where(c => c.CourseId == courseId.Value);
+        {
+            var courseIdValue = courseId.Value;
+            query = query.Where(c => c.CourseId == courseIdValue);
+        }
 
         if (teacherId.HasValue)
-            query = query.Where(c => c.TeacherId == teacherId.Value);
+        {
+            var teacherIdValue = teacherId.Value;
+            query = query.Where(c => c.TeacherId == teacherIdValue);
+        }
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
@@ -241,10 +250,16 @@ public class ClassRepository : Repository<Class>, IClassRepository
             .AsQueryable();
 
         if (fromDateUtc.HasValue)
-            query = query.Where(s => s.StartTime >= fromDateUtc.Value);
+        {
+            var fromDateValue = fromDateUtc.Value;
+            query = query.Where(s => s.StartTime >= fromDateValue);
+        }
 
         if (toDateUtc.HasValue)
-            query = query.Where(s => s.EndTime <= toDateUtc.Value);
+        {
+            var toDateValue = toDateUtc.Value;
+            query = query.Where(s => s.EndTime <= toDateValue);
+        }
 
         return await query
             .OrderBy(s => s.StartTime)

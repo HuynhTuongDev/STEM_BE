@@ -1,4 +1,6 @@
 using STEM.Application.Dtos.Classes;
+using STEM.Application.Interfaces;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 using FluentValidation;
@@ -13,17 +15,20 @@ public class UpdateClassHandler
     private readonly ICourseRepository _courseRepository;
     private readonly IUserRepository _userRepository;
     private readonly IValidator<UpdateClassRequest> _validator;
+    private readonly INotificationService _notificationService;
 
     public UpdateClassHandler(
         IClassRepository classRepository,
         ICourseRepository courseRepository,
         IUserRepository userRepository,
-        IValidator<UpdateClassRequest> validator)
+        IValidator<UpdateClassRequest> validator,
+        INotificationService notificationService)
     {
         _classRepository = classRepository;
         _courseRepository = courseRepository;
         _userRepository = userRepository;
         _validator = validator;
+        _notificationService = notificationService;
     }
 
     public async Task<bool> Handle(
@@ -81,6 +86,12 @@ public class UpdateClassHandler
 
         _classRepository.Update(classEntity);
         await _classRepository.SaveChangesAsync(cancellationToken);
+
+        // N-16: Notify teacher when assigned to class (or reassigned)
+        var title = $"Bạn được phân công dạy lớp mới {classEntity.ClassCode}";
+        var content = $"Bạn được phân công dạy lớp {classEntity.ClassCode} - {course.Title}. Thời gian: {classEntity.StartDate:dd/MM/yyyy} đến {classEntity.EndDate:dd/MM/yyyy}.";
+
+        await _notificationService.SendAsync(request.TeacherId, title, content, NotificationType.NewClassAvailable, cancellationToken);
 
         return true;
     }

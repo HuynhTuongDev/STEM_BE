@@ -61,17 +61,20 @@ public class UserRepository : Repository<User>, IUserRepository
 
         if (roleId.HasValue)
         {
-            query = query.Where(u => u.RoleId == roleId.Value);
+            var roleIdValue = roleId.Value;
+            query = query.Where(u => u.RoleId == roleIdValue);
         }
 
         if (isActive.HasValue)
         {
-            query = query.Where(u => u.IsActive == isActive.Value);
+            var isActiveValue = isActive.Value;
+            query = query.Where(u => u.IsActive == isActiveValue);
         }
 
         if (schoolId.HasValue)
         {
-            query = query.Where(u => u.SchoolId == schoolId.Value);
+            var schoolIdValue = schoolId.Value;
+            query = query.Where(u => u.SchoolId == schoolIdValue);
         }
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
