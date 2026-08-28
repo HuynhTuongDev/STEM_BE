@@ -84,6 +84,7 @@ public class PaymentsController : ControllerBase
     private bool IsMasterAdmin() => GetCurrentRoleId() == 1;
     private bool IsSchoolAdmin() => GetCurrentRoleId() == 2;
 
+    [AllowAnonymous]
     [HttpGet("packages")]
     public async Task<IActionResult> GetPackages(CancellationToken cancellationToken = default)
     {
