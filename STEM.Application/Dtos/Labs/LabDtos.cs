@@ -102,6 +102,10 @@ public class LabClassResponse
     public string CourseTitle { get; set; } = string.Empty;
     public int SchoolId { get; set; }
     public int TeacherId { get; set; }
+    // Buổi dạy (Schedule) cụ thể mà lab được gán cho lớp này, nếu có — cho phép
+    // FE suy ra "lab này đang gán cho bài học nào" qua Schedule.LessonId mà
+    // không cần lưu lessonId trùng lặp trên chính Lab.
+    public int? ScheduleId { get; set; }
 }
 
 public class LabProgressResponse

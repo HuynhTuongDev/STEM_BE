@@ -1078,6 +1078,22 @@ public class LabService : ILabService
             });
         }
 
+        // Mỗi lab chỉ được gán cho tối đa 1 buổi dạy (bài học) tại một thời
+        // điểm. Nếu request này gán 1 scheduleId mới, gỡ mọi liên kết buổi
+        // dạy KHÁC của chính lab này — kể cả ở những lớp không nằm trong
+        // classIds của request — để lab không bao giờ vô tình phục vụ 2 bài
+        // học cùng lúc (VD: lab đã gán cho Bài 1 rồi bị gán tiếp cho Bài 3).
+        if (scheduleId.HasValue)
+        {
+            foreach (var assignment in lab.ClassAssignments)
+            {
+                if (assignment.ScheduleId.HasValue && assignment.ScheduleId != scheduleId.Value)
+                {
+                    assignment.ScheduleId = null;
+                }
+            }
+        }
+
         // Update existing assignments with new scheduleId
         foreach (var assignment in lab.ClassAssignments.Where(a => targetIds.Contains(a.ClassId)))
         {
@@ -1097,7 +1113,8 @@ public class LabService : ILabService
                 CourseId = assignment.Class.CourseId,
                 CourseTitle = assignment.Class.Course?.Title ?? string.Empty,
                 SchoolId = assignment.Class.SchoolId,
-                TeacherId = assignment.Class.TeacherId
+                TeacherId = assignment.Class.TeacherId,
+                ScheduleId = assignment.ScheduleId
             })
             .ToList();
 
