@@ -884,7 +884,7 @@ public class LabService : ILabService
             thumbnailUrl?.Trim() ?? string.Empty,
             normalizedSimulationMode,
             normalizedBoardType,
-            string.IsNullOrWhiteSpace(starterCode) ? null : starterCode,
+            starterCode?.Trim(),
             circuitConfigJson,
             allowedComponentTypesJson,
             normalizedAllowedComponents,
