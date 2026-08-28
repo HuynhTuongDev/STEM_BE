@@ -1397,4 +1397,123 @@ public sealed class RobotDeliveryQemuIntegrationTests
         Assert.Contains(store.AppendedEvents, e => IsServoPartState(e, 180));
         Assert.Contains(store.AppendedEvents, e => IsServoPartState(e, 0));
     }
+
+    // ==================== CLOSE REMAINING QEMU RUNTIME STABILITY GAPS ====================
+    // Regression lock for the misclassification bug fixed in QemuEsp32Runner
+    // (FIX FIRST-RUN RANDOM STOP task): before that fix, a QEMU process that
+    // exited on its own — for ANY reason, NOT via our own timeoutCts/Stop
+    // cancellation — after already emitting a real event was reported to the
+    // student as finalStatus=Running/reason="completed" (FE showed the
+    // misleading "Mô phỏng đã dừng." as if the student had clicked Stop).
+    // This test forces a REAL, externally-triggered unexpected exit (docker
+    // kill on the actual running container — no mock, no guessed exit code)
+    // AFTER a real digitalWrite event has already reached the event store,
+    // which is exactly the code path that used to be silently mislabeled, and
+    // asserts the OBSERVABLE final status the student actually sees is
+    // Error, never Running/Stopped. Uses real Docker — same
+    // skip-if-unavailable convention as the rest of this file.
+    [Fact]
+    public async Task UnexpectedQemuExit_ShouldReturnError()
+    {
+        if (!IsDockerAvailable()) return;
+
+        var (runner, broadcaster, store, registry) = CreateQemuRunner();
+        var projectId = Guid.NewGuid().ToString("N");
+
+        const string diagram = """
+        {
+          "board": "esp32_devkit_v1",
+          "parts": [ { "id": "led1", "type": "wokwi-led", "pinMapping": { "A": 13 } } ],
+          "connections": [
+            ["arduino:GPIO13", "led1:A"],
+            ["led1:C", "arduino:GND.1"]
+          ]
+        }
+        """;
+        const string code = """
+        const int LED_PIN = 13;
+        void setup() { pinMode(LED_PIN, OUTPUT); }
+        void loop() { digitalWrite(LED_PIN, HIGH); delay(500); digitalWrite(LED_PIN, LOW); delay(500); }
+        """;
+
+        var startResult = await runner.RunAsync(new SimulationRunContext
+        {
+            ProjectId = projectId,
+            Mode = "qemu",
+            DiagramJson = diagram,
+            SourceCode = code,
+            MaxDurationMs = 120_000,
+            MaxInstructionCount = 100_000,
+        }, CancellationToken.None);
+        Assert.True(startResult.Success, string.Join("; ", startResult.Errors));
+
+        // Chờ ÍT NHẤT 1 pin-state THẬT (digitalWrite qua SF_EVENT) — đúng
+        // điều kiện "đã emit event thật" khiến retry-heuristic (eventsEmitted
+        // == 0) không còn áp dụng, y hệt bug gốc đã verify sống.
+        var gotRealEvent = await WaitUntilAsync(
+            () => store.AppendedEvents.Any(e => e.Type == "pin-state"),
+            TimeSpan.FromSeconds(120));
+        Assert.True(gotRealEvent, "Never observed a real pin-state event from QEMU within 120s — cannot force the unexpected-exit-after-event case.");
+
+        // Tìm container QEMU vừa tạo cho lần chạy này (tên "stem-qemu-*",
+        // random GUID — không expose trực tiếp qua API nào, nên đọc lại từ
+        // `docker ps`) và giết nó từ BÊN NGOÀI runner — mô phỏng đúng nghĩa
+        // "process tự thoát KHÔNG PHẢI do timeoutCts/Stop của chính ta".
+        var containerId = await FindNewestRunningQemuContainerIdAsync();
+        Assert.False(string.IsNullOrEmpty(containerId), "Could not find a running stem-qemu-* container to kill.");
+        await RunDockerCommandAsync("kill", containerId!);
+
+        var completed = await WaitUntilAsync(() => broadcaster.FinalStatus != null, TimeSpan.FromSeconds(60));
+        Assert.True(completed, "Background task never reported completion after the container was killed.");
+
+        // ĐÂY LÀ ASSERT CHÍNH — trước fix, dòng này FAIL với FinalStatus ==
+        // "running" (bug thật, không suy đoán — xem comment gốc ở
+        // QemuEsp32Runner.cs, ExecuteInBackgroundAsync).
+        Assert.Equal(STEM.Core.Entities.Simulations.VirtualLabProjectStatuses.Error, broadcaster.FinalStatus);
+        Assert.NotEqual(STEM.Core.Entities.Simulations.VirtualLabProjectStatuses.Stopped, broadcaster.FinalStatus);
+        Assert.False(registry.IsRunning(projectId), "Session phải được Remove khỏi registry sau khi background task kết thúc.");
+
+        // Container cũ phải được dọn sạch (TryDockerRemoveAsync trong finally)
+        // — không zombie sau khi bị kill từ ngoài.
+        await Task.Delay(1000);
+        var stillThere = await RunDockerCommandCaptureAsync("ps", "-a", "--filter", $"id={containerId}", "--format", "{{.ID}}");
+        Assert.True(string.IsNullOrWhiteSpace(stillThere), $"Container {containerId} still present after cleanup — zombie left behind.");
+    }
+
+    private static async Task<string?> FindNewestRunningQemuContainerIdAsync()
+    {
+        var output = await RunDockerCommandCaptureAsync(
+            "ps", "--filter", "name=stem-qemu-", "--format", "{{.ID}}\t{{.CreatedAt}}");
+        var rows = output
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line => line.Split('\t'))
+            .Where(parts => parts.Length == 2)
+            .ToList();
+        if (rows.Count == 0) return null;
+
+        // "CreatedAt" từ `docker ps` là chuỗi có thể sort lexicographically
+        // đúng thứ tự thời gian thật (định dạng "2026-08-28 10:00:00 +0700
+        // +07") — lấy dòng MỚI NHẤT, phòng trường hợp có container cũ (test
+        // khác/lần chạy trước) chưa kịp dọn.
+        return rows.OrderByDescending(parts => parts[1]).First()[0];
+    }
+
+    private static Task RunDockerCommandAsync(params string[] args) => RunDockerCommandCaptureAsync(args);
+
+    private static async Task<string> RunDockerCommandCaptureAsync(params string[] args)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo("docker")
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+        foreach (var arg in args) psi.ArgumentList.Add(arg);
+
+        using var process = System.Diagnostics.Process.Start(psi)!;
+        var stdout = await process.StandardOutput.ReadToEndAsync();
+        await process.StandardError.ReadToEndAsync();
+        await process.WaitForExitAsync();
+        return stdout.Trim();
+    }
 }

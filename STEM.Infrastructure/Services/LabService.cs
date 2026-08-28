@@ -1056,7 +1056,19 @@ public class LabService : ILabService
 
         foreach (var classId in targetIds.Except(existingIds))
         {
-            lab.ClassAssignments.Add(new LabClassAssignment
+            // Must go through the DbSet's Add (not lab.ClassAssignments.Add):
+            // adding to an already-tracked parent's navigation collection lets
+            // EF's change detection decide the new row's state from its Id,
+            // and a pre-assigned (client-generated) Guid key gets read as
+            // "already exists" -> State=Modified instead of Added. That made
+            // SaveChangesAsync emit an UPDATE ... WHERE Id = @id for a row
+            // that was never inserted -> 0 rows affected ->
+            // DbUpdateConcurrencyException ("Lab was modified by another
+            // user") on every attempt, even a fresh reload. Adding to the
+            // DbSet directly always marks the entity Added regardless of its
+            // key value; EF's relationship fixup still wires it into
+            // lab.ClassAssignments via the LabId FK.
+            _context.LabClassAssignments.Add(new LabClassAssignment
             {
                 Id = Guid.NewGuid(),
                 LabId = lab.Id,

@@ -136,12 +136,21 @@ public sealed class QemuEsp32Runner : ISimulationRunner
             sensorHeader += CloudRuntimeHeaderGenerator.Generate(diagramAnalysis.DiagramJson) ?? string.Empty;
         }
 
+        // CLOSE REMAINING QEMU RUNTIME STABILITY GAPS (BUG B — zombie
+        // container): RegisterAsync (thay vì Register + Task.Run rời rạc như
+        // trước) đảm bảo session/container CŨ của project này (nếu có) đã
+        // thực sự bị hủy VÀ dọn xong (kill QEMU, docker rm -f, chạy hết
+        // finally của lần chạy trước) TRƯỚC KHI lần chạy mới này được coi là
+        // active — đóng đúng race đã xác nhận thật qua `docker ps` (container
+        // "Up 15+ phút" sau rapid Run→Stop→Run) — xem
+        // IRunningSimulationRegistry.RegisterAsync.
         var runCts = new CancellationTokenSource();
-        _registry.Register(context.ProjectId, runCts);
-
-        _ = Task.Run(
-            () => ExecuteInBackgroundAsync(context.SourceCode, board, snapshot, context, runCts, sensorHeader, extraFiles),
-            CancellationToken.None);
+        await _registry.RegisterAsync(
+            context.ProjectId,
+            runCts,
+            () => Task.Run(
+                () => ExecuteInBackgroundAsync(context.SourceCode, board, snapshot, context, runCts, sensorHeader, extraFiles),
+                CancellationToken.None));
 
         return new SimulationRunResult
         {
@@ -348,8 +357,27 @@ public sealed class QemuEsp32Runner : ISimulationRunner
                     process = null;
                 }
 
-                finalStatus = VirtualLabProjectStatuses.Running;
-                reason = "completed";
+                // FIX FIRST-RUN RANDOM STOP (root cause, verify sống bằng
+                // `docker events` + Serial Monitor thật trên LAB06): tới đây nghĩa
+                // là process.HasExited tự nhiên, KHÔNG qua timeoutCts/Stop (nhánh
+                // đó throw OperationCanceledException, rơi vào catch riêng bên
+                // dưới, không bao giờ chạm code này). Với "-no-reboot" + sketch
+                // loop() vô hạn, QEMU KHÔNG BAO GIỜ tự thoát hợp lệ (đúng comment
+                // gốc ở khai báo suspiciousEarlyExit) — kể cả khi đã kịp emit vài
+                // event trước lúc thoát (nên suspiciousEarlyExit=false, không
+                // retry — đúng, tránh in trùng banner boot thứ 2 giữa log đã có sự
+                // kiện thật). Việc thoát tự nhiên này VẪN LUÔN LÀ QEMU
+                // crash/panic sớm (đã xác nhận thật: die exitCode=0 qua `docker
+                // events`, chỉ 1-2 sự kiện GPIO trước khi thoát, ~5s << MaxDurationMs),
+                // KHÔNG PHẢI hoàn thành bình thường. Gán "Running/completed" ở đây
+                // (code cũ) khiến FE hiện "Mô phỏng đã dừng." giống hệt 1 lần Stop
+                // chủ động — học sinh tưởng lỗi ở code/mạch của mình, trong khi
+                // chạy lại thì qua ngay (đúng triệu chứng "random stop lần chạy
+                // đầu"). Gán Error để FE hiện đúng "Mô phỏng dừng do lỗi..." — xem
+                // nhánh status==='error' có sẵn từ trước trong onRunCompleted
+                // (LabSandboxPage.tsx), không cần sửa FE.
+                finalStatus = VirtualLabProjectStatuses.Error;
+                reason = $"QEMU thoát bất ngờ (exit code {process.ExitCode}) trước khi phiên mô phỏng kết thúc — vui lòng nhấn Chạy lại.";
             }
             finally
             {
@@ -727,6 +755,19 @@ public sealed class QemuEsp32Runner : ISimulationRunner
         args.Add("-serial"); args.Add("file:/workspace/log/serial.log");
         args.Add("-no-reboot");
         args.Add("-M"); args.Add("esp32");
+        // KHÔNG thêm "-m" (từng thử "-m 4M" ở bản trước, dựa theo 1 lệnh tham
+        // chiếu tìm qua web search — GUESS, chưa verify — vi phạm đúng RULE 1
+        // "không đoán thêm flag QEMU"). CLOSE REMAINING QEMU RUNTIME STABILITY
+        // GAPS task (PHASE C/D) đo thật bằng A/B trực tiếp qua `docker run`,
+        // KHÔNG qua bất kỳ code C# nào (loại hẳn biến STEMFlow ra khỏi thí
+        // nghiệm): cùng 1 firmware.bin, 2 batch x10 lần mỗi cấu hình —
+        // CÓ "-m 4M": 8/20 healthy (40%). KHÔNG có "-m": 17/20 healthy (85%).
+        // Tức "-m 4M" làm tệ đi ~gấp đôi tỷ lệ crash, ngược hẳn giả thuyết ban
+        // đầu — đã XOÁ. Đây là bằng chứng thật, không suy đoán; tỷ lệ crash
+        // còn lại (~15%, "QEMU thoát exitCode=0" sau boot hoặc giữa loop() dù
+        // KHÔNG hề có code C# nào chạy) là flakiness NỘI TẠI của qemu-system-
+        // xtensa/firmware — ROOT DOMAIN = QEMU/FIRMWARE, không phải
+        // STEMFLOW_LIFECYCLE (xem FINAL REPORT).
         // readonly=on bắt buộc: QEMU mặc định mở -drive if=mtd ở chế độ ghi dù input
         // chỉ cần đọc — thiếu cờ này bind mount :ro sẽ báo lỗi "Read-only file system"
         // (đã xác nhận thật khi verify, không phải suy đoán).

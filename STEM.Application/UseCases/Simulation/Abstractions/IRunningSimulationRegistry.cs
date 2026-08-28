@@ -8,6 +8,24 @@ public interface IRunningSimulationRegistry
 {
     void Register(string projectId, CancellationTokenSource cts);
 
+    // CLOSE REMAINING QEMU RUNTIME STABILITY GAPS (BUG B — zombie container
+    // trên rapid Run→Stop→Run): Register() (trên) chỉ Cancel() CTS cũ rồi
+    // Dispose() ngay — KHÔNG chờ background task cũ (ExecuteInBackgroundAsync)
+    // thực sự quan sát cancellation, kill container, và chạy xong finally
+    // (TryDockerRemoveAsync/_registry.Remove) — xác nhận thật bằng
+    // `docker ps` sau bài test rapid Run→Stop x5: 1 container "Up 15+ phút"
+    // dù registry đã "Register" đè lên từ lâu. RegisterAsync là điểm ownership
+    // đúng để đóng race này: nhận cả "startRun" (factory tạo Task chạy nền)
+    // để CANCEL + AWAIT CLEANUP CỦA SESSION CŨ và START SESSION MỚI xảy ra
+    // NGUYÊN TỬ dưới 1 SemaphoreSlim theo từng projectId (không khoá chéo
+    // giữa các project khác nhau) — đây là "completion primitive thật" theo
+    // yêu cầu, không phải Task.Delay đoán mò. Đồng thời đóng luôn race
+    // concurrent-start (2 lần Start gần như đồng thời cho CÙNG 1 project):
+    // lệnh Start thứ 2 phải đợi tới khi lệnh thứ 1 đã thật sự start xong (Task
+    // đã được lưu vào registry) mới được xử lý, nên không bao giờ có 2 session
+    // cùng "active" một lúc cho 1 project.
+    Task RegisterAsync(string projectId, CancellationTokenSource cts, Func<Task> startRun);
+
     bool TryCancel(string projectId);
 
     void Remove(string projectId);
