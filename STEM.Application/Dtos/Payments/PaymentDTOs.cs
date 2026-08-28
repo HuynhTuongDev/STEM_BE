@@ -159,13 +159,14 @@ public record BulkAllocationResponse(
 );
 
 // Webhook Request DTOs
-public record PayOSWebhookRequestDto(
-    string Code,
+public record PayOSWebhookDataDto(
+    string? Code,
     string? Desc,
-    string? Success,
+    bool? Success,
     string? PaymentLinkId,
     long? OrderCode,
     long? Amount,
+    string? Reference,
     long? TransactionId,
     string? TransactionDateTime,
     string? Signature,
@@ -173,6 +174,14 @@ public record PayOSWebhookRequestDto(
     string? SubAccount,
     string? Currency
 );
+
+public record PayOSWebhookRequestDto(
+    string Code,
+    string Desc,
+    PayOSWebhookDataDto? Data,
+    string? Signature
+);
+
 
 public record PaymentCallbackRequestDto(
     string TransactionId,

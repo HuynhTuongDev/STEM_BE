@@ -402,7 +402,7 @@ public class PaymentsController : ControllerBase
         try
         {
             _logger.LogInformation("PayOS Webhook received: Code={Code}, OrderCode={OrderCode}, PaymentLinkId={PaymentLinkId}", 
-                request.Code, request.OrderCode, request.PaymentLinkId);
+                request.Code, request.Data?.OrderCode, request.Data?.PaymentLinkId);
 
             string status;
             if (request.Code == "00")
@@ -425,9 +425,9 @@ public class PaymentsController : ControllerBase
             var result = await _paymentWebhookHandler.Handle(
                 transactionId: "",
                 status: status,
-                gatewayTransactionId: request.TransactionId?.ToString(),
-                orderCode: request.OrderCode,
-                paymentLinkId: request.PaymentLinkId,
+                gatewayTransactionId: request.Data?.Reference ?? request.Data?.TransactionId?.ToString(),
+                orderCode: request.Data?.OrderCode,
+                paymentLinkId: request.Data?.PaymentLinkId,
                 cancellationToken: cancellationToken);
 
             return Ok(new { success = result });
