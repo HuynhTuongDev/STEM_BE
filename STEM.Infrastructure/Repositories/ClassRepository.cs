@@ -229,6 +229,7 @@ public class ClassRepository : Repository<Class>, IClassRepository
             .Include(c => c.School)
             .Include(c => c.GradeLevel)
             .Include(c => c.Course)
+                .ThenInclude(co => co.Syllabus)
             .Include(c => c.Teacher)
             .Include(c => c.Enrollments).ThenInclude(e => e.Student)
             .Include(c => c.Schedules).ThenInclude(s => s.Lesson)

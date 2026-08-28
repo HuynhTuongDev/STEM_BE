@@ -1,4 +1,5 @@
 using System.Linq.Expressions;
+using Microsoft.AspNetCore.Http;
 using STEM.Application.Dtos.Syllabuses;
 using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Syllabuses;
@@ -132,9 +133,11 @@ internal class FakeSyllabusRepository : FakeRepository<Syllabus>, ISyllabusRepos
     }
     public Task<(IEnumerable<Syllabus> Syllabuses, int TotalCount)> GetSyllabusesPagedAsync(
         int pageNumber, int pageSize, string? searchTerm, int? gradeLevelId, string? status,
+        bool excludeArchived = false,
         CancellationToken cancellationToken = default)
     {
         var query = Items.AsEnumerable();
+        if (excludeArchived) query = query.Where(s => s.Status != SyllabusStatuses.Archived);
         if (gradeLevelId.HasValue) query = query.Where(s => s.GradeLevelId == gradeLevelId.Value);
         if (!string.IsNullOrWhiteSpace(status)) query = query.Where(s => s.Status == status);
         var ordered = query.OrderBy(s => s.DisplayOrder).ThenBy(s => s.Title).ToList();
@@ -274,7 +277,7 @@ public class SyllabusHandlerTests
         await syllabusRepo.AddAsync(new Syllabus { Id = 2, Title = "A", DisplayOrder = 1 });
         await syllabusRepo.AddAsync(new Syllabus { Id = 3, Title = "B", DisplayOrder = 2 });
 
-        var handler = new GetSyllabusesListHandler(syllabusRepo);
+        var handler = new GetSyllabusesListHandler(syllabusRepo, new FakeHttpContextAccessor());
         var result = await handler.Handle(new GetSyllabusesRequest());
 
         Assert.Equal(new[] { "A", "B", "C" }, result.Items.Select(i => i.Title));
@@ -316,7 +319,7 @@ public class SyllabusHandlerTests
         var syllabusRepo = new FakeSyllabusRepository();
         await syllabusRepo.AddAsync(syllabus);
 
-        var handler = new GetSyllabusStructureHandler(syllabusRepo);
+        var handler = new GetSyllabusStructureHandler(syllabusRepo, new FakeHttpContextAccessor());
         var result = await handler.Handle(1);
 
         Assert.NotNull(result);
@@ -344,7 +347,7 @@ public class SyllabusHandlerTests
         var syllabusRepo = new FakeSyllabusRepository();
         await syllabusRepo.AddAsync(syllabus);
 
-        var handler = new GetSyllabusDetailHandler(syllabusRepo);
+        var handler = new GetSyllabusDetailHandler(syllabusRepo, new FakeHttpContextAccessor());
         var result = await handler.Handle(1);
 
         Assert.NotNull(result);
@@ -354,7 +357,7 @@ public class SyllabusHandlerTests
     [Fact]
     public async Task GetSyllabusStructure_ReturnsNull_WhenNotFound()
     {
-        var handler = new GetSyllabusStructureHandler(new FakeSyllabusRepository());
+        var handler = new GetSyllabusStructureHandler(new FakeSyllabusRepository(), new FakeHttpContextAccessor());
         var result = await handler.Handle(999);
         Assert.Null(result);
     }
@@ -382,4 +385,9 @@ public class SyllabusHandlerTests
         foreach (var keyword in SensitiveKeywords)
             Assert.DoesNotContain(keyword, json);
     }
+}
+
+internal class FakeHttpContextAccessor : IHttpContextAccessor
+{
+    public HttpContext? HttpContext { get; set; }
 }

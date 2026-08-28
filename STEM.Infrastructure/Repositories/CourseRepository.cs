@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Curriculum;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
 using STEM.Infrastructure.Repositories;
@@ -16,11 +17,17 @@ public class CourseRepository : Repository<Course>, ICourseRepository
         int pageNumber,
         int pageSize,
         string? searchTerm,
+        bool excludeArchived = false,
         CancellationToken cancellationToken = default)
     {
         var query = _dbSet
             .Include(c => c.Syllabus)
             .AsQueryable();
+
+        if (excludeArchived)
+        {
+            query = query.Where(c => c.Syllabus == null || c.Syllabus.Status != SyllabusStatuses.Archived);
+        }
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {

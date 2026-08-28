@@ -1,6 +1,10 @@
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
+using System.Linq;
 using STEM.Application.Dtos.Curriculum;
 using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Curriculum;
+using STEM.Core.Entities.Users;
 using STEM.Core.Interfaces;
 using STEM.Core.Repository;
 
@@ -9,14 +13,50 @@ namespace STEM.Application.UseCases.Curriculum;
 public class GetLessonsHandler
 {
     private readonly ILessonRepository _repository;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public GetLessonsHandler(ILessonRepository repository)
+    public GetLessonsHandler(
+        ILessonRepository repository,
+        IHttpContextAccessor httpContextAccessor)
     {
         _repository = repository;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<IEnumerable<LessonDto>> Handle(int moduleId, CancellationToken cancellationToken = default)
     {
+        var httpContext = _httpContextAccessor.HttpContext;
+        string? roleName = null;
+        if (httpContext != null)
+        {
+            roleName = httpContext.User?.FindFirst(ClaimTypes.Role)?.Value
+                ?? httpContext.User?.FindFirst("role")?.Value
+                ?? httpContext.User?.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+        }
+
+        var isStudentOrTeacher = string.Equals(roleName, RoleNames.Student, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(roleName, RoleNames.Teacher, StringComparison.OrdinalIgnoreCase);
+        if (isStudentOrTeacher)
+        {
+            var isRestricted = await _repository.IsSyllabusOrCourseRestrictedForModuleAsync(moduleId, cancellationToken);
+            if (isRestricted)
+            {
+                return Enumerable.Empty<LessonDto>();
+            }
+        }
+        else
+        {
+            var isMasterAdmin = string.Equals(roleName, RoleNames.MasterAdministrator, StringComparison.OrdinalIgnoreCase);
+            if (!isMasterAdmin)
+            {
+                var isArchived = await _repository.IsSyllabusArchivedForModuleAsync(moduleId, cancellationToken);
+                if (isArchived)
+                {
+                    return Enumerable.Empty<LessonDto>();
+                }
+            }
+        }
+
         var lessons = await _repository.GetByModuleIdOrderedAsync(moduleId);
         
         return lessons.Select(l => new LessonDto
@@ -40,6 +80,38 @@ public class GetLessonsHandler
 
     public async Task<IEnumerable<LessonDto>> HandleByClass(int classId, CancellationToken cancellationToken = default)
     {
+        var httpContext = _httpContextAccessor.HttpContext;
+        string? roleName = null;
+        if (httpContext != null)
+        {
+            roleName = httpContext.User?.FindFirst(ClaimTypes.Role)?.Value
+                ?? httpContext.User?.FindFirst("role")?.Value
+                ?? httpContext.User?.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+        }
+
+        var isStudentOrTeacher = string.Equals(roleName, RoleNames.Student, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(roleName, RoleNames.Teacher, StringComparison.OrdinalIgnoreCase);
+        if (isStudentOrTeacher)
+        {
+            var isRestricted = await _repository.IsSyllabusOrCourseRestrictedForClassAsync(classId, cancellationToken);
+            if (isRestricted)
+            {
+                return Enumerable.Empty<LessonDto>();
+            }
+        }
+        else
+        {
+            var isMasterAdmin = string.Equals(roleName, RoleNames.MasterAdministrator, StringComparison.OrdinalIgnoreCase);
+            if (!isMasterAdmin)
+            {
+                var isArchived = await _repository.IsSyllabusArchivedForClassAsync(classId, cancellationToken);
+                if (isArchived)
+                {
+                    return Enumerable.Empty<LessonDto>();
+                }
+            }
+        }
+
         var lessons = await _repository.GetByClassIdAsync(classId);
         
         return lessons.Select(l => new LessonDto
@@ -65,14 +137,50 @@ public class GetLessonsHandler
 public class GetLessonByIdHandler
 {
     private readonly ILessonRepository _repository;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public GetLessonByIdHandler(ILessonRepository repository)
+    public GetLessonByIdHandler(
+        ILessonRepository repository,
+        IHttpContextAccessor httpContextAccessor)
     {
         _repository = repository;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<LessonDto?> Handle(int id, CancellationToken cancellationToken = default)
     {
+        var httpContext = _httpContextAccessor.HttpContext;
+        string? roleName = null;
+        if (httpContext != null)
+        {
+            roleName = httpContext.User?.FindFirst(ClaimTypes.Role)?.Value
+                ?? httpContext.User?.FindFirst("role")?.Value
+                ?? httpContext.User?.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+        }
+
+        var isStudentOrTeacher = string.Equals(roleName, RoleNames.Student, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(roleName, RoleNames.Teacher, StringComparison.OrdinalIgnoreCase);
+        if (isStudentOrTeacher)
+        {
+            var isRestricted = await _repository.IsSyllabusOrCourseRestrictedForLessonAsync(id, cancellationToken);
+            if (isRestricted)
+            {
+                return null;
+            }
+        }
+        else
+        {
+            var isMasterAdmin = string.Equals(roleName, RoleNames.MasterAdministrator, StringComparison.OrdinalIgnoreCase);
+            if (!isMasterAdmin)
+            {
+                var isArchived = await _repository.IsSyllabusArchivedForLessonAsync(id, cancellationToken);
+                if (isArchived)
+                {
+                    return null;
+                }
+            }
+        }
+
         var lesson = await _repository.GetByIdAsync(id);
         if (lesson == null)
             return null;

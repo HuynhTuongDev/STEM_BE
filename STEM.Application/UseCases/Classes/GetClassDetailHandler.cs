@@ -1,6 +1,7 @@
 using STEM.Application.Dtos.Classes;
 using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Curriculum;
 using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Users;
 using STEM.Core.Interfaces;
@@ -50,6 +51,23 @@ public class GetClassDetailHandler
         var classEntity = await _classRepository.GetByIdWithDetailsAsync(classId, cancellationToken);
         if (classEntity == null)
             throw new KeyNotFoundException($"Không tìm thấy lớp học với id {classId}.");
+
+        var isTeacher = string.Equals(roleName, RoleNames.Teacher, StringComparison.OrdinalIgnoreCase);
+        if (isTeacher)
+        {
+            if (classEntity.Course?.Syllabus != null && (
+                classEntity.Course.Syllabus.Status == SyllabusStatuses.Draft || classEntity.Course.Syllabus.Status == SyllabusStatuses.Archived
+            ))
+            {
+                throw new UnauthorizedAccessException("Khóa học/chương trình học này chưa được công bố hoặc đã bị lưu trữ.");
+            }
+        }
+        else
+        {
+            var isMasterAdmin = string.Equals(roleName, RoleNames.MasterAdministrator, StringComparison.OrdinalIgnoreCase);
+            if (!isMasterAdmin && classEntity.Course?.Syllabus != null && classEntity.Course.Syllabus.Status == SyllabusStatuses.Archived)
+                throw new UnauthorizedAccessException("Khóa học/chương trình học này đã bị khóa (lưu trữ) bởi quản trị hệ thống.");
+        }
 
         if (classEntity.SchoolId != currentUser.SchoolId && roleName != RoleNames.MasterAdministrator)
             throw new UnauthorizedAccessException("Bạn chỉ có thể xem lớp học thuộc trường của mình.");
@@ -159,6 +177,13 @@ public class GetClassDetailHandler
         var classEntity = await _classRepository.GetByIdWithDetailsAsync(classId, cancellationToken);
         if (classEntity == null)
             throw new KeyNotFoundException($"Không tìm thấy lớp học với id {classId}.");
+
+        if (classEntity.Course != null && classEntity.Course.Syllabus != null && (
+            classEntity.Course.Syllabus.Status == SyllabusStatuses.Draft || classEntity.Course.Syllabus.Status == SyllabusStatuses.Archived
+        ))
+        {
+            throw new UnauthorizedAccessException("Khóa học/chương trình học này chưa được công bố hoặc đã bị lưu trữ.");
+        }
 
         // Get assignments for this class
         var assignments = await _classRepository.GetClassAssignmentsAsync(classId, cancellationToken);
@@ -295,6 +320,24 @@ public class GetClassDetailHandler
         if (classEntity == null)
             throw new KeyNotFoundException($"Không tìm thấy lớp học với id {classId}.");
 
+        var isStudentOrTeacher = string.Equals(roleName, RoleNames.Student, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(roleName, RoleNames.Teacher, StringComparison.OrdinalIgnoreCase);
+        if (isStudentOrTeacher)
+        {
+            if (classEntity.Course != null && classEntity.Course.Syllabus != null && (
+                classEntity.Course.Syllabus.Status == SyllabusStatuses.Draft || classEntity.Course.Syllabus.Status == SyllabusStatuses.Archived
+            ))
+            {
+                throw new UnauthorizedAccessException("Giáo trình của khóa học/chương trình học này chưa được công bố hoặc đã bị lưu trữ.");
+            }
+        }
+        else
+        {
+            var isMasterAdminCurriculum = string.Equals(roleName, RoleNames.MasterAdministrator, StringComparison.OrdinalIgnoreCase);
+            if (!isMasterAdminCurriculum && classEntity.Course?.Syllabus != null && classEntity.Course.Syllabus.Status == SyllabusStatuses.Archived)
+                throw new UnauthorizedAccessException("Giáo trình của khóa học/chương trình học này đã bị khóa (lưu trữ) bởi quản trị hệ thống.");
+        }
+
         // Check access: teacher of this class, admin, or enrolled student
         var isTeacher = roleName == RoleNames.Teacher && classEntity.TeacherId == currentUserId;
         var isAdmin = roleName == RoleNames.MasterAdministrator || roleName == RoleNames.SchoolAdministrator;
@@ -354,6 +397,24 @@ public class GetClassDetailHandler
         var classEntity = await _classRepository.GetByIdWithDetailsAsync(classId, cancellationToken);
         if (classEntity == null)
             throw new KeyNotFoundException($"Không tìm thấy lớp học với id {classId}.");
+
+        var roleNameTeacher = teacher.Role?.Name;
+        var isTeacherClass = string.Equals(roleNameTeacher, RoleNames.Teacher, StringComparison.OrdinalIgnoreCase);
+        if (isTeacherClass)
+        {
+            if (classEntity.Course?.Syllabus != null && (
+                classEntity.Course.Syllabus.Status == SyllabusStatuses.Draft || classEntity.Course.Syllabus.Status == SyllabusStatuses.Archived
+            ))
+            {
+                throw new UnauthorizedAccessException("Khóa học/chương trình học này chưa được công bố hoặc đã bị lưu trữ.");
+            }
+        }
+        else
+        {
+            var isMasterAdminTeacher = string.Equals(roleNameTeacher, RoleNames.MasterAdministrator, StringComparison.OrdinalIgnoreCase);
+            if (!isMasterAdminTeacher && classEntity.Course?.Syllabus != null && classEntity.Course.Syllabus.Status == SyllabusStatuses.Archived)
+                throw new UnauthorizedAccessException("Khóa học/chương trình học này đã bị khóa (lưu trữ) bởi quản trị hệ thống.");
+        }
 
         // Verify teacher is assigned to this class
         if (classEntity.TeacherId != teacherId && teacher.Role?.Name != RoleNames.MasterAdministrator && teacher.Role?.Name != RoleNames.SchoolAdministrator)
