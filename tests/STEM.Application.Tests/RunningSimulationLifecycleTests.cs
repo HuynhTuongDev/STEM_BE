@@ -200,20 +200,42 @@ public sealed class RunningSimulationLifecycleTests
 
         await Task.Delay(500);
 
-        // Cho phiên "thắng" (dù là A hay B) chạy xong tự nhiên qua Stop, rồi
-        // xác nhận đúng 1 completion cuối cùng — không có completion nào bị
-        // trùng lặp/lệch trạng thái từ phiên "thua".
+        // Cho phiên "thắng" (dù là A hay B) chạy xong tự nhiên qua Stop.
+        //
+        // KHÔNG được chờ qua broadcaster.Completed ở đây: đó là 1
+        // TaskCompletionSource DÙNG 1 LẦN (TrySetResult), và phiên "thua"
+        // CHẮC CHẮN đã tự hoàn tất (bị cancel + chạy hết finally, tự
+        // BroadcastRunCompletedAsync("stopped")) TỪ TRƯỚC — ngay trong lúc
+        // RegisterAsync() của phiên "thắng" `await previous.RunTask` phía
+        // trên (trước cả khi Task.WhenAll(startA, startB) return). Nghĩa là
+        // broadcaster.Completed đã được set bởi phiên THUA rồi, nên chờ nó ở
+        // đây sẽ trả về NGAY LẬP TỨC mà không thật sự đợi phiên THẮNG dừng —
+        // khiến Assert.False(IsRunning) bên dưới đua với cleanup của phiên
+        // thắng vẫn đang chạy nền (đây là nguyên nhân test này flaky, không
+        // phải lỗi ở RunningSimulationRegistry). Poll thẳng trên
+        // registry.IsRunning — tín hiệu KHÔNG dùng 1 lần, phản ánh đúng
+        // trạng thái thật của phiên đang active bất kể nó là A hay B.
         registry.TryCancel(projectId);
-        var completed = await WaitForCompletionAsync(broadcaster);
-        Assert.True(completed);
+        var stopped = await WaitForNotRunningAsync(registry, projectId);
+        Assert.True(stopped, "Phiên đang active không dừng (Remove khỏi registry) trong thời gian chờ.");
         Assert.Equal(VirtualLabProjectStatuses.Stopped, broadcaster.FinalStatus);
         Assert.False(registry.IsRunning(projectId));
     }
 
-    private static async Task<bool> WaitForCompletionAsync(SimulationRunnerResolverTests.FakeSimulationEventBroadcaster broadcaster)
+    private static async Task<bool> WaitForNotRunningAsync(IRunningSimulationRegistry registry, string projectId)
     {
-        var completed = await Task.WhenAny(broadcaster.Completed.Task, Task.Delay(TimeSpan.FromSeconds(20)));
-        return completed == broadcaster.Completed.Task;
+        var deadline = DateTime.UtcNow.AddSeconds(20);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (!registry.IsRunning(projectId))
+            {
+                return true;
+            }
+
+            await Task.Delay(25);
+        }
+
+        return !registry.IsRunning(projectId);
     }
 
     private sealed class SingleRunnerResolver : ISimulationRunnerResolver
