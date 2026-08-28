@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Dtos.Grading;
+using STEM.Application.Interfaces;
 using STEM.Application.UseCases.Grading;
 
 namespace STEM.Api.Controllers;
@@ -19,6 +20,8 @@ public class GradingController : ControllerBase
     private readonly CreateSubmissionCommentHandler _createSubmissionCommentHandler;
     private readonly UpdateSubmissionCommentHandler _updateSubmissionCommentHandler;
     private readonly DeleteSubmissionCommentHandler _deleteSubmissionCommentHandler;
+    private readonly RequestResubmitByTeacherHandler _requestResubmitByTeacherHandler;
+    private readonly IGradingSessionService _gradingSessionService;
 
     public GradingController(
         GetSubmissionsHandler getSubmissionsHandler,
@@ -28,8 +31,11 @@ public class GradingController : ControllerBase
         GetSubmissionCommentsHandler getSubmissionCommentsHandler,
         CreateSubmissionCommentHandler createSubmissionCommentHandler,
         UpdateSubmissionCommentHandler updateSubmissionCommentHandler,
-        DeleteSubmissionCommentHandler deleteSubmissionCommentHandler)
+        DeleteSubmissionCommentHandler deleteSubmissionCommentHandler,
+        RequestResubmitByTeacherHandler requestResubmitByTeacherHandler,
+        IGradingSessionService gradingSessionService)
     {
+        _gradingSessionService = gradingSessionService;
         _getSubmissionsHandler = getSubmissionsHandler;
         _getSubmissionDetailHandler = getSubmissionDetailHandler;
         _gradeSubmissionHandler = gradeSubmissionHandler;
@@ -38,6 +44,7 @@ public class GradingController : ControllerBase
         _createSubmissionCommentHandler = createSubmissionCommentHandler;
         _updateSubmissionCommentHandler = updateSubmissionCommentHandler;
         _deleteSubmissionCommentHandler = deleteSubmissionCommentHandler;
+        _requestResubmitByTeacherHandler = requestResubmitByTeacherHandler;
     }
 
     [HttpGet("submissions")]
@@ -143,6 +150,67 @@ public class GradingController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { success = false, message = "Failed to update submission grade.", error = ex.Message });
+        }
+    }
+
+    [HttpPost("submissions/{id:int}/request-resubmit")]
+    public async Task<IActionResult> RequestResubmit(
+        int id,
+        [FromBody] TeacherRequestResubmitRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _requestResubmitByTeacherHandler.Handle(id, request, GetCurrentUserId(), cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to request resubmission.", error = ex.Message });
+        }
+    }
+
+    [HttpPost("submissions/{id:int}/prepare-run")]
+    public async Task<IActionResult> PrepareRun(
+        int id,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var response = await _gradingSessionService.PrepareAsync(id, GetCurrentUserId(), cancellationToken);
+            return Ok(new { success = true, data = response });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Failed to prepare grading session.", error = ex.Message });
         }
     }
 

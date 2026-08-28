@@ -136,6 +136,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<GetResubmitRequestsHandler>();
         services.AddScoped<ApproveResubmitRequestHandler>();
         services.AddScoped<RejectResubmitRequestHandler>();
+        services.AddScoped<RequestResubmitByTeacherHandler>();
 
         // Student Handlers
         services.AddScoped<GetStudentsHandler>();
