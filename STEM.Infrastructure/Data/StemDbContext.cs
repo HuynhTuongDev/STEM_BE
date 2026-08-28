@@ -6,7 +6,9 @@ using STEM.Core.Entities;
 using STEM.Core.Entities.Assessments;
 using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Common;
+using STEM.Core.Entities.Components;
 using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Curriculum;
 using STEM.Core.Entities.Payments;
 using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Schools;
@@ -26,8 +28,6 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<Course> Courses => Set<Course>();
     public DbSet<Module> Modules => Set<Module>();
     public DbSet<Lesson> Lessons => Set<Lesson>();
-    public DbSet<Material> Materials => Set<Material>();
-    public DbSet<STEM.Core.Entities.Courses.File> Files => Set<STEM.Core.Entities.Courses.File>();
 
     public DbSet<Class> Classes => Set<Class>();
     public DbSet<Enrollment> Enrollments => Set<Enrollment>();
@@ -52,6 +52,9 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<ComponentGlueRegistry> ComponentGlueRegistry => Set<ComponentGlueRegistry>();
     public DbSet<AiQuotaUsage> AiQuotaUsages => Set<AiQuotaUsage>();
 
+    public DbSet<ComponentDefinition> ComponentDefinitions => Set<ComponentDefinition>();
+    public DbSet<ComponentSource> ComponentSources => Set<ComponentSource>();
+
     public DbSet<Rubric> Rubrics => Set<Rubric>();
 
     public DbSet<Notification> Notifications => Set<Notification>();
@@ -62,6 +65,13 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
     public DbSet<TokenAccount> TokenAccounts => Set<TokenAccount>();
     public DbSet<TokenTransaction> TokenTransactions => Set<TokenTransaction>();
     public DbSet<TokenAllocation> TokenAllocations => Set<TokenAllocation>();
+
+    // Curriculum entities (Master Admin)
+    public DbSet<Syllabus> Syllabuses => Set<Syllabus>();
+    public DbSet<GradeLevel> GradeLevels => Set<GradeLevel>();
+
+    // System audit logs
+    public DbSet<SystemLog> SystemLogs => Set<SystemLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -117,6 +127,13 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(c => c.CourseId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // Class -> GradeLevel
+        modelBuilder.Entity<Class>()
+            .HasOne(c => c.GradeLevel)
+            .WithMany()
+            .HasForeignKey(c => c.GradeLevelId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         // Class -> Teacher
         modelBuilder.Entity<Class>()
             .HasOne(c => c.Teacher)
@@ -124,12 +141,12 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(c => c.TeacherId)
             .OnDelete(DeleteBehavior.Restrict);
 
-        // Course -> School
+        // Course -> Syllabus (Master Admin curriculum)
         modelBuilder.Entity<Course>()
-            .HasOne(c => c.School)
+            .HasOne(c => c.Syllabus)
             .WithMany(s => s.Courses)
-            .HasForeignKey(c => c.SchoolId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .HasForeignKey(c => c.SyllabusId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // Module -> Course
         modelBuilder.Entity<Module>()
@@ -141,24 +158,25 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
         // Lesson -> Module
         modelBuilder.Entity<Lesson>()
             .HasOne(l => l.Module)
-            .WithMany()
+            .WithMany(m => m.Lessons)
             .HasForeignKey(l => l.ModuleId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Material -> Course
-        modelBuilder.Entity<Material>()
-            .HasOne(m => m.Course)
-            .WithMany(c => c.Materials)
-            .HasForeignKey(m => m.CourseId)
-            .OnDelete(DeleteBehavior.Cascade);
-
-        // File -> Material
-        modelBuilder.Entity<STEM.Core.Entities.Courses.File>()
-            .ToTable("Files")
-            .HasOne(f => f.Material)
+        // Lesson -> Lab
+        modelBuilder.Entity<Lesson>()
+            .HasOne(l => l.Lab)
             .WithMany()
-            .HasForeignKey(f => f.MaterialId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .HasForeignKey(l => l.LabId)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        // === CURRICULUM (MASTER ADMIN) ===
+        
+        // Syllabus -> GradeLevel
+        modelBuilder.Entity<Syllabus>()
+            .HasOne(s => s.GradeLevel)
+            .WithMany(g => g.Syllabi)
+            .HasForeignKey(s => s.GradeLevelId)
+            .OnDelete(DeleteBehavior.SetNull);
 
         // SubmissionFile -> FileEntity
         modelBuilder.Entity<SubmissionFile>()
@@ -229,6 +247,20 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .WithMany(c => c.Schedules)
             .HasForeignKey(s => s.ClassId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Schedule -> Lesson (optional, one-to-one: mỗi lesson chỉ gán cho 1 slot)
+        modelBuilder.Entity<Schedule>()
+            .HasOne(s => s.Lesson)
+            .WithMany()
+            .HasForeignKey(s => s.LessonId)
+            .OnDelete(DeleteBehavior.Restrict); // Không xóa lesson khi xóa schedule
+
+        // Unique composite index: mỗi lesson chỉ được gán cho 1 slot TRONG MỘT LỚP
+        // (ClassId, LessonId) đảm bảo cùng lesson không trùng trong cùng lớp, nhưng khác lớp thì được
+        modelBuilder.Entity<Schedule>()
+            .HasIndex(s => new { s.ClassId, s.LessonId })
+            .IsUnique()
+            .HasFilter("LessonId IS NOT NULL"); // Chỉ apply cho các row có LessonId
 
         // Assignment -> Class
         modelBuilder.Entity<Assignment>()
@@ -415,6 +447,28 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .HasForeignKey(n => n.UserId)
             .OnDelete(DeleteBehavior.Cascade);
 
+        // SystemLogs (append-only audit trail)
+        modelBuilder.Entity<SystemLog>(entity =>
+        {
+            entity.ToTable("SystemLogs");
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Level).HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Action).HasMaxLength(80).IsRequired();
+            entity.Property(e => e.ActorRole).HasMaxLength(60);
+            entity.Property(e => e.EntityType).HasMaxLength(60);
+            entity.Property(e => e.EntityId).HasMaxLength(60);
+            entity.Property(e => e.MetadataJson).HasColumnType("jsonb");
+            entity.Property(e => e.IpAddress).HasMaxLength(64);
+            entity.HasIndex(e => e.Action);
+            entity.HasIndex(e => e.ActorUserId);
+            entity.HasIndex(e => e.CreatedAt);
+            entity.HasIndex(e => new { e.EntityType, e.EntityId });
+            entity.HasOne<User>()
+                .WithMany()
+                .HasForeignKey(e => e.ActorUserId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
         // AiQuotaUsage
         modelBuilder.Entity<AiQuotaUsage>()
             .HasIndex(usage => new { usage.UserId, usage.UsageDate })
@@ -511,8 +565,18 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<LabClassAssignment>()
+            .HasOne(assignment => assignment.Schedule)
+            .WithMany()
+            .HasForeignKey(assignment => assignment.ScheduleId)
+            .IsRequired(false)
+            .OnDelete(DeleteBehavior.SetNull);
+
+        modelBuilder.Entity<LabClassAssignment>()
             .HasIndex(assignment => new { assignment.LabId, assignment.ClassId })
             .IsUnique();
+
+        modelBuilder.Entity<LabClassAssignment>()
+            .HasIndex(assignment => assignment.ScheduleId);
 
         // LabProgress
         modelBuilder.Entity<LabProgress>()
@@ -808,7 +872,7 @@ public class StemDbContext(DbContextOptions<StemDbContext> options) : DbContext(
             entity.HasIndex(e => e.SchoolId).IsUnique();
 
             entity.HasOne(e => e.School)
-                .WithMany()
+                .WithMany(s => s.TokenAccounts)
                 .HasForeignKey(e => e.SchoolId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

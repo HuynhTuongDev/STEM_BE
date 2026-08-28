@@ -186,4 +186,33 @@ public class EnrollmentRepository : Repository<Enrollment>, IEnrollmentRepositor
 
         return true;
     }
+
+    public async Task<StudentCourseEnrollment?> GetExistingCourseEnrollmentAsync(
+        int studentId,
+        int courseId,
+        int excludeClassId,
+        CancellationToken cancellationToken = default)
+    {
+        // Tìm enrollment của student vào class cùng course (trừ class hiện tại)
+        var enrollment = await _dbSet
+            .Include(e => e.Class)
+                .ThenInclude(c => c!.Course)
+            .Include(e => e.Student)
+            .Where(e => e.StudentId == studentId &&
+                       e.ClassId != excludeClassId &&
+                       e.Class != null &&
+                       e.Class.CourseId == courseId)
+            .Select(e => new StudentCourseEnrollment
+            {
+                StudentId = e.StudentId,
+                StudentName = e.Student != null ? e.Student.FullName : string.Empty,
+                ClassId = e.ClassId,
+                ClassCode = e.Class!.ClassCode,
+                CourseId = e.Class!.CourseId,
+                CourseName = e.Class!.Course != null ? e.Class.Course.Title : string.Empty
+            })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return enrollment;
+    }
 }

@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging;
 using STEM.Application.Interfaces;
+using STEM.Application.UseCases.Simulation.Abstractions;
 using STEM.Infrastructure.Data;
 
 namespace STEM.Api.Hubs;
@@ -18,15 +19,18 @@ public class VirtualLabHub : Hub
     private readonly IVirtualLabRuntimeService _runtimeService;
     private readonly StemDbContext _context;
     private readonly ILogger<VirtualLabHub> _logger;
+    private readonly ISimulationInputChannel _inputChannel;
 
     public VirtualLabHub(
         IVirtualLabRuntimeService runtimeService,
         StemDbContext context,
-        ILogger<VirtualLabHub> logger)
+        ILogger<VirtualLabHub> logger,
+        ISimulationInputChannel inputChannel)
     {
         _runtimeService = runtimeService;
         _context = context;
         _logger = logger;
+        _inputChannel = inputChannel;
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
@@ -108,6 +112,89 @@ public class VirtualLabHub : Hub
             projectId,
             eventPayload,
             Context.ConnectionAborted);
+    }
+
+    // ESP32 ADC is 12-bit — canonical range for every analog input this Hub
+    // accepts, not just the potentiometer. Rejecting out-of-range values here
+    // (not clamping) means a client bug surfaces as an error instead of a
+    // silently wrong reading.
+    private const int AnalogMinValue = 0;
+    private const int AnalogMaxValue = 4095;
+
+    // Realtime input path (button press/release, slider drag, sensor value,
+    // etc) — same auth/session pattern as SimulationEvent/DiagramUpdated
+    // above (GetOrJoinSessionAsync implicitly verifies the caller owns this
+    // project via JoinStudentSessionAsync -> _runtimeService.GetDiagramAsync(
+    // projectId, studentId, ...)). Value is a string on the wire to avoid
+    // SignalR JSON-typing ambiguity; parsed to the CLR type
+    // ISimulationInputChannel expects per inputType. sensorKind is only
+    // meaningful (and only required) for inputType "sensor" — e.g. "light" —
+    // it's metadata for future sensor-specific handling, not something
+    // TrySetInput's storage or LightSensorModel.Read() depends on today.
+    public async Task SetSimulationInput(
+        string projectId, string componentId, string? pin, string inputType, string value, string? sensorKind = null)
+    {
+        _ = await GetOrJoinSessionAsync(projectId);
+
+        object parsedValue;
+        SimulationInputType parsedType;
+
+        if (inputType.Equals("digital", StringComparison.OrdinalIgnoreCase))
+        {
+            parsedType = SimulationInputType.Digital;
+            parsedValue = value.Equals("1", StringComparison.OrdinalIgnoreCase) ||
+                value.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+                value.Equals("HIGH", StringComparison.OrdinalIgnoreCase);
+        }
+        else if (inputType.Equals("analog", StringComparison.OrdinalIgnoreCase) ||
+                 inputType.Equals("sensor", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!int.TryParse(value, out var analogValue))
+            {
+                throw new HubException($"{inputType} input value must be numeric, got '{value}'.");
+            }
+
+            if (analogValue < AnalogMinValue || analogValue > AnalogMaxValue)
+            {
+                throw new HubException(
+                    $"{inputType} input value {analogValue} is out of range ({AnalogMinValue}..{AnalogMaxValue}).");
+            }
+
+            if (inputType.Equals("sensor", StringComparison.OrdinalIgnoreCase) && string.IsNullOrWhiteSpace(sensorKind))
+            {
+                throw new HubException("sensorKind is required for inputType \"sensor\".");
+            }
+
+            parsedType = inputType.Equals("sensor", StringComparison.OrdinalIgnoreCase)
+                ? SimulationInputType.Sensor
+                : SimulationInputType.Analog;
+            parsedValue = analogValue;
+        }
+        else
+        {
+            throw new HubException($"Unsupported simulation input type: {inputType}.");
+        }
+
+        // VirtualLabProjectController's {id}/start route builds
+        // RunEsp32SimulationRequest.SessionId as id.ToString("N") (no dashes) —
+        // that's exactly the string EducationalSimulationRunner registers under
+        // (context.ProjectId = that sessionId, unchanged). StopSimulationAsync
+        // normalizes the same way before touching IRunningSimulationRegistry
+        // (projectId.ToString("N")) — ISimulationInputChannel must match that
+        // same convention, not the raw dashed projectId the client happens to
+        // send (found live: without this, TrySetInput always missed).
+        var accepted = _inputChannel.TrySetInput(new SimulationInputEvent(
+            NormalizeProjectId(projectId),
+            componentId,
+            pin,
+            parsedType,
+            parsedValue,
+            parsedType == SimulationInputType.Sensor ? sensorKind : null));
+
+        if (!accepted)
+        {
+            throw new HubException("No running simulation session accepts input for this project right now.");
+        }
     }
 
     public async Task Stopped(string projectId)

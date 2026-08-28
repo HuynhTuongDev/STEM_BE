@@ -105,29 +105,34 @@ public class AssignmentRepository : Repository<Assignment>, IAssignmentRepositor
 
         if (classId.HasValue)
         {
-            query = query.Where(assignment => assignment.ClassId == classId.Value);
+            var classIdValue = classId.Value;
+            query = query.Where(assignment => assignment.ClassId == classIdValue);
         }
 
         if (courseId.HasValue)
         {
-            query = query.Where(assignment => assignment.Class != null && assignment.Class.CourseId == courseId.Value);
+            var courseIdValue = courseId.Value;
+            query = query.Where(assignment => assignment.Class != null && assignment.Class.CourseId == courseIdValue);
         }
 
         if (schoolId.HasValue)
         {
-            query = query.Where(assignment => assignment.Class != null && assignment.Class.SchoolId == schoolId.Value);
+            var schoolIdValue = schoolId.Value;
+            query = query.Where(assignment => assignment.Class != null && assignment.Class.SchoolId == schoolIdValue);
         }
 
         if (teacherId.HasValue)
         {
-            query = query.Where(assignment => assignment.Class != null && assignment.Class.TeacherId == teacherId.Value);
+            var teacherIdValue = teacherId.Value;
+            query = query.Where(assignment => assignment.Class != null && assignment.Class.TeacherId == teacherIdValue);
         }
 
         if (studentId.HasValue)
         {
+            var studentIdValue = studentId.Value;
             query = query.Where(assignment =>
                 assignment.Class != null &&
-                assignment.Class.Enrollments.Any(enrollment => enrollment.StudentId == studentId.Value));
+                assignment.Class.Enrollments.Any(enrollment => enrollment.StudentId == studentIdValue));
         }
 
         var totalCount = await query.CountAsync(cancellationToken);

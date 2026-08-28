@@ -1,7 +1,11 @@
 using STEM.Application.Dtos.Classes;
+using STEM.Application.Interfaces;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 using FluentValidation;
+
+using static STEM.Core.Entities.Users.RoleNames;
 
 namespace STEM.Application.UseCases.Classes;
 
@@ -11,17 +15,20 @@ public class UpdateClassHandler
     private readonly ICourseRepository _courseRepository;
     private readonly IUserRepository _userRepository;
     private readonly IValidator<UpdateClassRequest> _validator;
+    private readonly INotificationService _notificationService;
 
     public UpdateClassHandler(
         IClassRepository classRepository,
         ICourseRepository courseRepository,
         IUserRepository userRepository,
-        IValidator<UpdateClassRequest> validator)
+        IValidator<UpdateClassRequest> validator,
+        INotificationService notificationService)
     {
         _classRepository = classRepository;
         _courseRepository = courseRepository;
         _userRepository = userRepository;
         _validator = validator;
+        _notificationService = notificationService;
     }
 
     public async Task<bool> Handle(
@@ -36,23 +43,21 @@ public class UpdateClassHandler
         if (currentUser == null)
             throw new UnauthorizedAccessException("Người dùng không tồn tại.");
 
-        if (currentUser.Role?.Name != RoleNames.SchoolAdministrator && currentUser.Role?.Name != RoleNames.MasterAdministrator)
+        if (!RoleNames.IsSchoolAdmin(currentUser.Role?.Name) && !RoleNames.IsMasterAdmin(currentUser.Role?.Name))
             throw new UnauthorizedAccessException("Chỉ Quản trị viên trường mới được cập nhật lớp học.");
 
         var classEntity = await _classRepository.GetByIdAsync(classId, cancellationToken);
         if (classEntity == null)
             return false;
 
-        if (classEntity.SchoolId != currentUser.SchoolId && currentUser.Role?.Name != RoleNames.MasterAdministrator)
+        if (classEntity.SchoolId != currentUser.SchoolId && !RoleNames.IsMasterAdmin(currentUser.Role?.Name))
             throw new UnauthorizedAccessException("Bạn chỉ có thể cập nhật lớp học thuộc trường của mình.");
 
         var course = await _courseRepository.GetByIdAsync(request.CourseId, cancellationToken);
         if (course == null)
             throw new ArgumentException("Không tìm thấy khóa học.");
 
-        if (course.SchoolId != currentUser.SchoolId && currentUser.Role?.Name != RoleNames.MasterAdministrator)
-            throw new ArgumentException("Khóa học không thuộc trường của bạn.");
-
+        // Course giờ không còn SchoolId, SchoolAdmin vẫn cập nhật được lớp với course
         var teacher = await _userRepository.GetByIdAsync(request.TeacherId, cancellationToken);
         if (teacher == null)
             throw new ArgumentException("Không tìm thấy giáo viên.");
@@ -60,7 +65,7 @@ public class UpdateClassHandler
         if (teacher.Role?.Name != RoleNames.Teacher)
             throw new ArgumentException("Người dùng được chỉ định không phải là giáo viên.");
 
-        if (teacher.SchoolId != currentUser.SchoolId && currentUser.Role?.Name != RoleNames.MasterAdministrator)
+        if (teacher.SchoolId != currentUser.SchoolId && !RoleNames.IsMasterAdmin(currentUser.Role?.Name))
             throw new ArgumentException("Giáo viên không thuộc trường của bạn.");
 
         if (classEntity.ClassCode != request.ClassCode)
@@ -72,6 +77,7 @@ public class UpdateClassHandler
         }
 
         classEntity.ClassCode = request.ClassCode;
+        classEntity.GradeLevelId = request.GradeLevelId;
         classEntity.CourseId = request.CourseId;
         classEntity.TeacherId = request.TeacherId;
         classEntity.StartDate = NormalizeToUtc(request.StartDate);
@@ -80,6 +86,12 @@ public class UpdateClassHandler
 
         _classRepository.Update(classEntity);
         await _classRepository.SaveChangesAsync(cancellationToken);
+
+        // N-16: Notify teacher when assigned to class (or reassigned)
+        var title = $"Bạn được phân công dạy lớp mới {classEntity.ClassCode}";
+        var content = $"Bạn được phân công dạy lớp {classEntity.ClassCode} - {course.Title}. Thời gian: {classEntity.StartDate:dd/MM/yyyy} đến {classEntity.EndDate:dd/MM/yyyy}.";
+
+        await _notificationService.SendAsync(request.TeacherId, title, content, NotificationType.NewClassAvailable, cancellationToken);
 
         return true;
     }

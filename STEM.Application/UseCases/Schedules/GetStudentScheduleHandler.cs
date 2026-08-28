@@ -1,5 +1,6 @@
 using STEM.Application.Dtos.Schedules;
 using STEM.Core.Repository;
+using STEM.Core.Interfaces;
 
 namespace STEM.Application.UseCases.Schedules;
 
@@ -7,6 +8,7 @@ public class GetStudentScheduleHandler
 {
     private readonly IUserRepository _userRepository;
     private readonly IScheduleRepository _scheduleRepository;
+    private readonly IEnrollmentRepository _enrollmentRepository;
     
     private static readonly string[] ScheduleColors = new[]
     {
@@ -14,10 +16,14 @@ public class GetStudentScheduleHandler
         "#ec4899", "#06b6d4", "#84cc16", "#f97316", "#6366f1"
     };
 
-    public GetStudentScheduleHandler(IUserRepository userRepository, IScheduleRepository scheduleRepository)
+    public GetStudentScheduleHandler(
+        IUserRepository userRepository, 
+        IScheduleRepository scheduleRepository,
+        IEnrollmentRepository enrollmentRepository)
     {
         _userRepository = userRepository;
         _scheduleRepository = scheduleRepository;
+        _enrollmentRepository = enrollmentRepository;
     }
 
     public async Task<IEnumerable<ScheduleCalendarResponse>> Handle(
@@ -55,8 +61,39 @@ public class GetStudentScheduleHandler
             End = DateTime.SpecifyKind(s.EndTime, DateTimeKind.Utc),
             ClassCode = s.Class?.ClassCode ?? string.Empty,
             ClassName = s.Class?.Course?.Title ?? string.Empty,
-            Color = ScheduleColors[index % ScheduleColors.Length]
+            Color = ScheduleColors[index % ScheduleColors.Length],
+            LessonId = s.LessonId,
+            LessonTitle = s.Lesson?.Title
         });
+    }
+
+    public async Task<IEnumerable<ScheduleCalendarResponse>> HandleByClass(
+        int classId,
+        GetScheduleRequest request,
+        int currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
+        if (currentUser == null)
+            throw new UnauthorizedAccessException("Người dùng không tồn tại.");
+
+        // Check if user has access (enrolled student, or admin/teacher)
+        if (currentUser.Role?.Name == "Student")
+        {
+            var enrollment = await _enrollmentRepository.FindAsync(
+                e => e.StudentId == currentUserId && e.ClassId == classId, cancellationToken);
+            if (!enrollment.Any())
+                throw new UnauthorizedAccessException("Bạn không có quyền xem lịch của lớp học này.");
+        }
+        // Admin and Teacher can access any class they're teaching
+
+        var req = new GetScheduleRequest 
+        { 
+            FromDate = request.FromDate, 
+            ToDate = request.ToDate, 
+            ClassId = classId 
+        };
+        return await GetSchedulesByClassIdAsync(req, cancellationToken);
     }
 
     private async Task<IEnumerable<ScheduleCalendarResponse>> GetSchedulesByClassIdAsync(
@@ -87,7 +124,9 @@ public class GetStudentScheduleHandler
             End = DateTime.SpecifyKind(s.EndTime, DateTimeKind.Utc),
             ClassCode = s.Class?.ClassCode ?? string.Empty,
             ClassName = s.Class?.Course?.Title ?? string.Empty,
-            Color = ScheduleColors[index % ScheduleColors.Length]
+            Color = ScheduleColors[index % ScheduleColors.Length],
+            LessonId = s.LessonId,
+            LessonTitle = s.Lesson?.Title
         });
     }
 }

@@ -1,8 +1,10 @@
 using STEM.Application.Dtos.Classes;
 using STEM.Application.Dtos.Schedules;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
+using STEM.Application.Interfaces;
 using System.Linq;
 
 namespace STEM.Application.UseCases.Classes;
@@ -14,19 +16,22 @@ public class AssignStudentsToClassHandler
     private readonly IRepository<Enrollment> _enrollmentRepository;
     private readonly IEnrollmentRepository _enrollmentFullRepository;
     private readonly IAttendanceRepository _attendanceRepository;
+    private readonly INotificationService _notificationService;
 
     public AssignStudentsToClassHandler(
         IClassRepository classRepository,
         IUserRepository userRepository,
         IRepository<Enrollment> enrollmentRepository,
         IEnrollmentRepository enrollmentFullRepository,
-        IAttendanceRepository attendanceRepository)
+        IAttendanceRepository attendanceRepository,
+        INotificationService notificationService)
     {
         _classRepository = classRepository;
         _userRepository = userRepository;
         _enrollmentRepository = enrollmentRepository;
         _enrollmentFullRepository = enrollmentFullRepository;
         _attendanceRepository = attendanceRepository;
+        _notificationService = notificationService;
     }
 
     public async Task<AssignStudentsResponse> Handle(int classId, AssignStudentsRequest request, int currentUserId)
@@ -43,6 +48,9 @@ public class AssignStudentsToClassHandler
         var classEntity = await _classRepository.GetByIdAsync(classId);
         if (classEntity == null)
             throw new KeyNotFoundException("Không tìm thấy lớp học.");
+
+        // Get class with course details for notification
+        var classWithCourse = await _classRepository.GetByIdWithDetailsAsync(classId);
 
         if (classEntity.SchoolId != currentUser.SchoolId && currentUser.Role?.Name != RoleNames.MasterAdministrator)
             throw new UnauthorizedAccessException("Bạn không có quyền thao tác với lớp học này.");
@@ -64,11 +72,35 @@ public class AssignStudentsToClassHandler
             .Select(e => e.StudentId)
             .ToHashSet();
 
-        // Check schedule conflicts for students NOT already enrolled
+        // Check for same-course enrollment conflicts (ALWAYS reject)
+        var courseConflictStudents = new List<StudentCourseEnrollment>();
         var studentsToCheck = request.StudentIds.Except(existingEnrollmentStudentIds).ToList();
-        var conflictingStudents = new List<StudentScheduleConflict>();
 
         foreach (var studentId in studentsToCheck)
+        {
+            var existingCourseEnrollment = await _enrollmentFullRepository.GetExistingCourseEnrollmentAsync(
+                studentId, classEntity.CourseId, classId);
+
+            if (existingCourseEnrollment != null)
+            {
+                courseConflictStudents.Add(existingCourseEnrollment);
+            }
+        }
+
+        // ALWAYS reject if any course conflicts exist
+        if (courseConflictStudents.Any())
+        {
+            var conflictInfo = string.Join(", ", courseConflictStudents.Select(c =>
+                $"{validStudents.First(s => s.Id == c.StudentId).FullName} (đã học {c.CourseName} tại lớp {c.ClassCode})"));
+            throw new ArgumentException($"Học sinh đã học khóa học này tại lớp khác: {conflictInfo}");
+        }
+
+        // Check schedule conflicts for students NOT already enrolled and NOT course-conflicted
+        var courseConflictStudentIds = courseConflictStudents.Select(c => c.StudentId).ToHashSet();
+        var studentsForScheduleCheck = studentsToCheck.Except(courseConflictStudentIds).ToList();
+        var conflictingStudents = new List<StudentScheduleConflict>();
+
+        foreach (var studentId in studentsForScheduleCheck)
         {
             var canAdd = await _enrollmentFullRepository.CanAddStudentToClassAsync(studentId, classId);
             if (!canAdd)
@@ -98,15 +130,17 @@ public class AssignStudentsToClassHandler
             }
         }
 
-        // If strict mode is enabled, reject if any conflicts exist
+        // If strict mode is enabled, reject if any schedule conflicts exist
         if (request.StrictMode && conflictingStudents.Any())
         {
             throw new ArgumentException($"Có {conflictingStudents.Count} học sinh bị trùng lịch: {string.Join(", ", conflictingStudents.Select(c => c.StudentName))}");
         }
 
-        // Calculate new enrollments (exclude already enrolled AND conflicting if not strict mode)
+        // Calculate new enrollments (exclude already enrolled and schedule-conflicted if not strict mode)
         var conflictingStudentIds = conflictingStudents.Select(c => c.StudentId).ToHashSet();
-        var newStudentIds = studentsToCheck.Except(conflictingStudentIds).ToList();
+        var newStudentIds = studentsToCheck
+            .Except(conflictingStudentIds)
+            .ToList();
 
         if (newStudentIds.Any())
         {
@@ -123,24 +157,52 @@ public class AssignStudentsToClassHandler
             await _enrollmentRepository.SaveChangesAsync();
 
             // Create attendance records for all existing schedules in this class
-            var schedules = classEntity.Schedules.ToList();
+            var schedules = classWithCourse?.Schedules?.ToList() ?? new List<Schedule>();
             if (schedules.Any())
             {
+                // Check for existing attendance records to avoid duplicates
+                var existingAttendance = await _attendanceRepository.FindAsync(
+                    a => a.ClassId == classId && newStudentIds.Contains(a.StudentId));
+                var existingKeys = existingAttendance
+                    .Select(a => (a.StudentId, ScheduleId: a.ScheduleId ?? 0))
+                    .ToHashSet();
+
                 var nowForAttendance = DateTime.UtcNow;
                 var attendanceRecords = newStudentIds
-                    .SelectMany(studentId => schedules.Select(schedule => new AttendanceRecord
+                    .SelectMany(studentId => schedules.Select(schedule => new
+                    {
+                        StudentId = studentId,
+                        Schedule = schedule,
+                        Key = (studentId, ScheduleId: schedule.Id)
+                    }))
+                    .Where(x => !existingKeys.Contains(x.Key))
+                    .Select(x => new AttendanceRecord
                     {
                         ClassId = classId,
-                        ScheduleId = schedule.Id,
-                        StudentId = studentId,
-                        AttendanceDate = DateOnly.FromDateTime(schedule.StartTime),
+                        ScheduleId = x.Schedule.Id,
+                        StudentId = x.StudentId,
+                        AttendanceDate = DateOnly.FromDateTime(x.Schedule.StartTime),
                         Status = null,
                         CreatedAt = nowForAttendance,
                         UpdatedAt = nowForAttendance
-                    }))
+                    })
                     .ToList();
 
-                await _attendanceRepository.AddRangeAsync(attendanceRecords);
+                if (attendanceRecords.Any())
+                {
+                    await _attendanceRepository.AddRangeAsync(attendanceRecords);
+                    await _attendanceRepository.SaveChangesAsync();
+                }
+            }
+
+            // N-15: Notify newly added students
+            if (classWithCourse?.Course != null)
+            {
+                var courseName = classWithCourse.Course.Title ?? "khóa học";
+                var title = $"Bạn đã được thêm vào lớp {classWithCourse.ClassCode}";
+                var content = $"Bạn đã được thêm vào lớp {classWithCourse.ClassCode} - {courseName}.";
+
+                await _notificationService.SendToManyAsync(newStudentIds, title, content, NotificationType.AddedToClass);
             }
         }
 
@@ -159,7 +221,7 @@ public class AssignStudentsToClassHandler
             TotalRequested = request.StudentIds.Count,
             SuccessCount = newStudentIds.Count,
             AlreadyEnrolledCount = existingEnrollmentStudentIds.Count,
-            ConflictCount = conflictingStudents.Count,
+            ConflictCount = conflictingStudents.Count + courseConflictStudents.Count,
             AlreadyEnrolledStudentIds = existingEnrollmentStudentIds.ToList(),
             AddedStudents = addedStudents,
             ConflictingStudents = conflictingStudents

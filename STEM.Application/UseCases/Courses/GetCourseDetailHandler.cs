@@ -7,46 +7,30 @@ namespace STEM.Application.UseCases.Courses;
 public class GetCourseDetailHandler
 {
     private readonly ICourseRepository _courseRepository;
-    private readonly IUserRepository _userRepository;
 
-    public GetCourseDetailHandler(ICourseRepository courseRepository, IUserRepository userRepository)
+    public GetCourseDetailHandler(ICourseRepository courseRepository)
     {
         _courseRepository = courseRepository;
-        _userRepository = userRepository;
     }
 
     public async Task<CourseDetailResponse?> Handle(
         int courseId,
-        int currentUserId,
         CancellationToken cancellationToken = default)
     {
-        var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
-        if (currentUser == null)
-            throw new UnauthorizedAccessException("Current user not found.");
-
-        var roleName = currentUser.Role?.Name;
-
-        if (roleName == RoleNames.MasterAdministrator)
-            throw new UnauthorizedAccessException("Master Administrator does not have access to course data.");
-
         var course = await _courseRepository.GetCourseDetailAsync(courseId, cancellationToken);
         if (course == null)
-            return null; // Not found
-
-        // Data isolation logic
-        if (roleName == RoleNames.SchoolAdministrator || roleName == RoleNames.Teacher || roleName == RoleNames.Student)
-        {
-            if (course.SchoolId != currentUser.SchoolId)
-                throw new UnauthorizedAccessException("You do not have access to courses outside your school.");
-        }
+            return null;
 
         return new CourseDetailResponse
         {
             Id = course.Id,
             Title = course.Title,
             Description = course.Description,
-            SchoolId = course.SchoolId,
-            SchoolName = course.School?.Name,
+            SyllabusId = course.SyllabusId,
+            SyllabusTitle = course.Syllabus?.Title,
+            EstimatedHours = course.EstimatedHours,
+            IsRequired = course.IsRequired,
+            IsActive = course.IsActive,
             CreatedAt = course.CreatedAt,
             UpdatedAt = course.UpdatedAt
         };

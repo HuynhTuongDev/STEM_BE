@@ -1,6 +1,8 @@
 using System.Text.Json;
 using STEM.Application.Dtos.Assignments;
+using STEM.Application.Interfaces;
 using STEM.Core.Entities.Projects;
+using STEM.Core.Entities.Common;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Assignments;
@@ -10,15 +12,18 @@ public class SubmitQuizAssignmentHandler
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly ISubmissionRepository _submissionRepository;
     private readonly IUserRepository _userRepository;
+    private readonly INotificationService _notificationService;
 
     public SubmitQuizAssignmentHandler(
         IAssignmentRepository assignmentRepository,
         ISubmissionRepository submissionRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        INotificationService notificationService)
     {
         _assignmentRepository = assignmentRepository;
         _submissionRepository = submissionRepository;
         _userRepository = userRepository;
+        _notificationService = notificationService;
     }
 
     public async Task<SubmitQuizResponse> Handle(
@@ -55,8 +60,12 @@ public class SubmitQuizAssignmentHandler
             throw new InvalidOperationException("Resubmission is not allowed for this assignment.");
 
         if (assignment.ResubmitLimit.HasValue && attemptCount >= assignment.ResubmitLimit.Value)
-            throw new InvalidOperationException($"You have reached the maximum number of attempts ({assignment.ResubmitLimit.Value}).");
+            throw new InvalidOperationException($"Bạn đã hết lượt nộp lại (tối đa {assignment.ResubmitLimit.Value} lần).");
 
+        // Get best previous score
+        var bestPreviousScore = await _submissionRepository.GetBestScoreAsync(assignmentId, studentId, cancellationToken);
+
+        // Calculate score for this attempt
         var questions = ParseQuestions(quizDetail.QuestionsJson);
         var results = new List<QuizAnswerResult>();
         var correctCount = 0;
@@ -112,6 +121,13 @@ public class SubmitQuizAssignmentHandler
 
         var score = assignment.MaxScore * correctCount / Math.Max(questions.Count, 1);
 
+        // Always delete previous submissions for this student and assignment (keep only latest attempt)
+        var oldSubmissions = await _submissionRepository.GetAllByAssignmentAndStudentAsync(assignmentId, studentId, cancellationToken);
+        foreach (var old in oldSubmissions)
+        {
+            _submissionRepository.Delete(old);
+        }
+
         var submission = new Submission
         {
             AssignmentId = assignmentId,
@@ -131,6 +147,23 @@ public class SubmitQuizAssignmentHandler
 
         await _submissionRepository.AddAsync(submission, cancellationToken);
         await _submissionRepository.SaveChangesAsync(cancellationToken);
+
+        // N-23: Notify teacher about new/retake submission
+        if (assignment.Class != null && assignment.Class.TeacherId > 0)
+        {
+            var isRetake = attemptCount > 0;
+            var title = isRetake ? "Bài làm lại" : "Bài nộp mới";
+            var content = isRetake
+                ? $"{student.FullName} đã làm lại bài \"{assignment.Title}\". Điểm mới: {score}"
+                : $"{student.FullName} đã nộp bài \"{assignment.Title}\".";
+
+            await _notificationService.SendAsync(
+                assignment.Class.TeacherId,
+                title,
+                content,
+                NotificationType.SubmissionReceived,
+                cancellationToken);
+        }
 
         return new SubmitQuizResponse
         {

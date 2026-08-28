@@ -301,9 +301,6 @@ public class AssignmentsController : ControllerBase
         {
             var innerException = ex.InnerException?.Message ?? ex.Message;
             var stackTrace = ex.StackTrace;
-            Console.WriteLine($"[ERROR] SubmitQuiz failed: {ex.Message}");
-            Console.WriteLine($"[ERROR] Inner Exception: {innerException}");
-            Console.WriteLine($"[ERROR] Stack Trace: {stackTrace}");
             return StatusCode(500, new { success = false, message = "Failed to submit quiz.", error = innerException, stackTrace = stackTrace });
         }
     }

@@ -17,6 +17,7 @@ public sealed class EducationalSimulationRunner : ISimulationRunner
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ISimulationEventBroadcaster _broadcaster;
     private readonly IRunningSimulationRegistry _registry;
+    private readonly ISimulationInputChannel _inputChannel;
     private readonly SemaphoreSlim _runGate;
 
     public EducationalSimulationRunner(
@@ -26,6 +27,7 @@ public sealed class EducationalSimulationRunner : ISimulationRunner
         IServiceScopeFactory scopeFactory,
         ISimulationEventBroadcaster broadcaster,
         IRunningSimulationRegistry registry,
+        ISimulationInputChannel inputChannel,
         IConfiguration configuration)
     {
         _diagramService = diagramService;
@@ -34,6 +36,7 @@ public sealed class EducationalSimulationRunner : ISimulationRunner
         _scopeFactory = scopeFactory;
         _broadcaster = broadcaster;
         _registry = registry;
+        _inputChannel = inputChannel;
 
         var maxConcurrentRuns = int.TryParse(
             configuration["SimulationRunner:MaxConcurrentRuns"],
@@ -93,12 +96,29 @@ public sealed class EducationalSimulationRunner : ISimulationRunner
 
         var snapshot = _diagramService.BuildRuntimeSnapshot(diagramAnalysis.DiagramJson);
 
+        // CLOSE REMAINING QEMU RUNTIME STABILITY GAPS task: RegisterAsync
+        // (thay Register + Task.Run rời rạc) giữ đúng invariant "mỗi project
+        // tối đa 1 active runner tại 1 thời điểm" cho CẢ 2 runner (registry
+        // dùng chung) — session cũ (nếu có) được cancel + chờ dọn xong trước
+        // khi session mới được đăng ký active. Runner này không giữ resource
+        // hệ điều hành (không Docker container) nên rủi ro zombie không áp
+        // dụng như QemuEsp32Runner, nhưng vẫn cần đúng invariant để 2 lệnh
+        // Start gần như đồng thời không tạo 2 background task cùng active.
         var runCts = new CancellationTokenSource();
-        _registry.Register(context.ProjectId, runCts);
-
-        _ = Task.Run(
-            () => ExecuteInBackgroundAsync(program, snapshot, context, runCts),
-            CancellationToken.None);
+        await _registry.RegisterAsync(
+            context.ProjectId,
+            runCts,
+            () =>
+            {
+                // Same instance the background loop reads from
+                // (state.Context.ComponentInputs in EducationalEventGenerator)
+                // — a live SetSimulationInput call reaching this dictionary is
+                // picked up on the NEXT digitalRead(), no restart needed.
+                _inputChannel.RegisterSession(context.ProjectId, context.ComponentInputs);
+                return Task.Run(
+                    () => ExecuteInBackgroundAsync(program, snapshot, context, runCts),
+                    CancellationToken.None);
+            });
 
         return new SimulationRunResult
         {
@@ -175,6 +195,7 @@ public sealed class EducationalSimulationRunner : ISimulationRunner
             // trong lúc đang dọn dẹp, Register() của lần chạy mới không bị
             // hiểu nhầm là "phải hủy chính nó".
             _registry.Remove(context.ProjectId);
+            _inputChannel.UnregisterSession(context.ProjectId);
 
             try
             {

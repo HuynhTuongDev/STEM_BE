@@ -155,36 +155,38 @@ public class SchedulesController : ControllerBase
         }
     }
 
+    [HttpGet("class/{classId}")]
+    public async Task<IActionResult> GetScheduleByClass(
+        int classId,
+        [FromQuery] GetScheduleRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var currentUserId = GetCurrentUserId();
+            var result = await _getStudentScheduleHandler.HandleByClass(classId, request, currentUserId, cancellationToken);
+            return Ok(new { success = true, data = result });
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new { success = false, message = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy lịch.", error = ex.Message });
+        }
+    }
+
     private int GetCurrentUserId()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userIdClaim) || !int.TryParse(userIdClaim, out int userId))
             throw new UnauthorizedAccessException("Invalid user token.");
         return userId;
-    }
-
-    [HttpGet("class/{classId:int}")]
-    [Authorize(Roles = "SchoolAdmin,Student")]
-    public async Task<IActionResult> GetSchedulesByClass(
-        int classId,
-        [FromQuery] DateTime? fromDate,
-        [FromQuery] DateTime? toDate,
-        CancellationToken cancellationToken = default)
-    {
-        try
-        {
-            var result = await _getStudentScheduleHandler.Handle(
-                new GetScheduleRequest { ClassId = classId, FromDate = fromDate, ToDate = toDate },
-                0, // Not used for admin
-                cancellationToken,
-                isAdmin: true
-            );
-            return Ok(new { success = true, data = result });
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { success = false, message = "Đã xảy ra lỗi khi lấy lịch.", error = ex.Message });
-        }
     }
 
     private Core.Entities.Users.User? GetCurrentUser()

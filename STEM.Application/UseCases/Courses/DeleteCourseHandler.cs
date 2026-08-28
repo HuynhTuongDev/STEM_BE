@@ -23,15 +23,13 @@ public class DeleteCourseHandler
         if (currentUser == null)
             throw new UnauthorizedAccessException("Current user not found.");
 
-        if (currentUser.Role?.Name != RoleNames.SchoolAdministrator)
-            throw new UnauthorizedAccessException("Only School Administrator can delete courses.");
+        // Chỉ MasterAdmin được phép xóa khóa học
+        if (currentUser.Role?.Name != RoleNames.MasterAdministrator)
+            throw new UnauthorizedAccessException("Only Master Administrator can delete courses.");
 
         var course = await _courseRepository.GetByIdAsync(courseId, cancellationToken);
         if (course == null)
-            return false; // Not found
-
-        if (course.SchoolId != currentUser.SchoolId)
-            throw new UnauthorizedAccessException("You can only delete courses from your own school.");
+            return false;
 
         // Check if course has any classes
         var hasClasses = await _courseRepository.HasClassesAsync(courseId, cancellationToken);

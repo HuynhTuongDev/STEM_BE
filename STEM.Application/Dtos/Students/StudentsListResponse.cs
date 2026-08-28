@@ -6,4 +6,10 @@ public class StudentsListResponse
     public int PageNumber { get; set; }
     public int PageSize { get; set; }
     public IReadOnlyCollection<StudentResponse> Data { get; set; } = Array.Empty<StudentResponse>();
+
+    // Aggregate counts for statistics
+    public int TotalActiveStudents { get; set; }
+    public int TotalEnrolledClasses { get; set; }
+    public int TotalWithScores { get; set; }
+    public int TotalWithoutScores { get; set; }
 }

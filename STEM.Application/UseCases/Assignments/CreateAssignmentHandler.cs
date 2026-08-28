@@ -1,6 +1,9 @@
 using System.Text.Json;
 using STEM.Application.Dtos.Assignments;
+using STEM.Application.Interfaces;
 using STEM.Core.Entities.Assessments;
+using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Projects;
 using STEM.Core.Repository;
 
@@ -11,15 +14,21 @@ public class CreateAssignmentHandler
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly IClassRepository _classRepository;
     private readonly IUserRepository _userRepository;
+    private readonly IEnrollmentRepository _enrollmentRepository;
+    private readonly INotificationService _notificationService;
 
     public CreateAssignmentHandler(
         IAssignmentRepository assignmentRepository,
         IClassRepository classRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        IEnrollmentRepository enrollmentRepository,
+        INotificationService notificationService)
     {
         _assignmentRepository = assignmentRepository;
         _classRepository = classRepository;
         _userRepository = userRepository;
+        _enrollmentRepository = enrollmentRepository;
+        _notificationService = notificationService;
     }
 
     public async Task<AssignmentResponse> Handle(
@@ -73,8 +82,30 @@ public class CreateAssignmentHandler
         await _assignmentRepository.AddAsync(assignment, cancellationToken);
         await _assignmentRepository.SaveChangesAsync(cancellationToken);
 
-        assignment.Class = classEntity;
+        // N-17: Notify students about new assignment
+        if (request.Status == "published")
+        {
+            var enrollments = await _enrollmentRepository.GetByClassIdAsync(request.ClassId, cancellationToken);
+            var studentIds = enrollments.Select(e => e.StudentId).ToList();
 
-        return AssignmentResponseMapper.Map(assignment);
+            var assignmentTypeText = assignment.AssignmentType switch
+            {
+                "Quiz" => "bài Quiz",
+                "Report" => "bài báo cáo",
+                "PracticalSimulation" => "bài lab thực hành",
+                _ => "bài tập"
+            };
+
+            var dueDateText = assignment.DueDate.HasValue
+                ? $". Hạn nộp: {assignment.DueDate.Value:dd/MM/yyyy HH:mm}"
+                : "";
+
+            var title = $"Bài tập mới: {assignment.Title}";
+            var content = $"Giáo viên đã giao cho bạn {assignmentTypeText} \"{assignment.Title}\"{dueDateText}.";
+
+            await _notificationService.SendToManyAsync(studentIds, title, content, NotificationType.AssignmentAssigned, cancellationToken);
+        }
+
+        return AssignmentResponseMapper.Map(assignment, classEntity);
     }
 }

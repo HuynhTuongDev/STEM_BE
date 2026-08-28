@@ -36,24 +36,18 @@ public class CoursesController : ControllerBase
 
     /// <summary>
     /// Lấy danh sách khoá học (có phân trang và tìm kiếm).
-    /// - MasterAdmin: không có quyền truy cập (chỉ quản lý School accounts).
-    /// - SchoolAdmin: xem toàn bộ khoá học trong trường của mình.
-    /// - Teacher/Student: chỉ xem khoá học thuộc trường của mình.
+    /// MasterAdmin và SchoolAdmin đều có quyền truy cập.
     /// </summary>
     [HttpGet]
+    [Authorize(Policy = "MasterAdminOrSchoolAdmin")]
     public async Task<IActionResult> GetCourses(
         [FromQuery] GetCoursesRequest request,
         CancellationToken cancellationToken = default)
     {
         try
         {
-            var currentUserId = GetCurrentUserId();
-            var result = await _getCoursesListHandler.Handle(request, currentUserId, cancellationToken);
+            var result = await _getCoursesListHandler.Handle(request, cancellationToken);
             return Ok(new { success = true, data = result });
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
         }
         catch (Exception ex)
         {
@@ -63,23 +57,18 @@ public class CoursesController : ControllerBase
 
     /// <summary>
     /// Xem chi tiết 1 khoá học.
-    /// - SchoolAdmin, Teacher, Student được xem (nếu cùng trường).
     /// </summary>
     [HttpGet("{id}")]
+    [Authorize(Policy = "MasterAdminOnly")]
     public async Task<IActionResult> GetCourse(int id, CancellationToken cancellationToken = default)
     {
         try
         {
-            var currentUserId = GetCurrentUserId();
-            var result = await _getCourseDetailHandler.Handle(id, currentUserId, cancellationToken);
+            var result = await _getCourseDetailHandler.Handle(id, cancellationToken);
             if (result == null)
                 return NotFound(new { success = false, message = "Course not found." });
 
             return Ok(new { success = true, data = result });
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return Forbid();
         }
         catch (Exception ex)
         {
@@ -89,10 +78,10 @@ public class CoursesController : ControllerBase
 
     /// <summary>
     /// Thêm mới khoá học.
-    /// - Chỉ SchoolAdmin mới được phép.
+    /// Chỉ MasterAdmin được phép.
     /// </summary>
     [HttpPost]
-    [Authorize(Policy = "SchoolAdminOnly")]
+    [Authorize(Policy = "MasterAdminOnly")]
     public async Task<IActionResult> CreateCourse(
         [FromBody] CreateCourseRequest request,
         CancellationToken cancellationToken = default)
@@ -123,10 +112,10 @@ public class CoursesController : ControllerBase
 
     /// <summary>
     /// Cập nhật khoá học.
-    /// - Chỉ SchoolAdmin mới được phép.
+    /// Chỉ MasterAdmin được phép.
     /// </summary>
     [HttpPut("{id}")]
-    [Authorize(Policy = "SchoolAdminOnly")]
+    [Authorize(Policy = "MasterAdminOnly")]
     public async Task<IActionResult> UpdateCourse(
         int id,
         [FromBody] UpdateCourseRequest request,
@@ -161,10 +150,10 @@ public class CoursesController : ControllerBase
 
     /// <summary>
     /// Xóa khoá học.
-    /// - Chỉ SchoolAdmin mới được phép.
+    /// Chỉ MasterAdmin được phép.
     /// </summary>
     [HttpDelete("{id}")]
-    [Authorize(Policy = "SchoolAdminOnly")]
+    [Authorize(Policy = "MasterAdminOnly")]
     public async Task<IActionResult> DeleteCourse(int id, CancellationToken cancellationToken = default)
     {
         try

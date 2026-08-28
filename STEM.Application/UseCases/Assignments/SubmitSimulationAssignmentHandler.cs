@@ -1,6 +1,8 @@
 using System.Text.Json;
 using STEM.Application.Dtos.Assignments;
+using STEM.Application.Interfaces;
 using STEM.Core.Entities.Projects;
+using STEM.Core.Entities.Common;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Assignments;
@@ -10,15 +12,18 @@ public class SubmitSimulationAssignmentHandler
     private readonly IAssignmentRepository _assignmentRepository;
     private readonly ISubmissionRepository _submissionRepository;
     private readonly IUserRepository _userRepository;
+    private readonly INotificationService _notificationService;
 
     public SubmitSimulationAssignmentHandler(
         IAssignmentRepository assignmentRepository,
         ISubmissionRepository submissionRepository,
-        IUserRepository userRepository)
+        IUserRepository userRepository,
+        INotificationService notificationService)
     {
         _assignmentRepository = assignmentRepository;
         _submissionRepository = submissionRepository;
         _userRepository = userRepository;
+        _notificationService = notificationService;
     }
 
     public async Task<SubmitSimulationResponse> Handle(
@@ -50,7 +55,14 @@ public class SubmitSimulationAssignmentHandler
             throw new InvalidOperationException("Resubmission is not allowed for this assignment.");
 
         if (assignment.ResubmitLimit.HasValue && attemptCount >= assignment.ResubmitLimit.Value)
-            throw new InvalidOperationException($"You have reached the maximum number of attempts ({assignment.ResubmitLimit.Value}).");
+            throw new InvalidOperationException($"Bạn đã hết lượt nộp lại (tối đa {assignment.ResubmitLimit.Value} lần).");
+
+        // Always delete previous submissions for this student and assignment (keep only latest attempt)
+        var oldSubmissions = await _submissionRepository.GetAllByAssignmentAndStudentAsync(assignmentId, studentId, cancellationToken);
+        foreach (var old in oldSubmissions)
+        {
+            _submissionRepository.Delete(old);
+        }
 
         var isCorrect = false;
         var validationMessage = "";
@@ -96,6 +108,20 @@ public class SubmitSimulationAssignmentHandler
 
         await _submissionRepository.AddAsync(submission, cancellationToken);
         await _submissionRepository.SaveChangesAsync(cancellationToken);
+
+        // N-23: Notify teacher about new submission
+        if (assignment.Class != null && assignment.Class.TeacherId > 0)
+        {
+            var title = "Bài nộp mới";
+            var content = $"{student.FullName} đã nộp bài \"{assignment.Title}\".";
+            
+            await _notificationService.SendAsync(
+                assignment.Class.TeacherId,
+                title,
+                content,
+                NotificationType.SubmissionReceived,
+                cancellationToken);
+        }
 
         return new SubmitSimulationResponse
         {

@@ -2,10 +2,12 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 using STEM.Application.DTOs.Payments;
 using STEM.Application.UseCases.Payments;
 using STEM.Core.Entities.Payments;
 using STEM.Core.Interfaces;
+using STEM.Infrastructure.Data;
 
 namespace STEM.Api.Controllers;
 
@@ -394,7 +396,7 @@ public class PaymentsController : ControllerBase
     [HttpPost("webhook")]
     [AllowAnonymous]
     public async Task<IActionResult> PaymentWebhook(
-        [FromBody] PayOSWebhookRequest request,
+        [FromBody] PayOSWebhookRequestDto request,
         CancellationToken cancellationToken = default)
     {
         try
@@ -438,7 +440,7 @@ public class PaymentsController : ControllerBase
 
     [HttpPost("callback")]
     public async Task<IActionResult> PaymentCallback(
-        [FromBody] PaymentCallbackRequest request,
+        [FromBody] PaymentCallbackRequestDto request,
         CancellationToken cancellationToken = default)
     {
         try
@@ -617,7 +619,7 @@ public class PaymentsController : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> UpdateOrderCode(
         int paymentId,
-        [FromBody] UpdateOrderCodeRequest request,
+        [FromBody] UpdateOrderCodeRequestDto request,
         CancellationToken cancellationToken = default)
     {
         try
@@ -642,32 +644,87 @@ public class PaymentsController : ControllerBase
             return StatusCode(500, new { success = false, error = ex.Message });
         }
     }
-}
 
-public class UpdateOrderCodeRequest
-{
-    public long OrderCode { get; set; }
-}
+    [HttpGet("admin/revenue")]
+    [Authorize(Roles = "Master Administrator")]
+    public async Task<IActionResult> GetRevenueStats(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var dbContext = HttpContext.RequestServices.GetService<StemDbContext>();
+            if (dbContext == null)
+                return StatusCode(500, new { success = false, message = "Database context unavailable" });
 
-public class PayOSWebhookRequest
-{
-    public string Code { get; set; } = string.Empty;
-    public string? Desc { get; set; }
-    public string? Success { get; set; }
-    public string? PaymentLinkId { get; set; }
-    public long? OrderCode { get; set; }
-    public long? Amount { get; set; }
-    public long? TransactionId { get; set; }
-    public string? TransactionDateTime { get; set; }
-    public string? Signature { get; set; }
-    public string? AccountNumber { get; set; }
-    public string? SubAccount { get; set; }
-    public string? Currency { get; set; }
-}
+            var completedPayments = dbContext.Payments
+                .Where(p => p.Status == PaymentStatus.Completed)
+                .ToList();
 
-public class PaymentCallbackRequest
-{
-    public string TransactionId { get; set; } = string.Empty;
-    public string Status { get; set; } = string.Empty;
-    public string? GatewayTransactionId { get; set; }
+            var totalRevenue = completedPayments.Sum(p => p.Amount);
+            var totalTokensSold = completedPayments.Sum(p => p.TokenAmount);
+            var totalPayments = completedPayments.Count;
+
+            var now = DateTime.UtcNow;
+            var revenueByMonth = Enumerable.Range(0, 12)
+                .Select(i =>
+                {
+                    var targetMonth = now.AddMonths(-11 + i);
+                    var startOfMonth = new DateTime(targetMonth.Year, targetMonth.Month, 1);
+                    var endOfMonth = startOfMonth.AddMonths(1);
+                    var monthRevenue = completedPayments
+                        .Where(p => p.CreatedAt >= startOfMonth && p.CreatedAt < endOfMonth)
+                        .Sum(p => p.Amount);
+                    var monthPayments = completedPayments
+                        .Where(p => p.CreatedAt >= startOfMonth && p.CreatedAt < endOfMonth)
+                        .Count();
+                    return new { month = $"T{targetMonth.Month}", revenue = monthRevenue, payments = monthPayments };
+                })
+                .ToList();
+
+            var revenueByPackage = dbContext.Payments
+                .Include(p => p.Package)
+                .Where(p => p.Status == PaymentStatus.Completed && p.Package != null)
+                .AsEnumerable()
+                .GroupBy(p => p.Package!.Name)
+                .Select(g => new { package = g.Key, revenue = g.Sum(p => p.Amount), count = g.Count() })
+                .OrderByDescending(x => x.revenue)
+                .ToList();
+
+            var topSchools = dbContext.Payments
+                .Include(p => p.School)
+                .Where(p => p.Status == PaymentStatus.Completed && p.School != null)
+                .AsEnumerable()
+                .GroupBy(p => new { p.SchoolId, SchoolName = p.School!.Name })
+                .Select(g => new { schoolId = g.Key.SchoolId, schoolName = g.Key.SchoolName, revenue = g.Sum(p => p.Amount), payments = g.Count() })
+                .OrderByDescending(x => x.revenue)
+                .Take(10)
+                .ToList();
+
+            var recentPayments = dbContext.Payments
+                .Include(p => p.School)
+                .Include(p => p.Package)
+                .Where(p => p.Status == PaymentStatus.Completed)
+                .OrderByDescending(p => p.CreatedAt)
+                .Take(10)
+                .AsEnumerable()
+                .Select(p => new { id = p.Id, schoolName = p.School?.Name ?? "N/A", packageName = p.Package?.Name ?? "N/A", amount = p.Amount, tokens = p.TokenAmount, date = p.CreatedAt })
+                .ToList();
+
+            return Ok(new
+            {
+                success = true,
+                data = new
+                {
+                    summary = new { totalRevenue, totalTokensSold, totalPayments, averagePayment = totalPayments > 0 ? totalRevenue / totalPayments : 0 },
+                    revenueByMonth,
+                    revenueByPackage,
+                    topSchools,
+                    recentPayments
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { success = false, message = ex.Message });
+        }
+    }
 }

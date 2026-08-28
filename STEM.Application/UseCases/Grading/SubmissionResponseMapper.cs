@@ -65,6 +65,50 @@ internal static class SubmissionResponseMapper
                 {
                 }
             }
+
+            // Add quiz details for review
+            if (assignment.AssignmentType == "quiz" && assignment.QuizDetail != null)
+            {
+                try
+                {
+                    var quizDetail = assignment.QuizDetail;
+                    var questions = new List<GradingQuizQuestion>();
+                    if (!string.IsNullOrEmpty(quizDetail.QuestionsJson))
+                    {
+                        var parsedQuestions = JsonSerializer.Deserialize<List<JsonElement>>(quizDetail.QuestionsJson);
+                        if (parsedQuestions != null)
+                        {
+                            foreach (var q in parsedQuestions)
+                            {
+                                var question = new GradingQuizQuestion
+                                {
+                                    Id = q.GetProperty("id").GetString() ?? "",
+                                    Text = q.GetProperty("text").GetString() ?? "",
+                                    Type = q.TryGetProperty("type", out var t) ? t.GetString() ?? "single_choice" : "single_choice"
+                                };
+                                if (q.TryGetProperty("options", out var opts) && opts.ValueKind == JsonValueKind.Array)
+                                {
+                                    question.Options = opts.EnumerateArray().Select(o => new GradingQuizOption
+                                    {
+                                        Id = o.GetProperty("id").GetString() ?? "",
+                                        Text = o.GetProperty("text").GetString() ?? ""
+                                    }).ToList();
+                                }
+                                questions.Add(question);
+                            }
+                        }
+                    }
+                    response.QuizDetail = new GradingQuizDetail
+                    {
+                        Questions = questions,
+                        TimeLimitSeconds = quizDetail.TimeLimitSeconds,
+                        ShuffleQuestions = quizDetail.ShuffleQuestions
+                    };
+                }
+                catch
+                {
+                }
+            }
         }
 
         return response;

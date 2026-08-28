@@ -16,11 +16,10 @@ public class CourseRepository : Repository<Course>, ICourseRepository
         int pageNumber,
         int pageSize,
         string? searchTerm,
-        int? schoolId,
         CancellationToken cancellationToken = default)
     {
         var query = _dbSet
-            .Include(c => c.School)
+            .Include(c => c.Syllabus)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
@@ -31,13 +30,11 @@ public class CourseRepository : Repository<Course>, ICourseRepository
                 c.Description.ToLower().Contains(term));
         }
 
-        if (schoolId.HasValue)
-            query = query.Where(c => c.SchoolId == schoolId.Value);
-
         var totalCount = await query.CountAsync(cancellationToken);
 
         var courses = await query
-            .OrderBy(c => c.Title)
+            .OrderBy(c => c.DisplayOrder)
+            .ThenBy(c => c.Title)
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
@@ -48,16 +45,13 @@ public class CourseRepository : Repository<Course>, ICourseRepository
     public async Task<Course?> GetCourseDetailAsync(int id, CancellationToken cancellationToken = default)
     {
         return await _dbSet
-            .Include(c => c.School)
+            .Include(c => c.Syllabus)
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
     }
 
-    public async Task<bool> ExistsByTitleAsync(string title, int schoolId, CancellationToken cancellationToken = default)
+    public async Task<bool> ExistsByTitleAsync(string title, CancellationToken cancellationToken = default)
     {
-        return await _dbSet.AnyAsync(c => 
-            c.SchoolId == schoolId && 
-            c.Title.ToLower() == title.ToLower(), 
-            cancellationToken);
+        return await _dbSet.AnyAsync(c => c.Title.ToLower() == title.ToLower(), cancellationToken);
     }
 
     public async Task<bool> HasClassesAsync(int courseId, CancellationToken cancellationToken = default)

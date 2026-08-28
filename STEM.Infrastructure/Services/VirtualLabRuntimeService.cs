@@ -26,6 +26,24 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         PropertyNameCaseInsensitive = true
     };
 
+    // Mirrors EducationalEventGenerator.BuildComponentIndexes's own type list
+    // EXACTLY (STEM.Application/UseCases/Simulation/Runners/Educational/
+    // EducationalEventGenerator.cs) plus the 2 board type strings
+    // VirtualLabDiagramService.EnsureBoardPart can emit — this is the
+    // definitive, current list of what the Educational runner actually
+    // models. Anything not in this set (L298N, DC motor, HC-SR04, DHT11/22,
+    // Fan, Drone Motor, line-tracking-3ch/5ch, etc.) is intentionally left to
+    // fall through to the existing QEMU-default behavior, unchanged.
+    private static readonly HashSet<string> EducationalOnlyComponentTypes = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "wokwi-led", "wokwi-pushbutton", "wokwi-buzzer", "wokwi-servo",
+        "wokwi-potentiometer", "wokwi-photoresistor-sensor", "wokwi-relay-module",
+        "wokwi-pir-motion-sensor", "wokwi-water-leak-sensor", "wokwi-flame-sensor",
+        "wokwi-soil-moisture-sensor", "wokwi-rain-sensor", "wokwi-vibration-sensor",
+        "wokwi-ir-obstacle-sensor",
+        "board-esp32-devkit-c-v4", "wokwi-arduino-uno",
+    };
+
     private readonly StemDbContext _context;
     private readonly VirtualLabDiagramService _diagramService;
     private readonly ISimulationRunnerResolver _runnerResolver;
@@ -164,6 +182,38 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
 
         var boardType = await ResolveBoardTypeAsync(sessionId, currentUserId, cancellationToken) ?? DefaultBoard;
         var analysis = _diagramService.Analyze(diagramJson, boardType);
+
+        // CLOSE REMAINING FINAL-LAB GAPS follow-up fix (2026-08-25, found via
+        // real manual browser testing, not guessed): ResolveSimulationMode()
+        // above is a FLAT global config read (SimulationRunner:DefaultMode) —
+        // there is no component-based runtime selection anywhere in this
+        // codebase (verified directly in SimulationRunnerResolver.cs), despite
+        // a stale comment elsewhere (virtualLabSampleExercises.ts) claiming
+        // "kien truc chon runtime dua tren linh kien, khong dua tren nhan bai
+        // hoc" — that was never actually implemented. Consequence: with the
+        // deployed DefaultMode=qemu, EVERY lab resolves to QemuEsp32Runner,
+        // which never references ISimulationInputChannel at all — so live
+        // button/potentiometer/light-sensor press-and-hold input silently
+        // fails end-to-end ("No running session accepts input for this
+        // project right now"), even though EducationalSimulationRunner fully
+        // supports it (proven by RealtimeSimulationInputTests.cs) and the
+        // component's own runtime models are correct. Minimal, targeted fix:
+        // when EVERY component on the diagram is one
+        // EducationalEventGenerator.BuildComponentIndexes actually models
+        // (plus the board itself), force "educational" regardless of the
+        // global default. Any diagram containing L298N/DC-motor/HC-SR04/Fan/
+        // DroneMotor/line-tracking-3ch-5ch/etc. falls through untouched to the
+        // existing default — this does not change QEMU routing for any lab
+        // that genuinely needs it.
+        if (mode.Equals("qemu", StringComparison.OrdinalIgnoreCase))
+        {
+            var snapshot = _diagramService.BuildRuntimeSnapshot(diagramJson, boardType);
+            if (snapshot.Components.Count > 0 &&
+                snapshot.Components.All(c => EducationalOnlyComponentTypes.Contains(c.Type)))
+            {
+                mode = "educational";
+            }
+        }
 
         // "educational" (EducationalSimulationRunner) và "qemu" (QemuEsp32Runner)
         // không còn tính hết rồi trả về đầy đủ trong 1 request nữa — cả 2 chỉ
@@ -583,7 +633,7 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
                 UserId = assignment.Class.TeacherId,
                 Title = "Bài nộp mới",
                 Content = $"{studentName} đã nộp bài \"{assignment.Title}\".",
-                Type = "SubmissionReceived"
+                Type = NotificationType.SubmissionReceived
             }, cancellationToken);
             await _notificationRepository.SaveChangesAsync(cancellationToken);
         }
@@ -613,66 +663,86 @@ public class VirtualLabRuntimeService : IVirtualLabRuntimeService
         }
 
         var eventBatchJson = JsonSerializer.Serialize(events, JsonOptions);
-        await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
-        var project = await LoadOwnedProjectAsync(projectId, currentUserId, asNoTracking: false, cancellationToken);
-        var now = DateTime.UtcNow;
-        var appendEventBatch = false;
 
-        if (project == null)
+        // BUG THẬT đã vá (MOTOR ANIMATION VERIFICATION milestone, 2026-08-24,
+        // live-verified qua Docker/QEMU thật — không phải suy đoán): StemDbContext
+        // dùng NpgsqlRetryingExecutionStrategy (connection resiliency), nhưng
+        // transaction thủ công (`BeginTransactionAsync` trần) KHÔNG được phép
+        // dùng cùng 1 retrying execution strategy — EF Core chủ động throw
+        // "does not support user-initiated transactions" ngay khi strategy cần
+        // retry (vd 1 lần transient connection hiccup thật với Supabase pooler ở
+        // xa, dễ gặp nhất ở request ĐẦU TIÊN sau khi API mới khởi động — connection
+        // pool chưa "ấm"). Hậu quả thật: học sinh bấm Run đúng lúc pod/API vừa
+        // restart có thể nhận lỗi 400 khó hiểu thay vì compile lỗi bình thường.
+        // Sửa bằng cách bọc TOÀN BỘ thao tác trong `CreateExecutionStrategy()
+        // .ExecuteAsync()` — cách EF Core khuyến nghị chính thức để kết hợp
+        // transaction thủ công với retrying strategy (tự mở lại transaction MỚI
+        // nếu phải retry, thay vì giữ 1 transaction "mồ côi" xung đột với chính
+        // sách retry).
+        var strategy = _context.Database.CreateExecutionStrategy();
+        await strategy.ExecuteAsync(async () =>
         {
-            var platform = await ResolveProjectPlatformAsync(labId, cancellationToken);
-            project = new VirtualLabProject
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+            var project = await LoadOwnedProjectAsync(projectId, currentUserId, asNoTracking: false, cancellationToken);
+            var now = DateTime.UtcNow;
+            var appendEventBatch = false;
+
+            if (project == null)
             {
-                Id = projectId,
-                UserId = currentUserId,
-                LabId = labId,
-                Name = $"session-{projectId:N}"[..20],
-                Board = platform.Board,
-                Language = platform.Language,
-                DiagramJson = diagramJson,
-                Status = status,
-                SimulationEventsJson = eventBatchJson,
-                CodeContent = sourceCode,
-                CreatedAt = now,
-                UpdatedAt = now
-            };
-            _context.VirtualLabProjects.Add(project);
-        }
-        else
-        {
-            project.DiagramJson = diagramJson;
-            project.CodeContent = sourceCode;
-            project.Status = status;
-            project.UpdatedAt = now;
-            appendEventBatch = true;
-        }
-
-        await _context.SaveChangesAsync(cancellationToken);
-
-        if (appendEventBatch)
-        {
-            var affectedRows = await _context.Database.ExecuteSqlRawAsync(
-                """
-                UPDATE "VirtualLabProjects"
-                SET
-                    "SimulationEventsJson" = '[]'::jsonb || @eventBatch,
-                    "UpdatedAt" = @updatedAt
-                WHERE "Id" = @projectId
-                """,
-                [
-                    new NpgsqlParameter("eventBatch", NpgsqlDbType.Jsonb) { Value = eventBatchJson },
-                    new NpgsqlParameter("updatedAt", NpgsqlDbType.TimestampTz) { Value = now },
-                    new NpgsqlParameter("projectId", NpgsqlDbType.Uuid) { Value = projectId }
-                ],
-                cancellationToken);
-
-            if (affectedRows == 0)
-            {
-                throw new KeyNotFoundException("VirtualLabProject not found.");
+                var platform = await ResolveProjectPlatformAsync(labId, cancellationToken);
+                project = new VirtualLabProject
+                {
+                    Id = projectId,
+                    UserId = currentUserId,
+                    LabId = labId,
+                    Name = $"session-{projectId:N}"[..20],
+                    Board = platform.Board,
+                    Language = platform.Language,
+                    DiagramJson = diagramJson,
+                    Status = status,
+                    SimulationEventsJson = eventBatchJson,
+                    CodeContent = sourceCode,
+                    CreatedAt = now,
+                    UpdatedAt = now
+                };
+                _context.VirtualLabProjects.Add(project);
             }
-        }
+            else
+            {
+                project.DiagramJson = diagramJson;
+                project.CodeContent = sourceCode;
+                project.Status = status;
+                project.UpdatedAt = now;
+                appendEventBatch = true;
+            }
 
-        await transaction.CommitAsync(cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
+
+            if (appendEventBatch)
+            {
+                var affectedRows = await _context.Database.ExecuteSqlRawAsync(
+                    """
+                    UPDATE "VirtualLabProjects"
+                    SET
+                        "SimulationEventsJson" = '[]'::jsonb || @eventBatch,
+                        "UpdatedAt" = @updatedAt
+                    WHERE "Id" = @projectId
+                    """,
+                    [
+                        new NpgsqlParameter("eventBatch", NpgsqlDbType.Jsonb) { Value = eventBatchJson },
+                        new NpgsqlParameter("updatedAt", NpgsqlDbType.TimestampTz) { Value = now },
+                        new NpgsqlParameter("projectId", NpgsqlDbType.Uuid) { Value = projectId }
+                    ],
+                    cancellationToken);
+
+                if (affectedRows == 0)
+                {
+                    throw new KeyNotFoundException("VirtualLabProject not found.");
+                }
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+        });
     }
 
     private async Task<string?> ResolveDiagramJsonAsync(

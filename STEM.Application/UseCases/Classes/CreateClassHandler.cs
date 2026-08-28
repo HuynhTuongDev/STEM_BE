@@ -1,8 +1,12 @@
 using STEM.Application.Dtos.Classes;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
+using STEM.Application.Interfaces;
 using FluentValidation;
+
+using static STEM.Core.Entities.Users.RoleNames;
 
 namespace STEM.Application.UseCases.Classes;
 
@@ -13,19 +17,22 @@ public class CreateClassHandler
     private readonly IUserRepository _userRepository;
     private readonly ISchoolRepository _schoolRepository;
     private readonly IValidator<CreateClassRequest> _validator;
+    private readonly INotificationService _notificationService;
 
     public CreateClassHandler(
         IClassRepository classRepository,
         ICourseRepository courseRepository,
         IUserRepository userRepository,
         ISchoolRepository schoolRepository,
-        IValidator<CreateClassRequest> validator)
+        IValidator<CreateClassRequest> validator,
+        INotificationService notificationService)
     {
         _classRepository = classRepository;
         _courseRepository = courseRepository;
         _userRepository = userRepository;
         _schoolRepository = schoolRepository;
         _validator = validator;
+        _notificationService = notificationService;
     }
 
     public async Task<int> Handle(
@@ -39,16 +46,14 @@ public class CreateClassHandler
         if (currentUser == null)
             throw new UnauthorizedAccessException("Người dùng không tồn tại.");
 
-        if (currentUser.Role?.Name != RoleNames.SchoolAdministrator && currentUser.Role?.Name != RoleNames.MasterAdministrator)
+        if (!RoleNames.IsSchoolAdmin(currentUser.Role?.Name) && !RoleNames.IsMasterAdmin(currentUser.Role?.Name))
             throw new UnauthorizedAccessException("Chỉ Quản trị viên trường mới được tạo lớp học.");
 
         var course = await _courseRepository.GetByIdAsync(request.CourseId, cancellationToken);
         if (course == null)
             throw new ArgumentException("Không tìm thấy khóa học.");
 
-        if (course.SchoolId != currentUser.SchoolId && currentUser.Role?.Name != RoleNames.MasterAdministrator)
-            throw new ArgumentException("Khóa học không thuộc trường của bạn.");
-
+        // Course giờ không còn SchoolId, SchoolAdmin vẫn tạo được lớp với course
         var teacher = await _userRepository.GetByIdAsync(request.TeacherId, cancellationToken);
         if (teacher == null)
             throw new ArgumentException("Không tìm thấy giáo viên.");
@@ -59,23 +64,25 @@ public class CreateClassHandler
         if (teacher.SchoolId != currentUser.SchoolId && currentUser.Role?.Name != RoleNames.MasterAdministrator)
             throw new ArgumentException("Giáo viên không thuộc trường của bạn.");
 
-        var schoolId = currentUser.SchoolId ?? course.SchoolId;
-        if (!schoolId.HasValue || schoolId.Value == 0)
+        if (!currentUser.SchoolId.HasValue || currentUser.SchoolId.Value == 0)
             throw new InvalidOperationException("Không xác định được trường cho lớp học.");
 
-        var schoolExists = await _schoolRepository.ExistsAsync(schoolId.Value, cancellationToken);
+        var schoolId = currentUser.SchoolId.Value;
+
+        var schoolExists = await _schoolRepository.ExistsAsync(schoolId, cancellationToken);
         if (!schoolExists)
             throw new InvalidOperationException($"Trường với ID {schoolId} không tồn tại.");
 
         var existingClass = (await _classRepository.GetClassesPagedAsync(1, 100, request.ClassCode, null, null, schoolId, cancellationToken)).Classes
-            .FirstOrDefault(c => c.ClassCode == request.ClassCode && c.SchoolId == schoolId.Value);
+            .FirstOrDefault(c => c.ClassCode == request.ClassCode && c.SchoolId == schoolId);
         if (existingClass != null)
             throw new ArgumentException("Mã lớp đã tồn tại trong trường của bạn.");
 
         var classEntity = new Class
         {
             ClassCode = request.ClassCode,
-            SchoolId = schoolId.Value,
+            SchoolId = schoolId,
+            GradeLevelId = request.GradeLevelId,
             CourseId = request.CourseId,
             TeacherId = request.TeacherId,
             StartDate = NormalizeToUtc(request.StartDate),
@@ -86,6 +93,12 @@ public class CreateClassHandler
 
         await _classRepository.AddAsync(classEntity, cancellationToken);
         await _classRepository.SaveChangesAsync(cancellationToken);
+
+        // N-16: Notify teacher about new class assigned
+        var title = $"Bạn được phân công dạy lớp mới {classEntity.ClassCode}";
+        var content = $"Bạn được phân công dạy lớp {classEntity.ClassCode} - {course.Title}. Thời gian: {classEntity.StartDate:dd/MM/yyyy} đến {classEntity.EndDate:dd/MM/yyyy}.";
+        
+        await _notificationService.SendAsync(request.TeacherId, title, content, NotificationType.NewClassAvailable, cancellationToken);
 
         return classEntity.Id;
     }

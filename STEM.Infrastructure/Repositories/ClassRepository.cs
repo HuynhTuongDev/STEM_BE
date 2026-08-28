@@ -19,6 +19,7 @@ public class ClassRepository : Repository<Class>, IClassRepository
     {
         return await _context.Classes
             .Include(c => c.School)
+            .Include(c => c.GradeLevel)
             .Include(c => c.Course)
             .Include(c => c.Teacher)
             .Where(c => c.CourseId == courseId)
@@ -179,19 +180,29 @@ public class ClassRepository : Repository<Class>, IClassRepository
     {
         var query = _context.Classes
             .Include(c => c.School)
+            .Include(c => c.GradeLevel)
             .Include(c => c.Course)
             .Include(c => c.Teacher)
             .Include(c => c.Enrollments)
             .AsQueryable();
 
         if (schoolId.HasValue)
-            query = query.Where(c => c.SchoolId == schoolId.Value);
+        {
+            var schoolIdValue = schoolId.Value;
+            query = query.Where(c => c.SchoolId == schoolIdValue);
+        }
 
         if (courseId.HasValue)
-            query = query.Where(c => c.CourseId == courseId.Value);
+        {
+            var courseIdValue = courseId.Value;
+            query = query.Where(c => c.CourseId == courseIdValue);
+        }
 
         if (teacherId.HasValue)
-            query = query.Where(c => c.TeacherId == teacherId.Value);
+        {
+            var teacherIdValue = teacherId.Value;
+            query = query.Where(c => c.TeacherId == teacherIdValue);
+        }
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {
@@ -216,10 +227,11 @@ public class ClassRepository : Repository<Class>, IClassRepository
     {
         return await _context.Classes
             .Include(c => c.School)
+            .Include(c => c.GradeLevel)
             .Include(c => c.Course)
             .Include(c => c.Teacher)
             .Include(c => c.Enrollments).ThenInclude(e => e.Student)
-            .Include(c => c.Schedules)
+            .Include(c => c.Schedules).ThenInclude(s => s.Lesson)
             .Include(c => c.Announcements)
             .FirstOrDefaultAsync(c => c.Id == id, cancellationToken);
     }
@@ -233,14 +245,21 @@ public class ClassRepository : Repository<Class>, IClassRepository
         var query = _context.Schedules
             .Include(s => s.Class)
                 .ThenInclude(c => c.Course)
+            .Include(s => s.Lesson)
             .Where(s => s.Class.TeacherId == teacherId)
             .AsQueryable();
 
         if (fromDateUtc.HasValue)
-            query = query.Where(s => s.StartTime >= fromDateUtc.Value);
+        {
+            var fromDateValue = fromDateUtc.Value;
+            query = query.Where(s => s.StartTime >= fromDateValue);
+        }
 
         if (toDateUtc.HasValue)
-            query = query.Where(s => s.EndTime <= toDateUtc.Value);
+        {
+            var toDateValue = toDateUtc.Value;
+            query = query.Where(s => s.EndTime <= toDateValue);
+        }
 
         return await query
             .OrderBy(s => s.StartTime)
@@ -250,6 +269,7 @@ public class ClassRepository : Repository<Class>, IClassRepository
     public async Task<IEnumerable<Schedule>> GetSchedulesAsync(int classId, CancellationToken cancellationToken = default)
     {
         return await _context.Schedules
+            .Include(s => s.Lesson)
             .Where(s => s.ClassId == classId)
             .ToListAsync(cancellationToken);
     }
@@ -321,6 +341,13 @@ public class ClassRepository : Repository<Class>, IClassRepository
             .Where(a => a.ClassId == classId)
             .OrderByDescending(a => a.DueDate)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<Course?> GetCourseByIdAsync(int courseId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Courses
+            .AsNoTracking()
+            .FirstOrDefaultAsync(c => c.Id == courseId, cancellationToken);
     }
 
 }

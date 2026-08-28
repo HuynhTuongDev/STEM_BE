@@ -35,6 +35,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ILoginHistoryRepository, LoginHistoryRepository>();
         services.AddScoped<INotificationRepository, NotificationRepository>();
         services.AddScoped<ICourseRepository, CourseRepository>();
+        services.AddScoped<ISyllabusRepository, SyllabusRepository>();
+        services.AddScoped<ISystemLogRepository, SystemLogRepository>();
+        services.AddScoped<ISystemLogService, SystemLogService>();
         services.AddScoped<IClassRepository, ClassRepository>();
         services.AddScoped<IAttendanceRepository, AttendanceRepository>();
         services.AddScoped<IAssignmentRepository, AssignmentRepository>();
@@ -50,7 +53,14 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITokenService, TokenService>();
         services.AddScoped<IWokwiService, WokwiService>();
         services.AddTransient<IEmailService, EmailService>();
-        
+        services.AddScoped<INotificationService, NotificationService>();
+
+        // Curriculum Repositories
+        services.AddScoped<ISyllabusRepository, SyllabusRepository>();
+        services.AddScoped<IGradeLevelRepository, GradeLevelRepository>();
+        services.AddScoped<IModuleRepository, ModuleRepository>();
+        services.AddScoped<ILessonRepository, LessonRepository>();
+
         services.AddScoped<IVirtualLabProjectService, VirtualLabProjectService>();
         services.AddHttpClient<ILabService, LabService>();
         services.AddHttpClient<ILabAiProvider, BeeknoeeLabAiProvider>(client =>
@@ -66,6 +76,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IFirmwareCacheService, FirmwareCacheService>();
         services.AddSingleton<IPrecompileTriggerService, PrecompileTriggerService>();
         services.AddHostedService<TokenExpirationBackgroundService>();
+        services.AddHostedService<NotificationBackgroundService>();
+        services.AddHostedService<ProgressAlertBackgroundService>();
+        services.AddHostedService<SchoolAdminNotificationBackgroundService>();
         services.AddScoped<IAiQuotaUsageStore, AiQuotaUsageStore>();
         services.AddSingleton<IDateTimeProvider, SystemDateTimeProvider>();
 
@@ -116,6 +129,35 @@ public static class ServiceCollectionExtensions
         services.AddScoped<STEM.Application.UseCases.Payments.DeletePackageHandler>();
         services.AddScoped<STEM.Application.UseCases.Payments.RevokeExpiredAllocationsHandler>();
         services.AddScoped<STEM.Application.UseCases.Payments.BulkAllocateTokensByRoleHandler>();
+
+        // Multi-Provider Component Architecture (acquisition side only —
+        // never referenced by VirtualLabRuntimeService/ISimulationRunnerResolver).
+        services.Configure<STEM.Infrastructure.VirtualLab.Components.Providers.Fritzing.FritzingOptions>(
+            configuration.GetSection(STEM.Infrastructure.VirtualLab.Components.Providers.Fritzing.FritzingOptions.SectionName));
+        services.AddHttpClient(STEM.Application.UseCases.Components.Providers.Fritzing.FritzingConstants.ProviderName, client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("StemFlow-ComponentImporter/1.0");
+        });
+        services.AddSingleton<STEM.Application.UseCases.Components.Abstractions.IComponentProvider,
+            STEM.Infrastructure.VirtualLab.Components.Providers.Fritzing.FritzingComponentProvider>();
+
+        services.Configure<STEM.Infrastructure.VirtualLab.Components.Providers.KiCad.KiCadOptions>(
+            configuration.GetSection(STEM.Infrastructure.VirtualLab.Components.Providers.KiCad.KiCadOptions.SectionName));
+        services.AddHttpClient(STEM.Application.UseCases.Components.Providers.KiCad.KiCadConstants.ProviderName, client =>
+        {
+            client.Timeout = TimeSpan.FromSeconds(15);
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("StemFlow-ComponentImporter/1.0");
+        });
+        services.AddSingleton<STEM.Application.UseCases.Components.Abstractions.IComponentProvider,
+            STEM.Infrastructure.VirtualLab.Components.Providers.KiCad.KiCadComponentProvider>();
+
+        services.AddSingleton<STEM.Application.UseCases.Components.Abstractions.IComponentProviderAggregator,
+            STEM.Application.UseCases.Components.ComponentProviderAggregator>();
+        services.AddSingleton<STEM.Application.UseCases.Components.Abstractions.IComponentNormalizer,
+            STEM.Application.UseCases.Components.ComponentNormalizer>();
+        services.AddScoped<STEM.Application.UseCases.Components.Abstractions.IComponentRegistry,
+            STEM.Infrastructure.VirtualLab.Components.ComponentRegistryService>();
 
         return services;
     }

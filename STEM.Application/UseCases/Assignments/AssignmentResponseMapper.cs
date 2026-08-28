@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using STEM.Application.Dtos.Assignments;
+using STEM.Core.Entities.Classes;
 using STEM.Core.Entities.Projects;
 
 namespace STEM.Application.UseCases.Assignments;
@@ -13,9 +14,9 @@ internal static class AssignmentResponseMapper
     /// and Quiz options[].isCorrect / fill_blank correctAnswer / Simulation AnswerKeyJson
     /// are graded-answer data that must not reach a Student before/while they can still submit.
     /// </summary>
-    public static AssignmentResponse Map(Assignment assignment, bool revealAnswers = true, int? currentStudentId = null)
+    public static AssignmentResponse Map(Assignment assignment, Class? classEntityFromParam = null, bool revealAnswers = true, int? currentStudentId = null)
     {
-        var classEntity = assignment.Class;
+        var classEntity = classEntityFromParam ?? assignment.Class;
         var course = classEntity?.Course;
         var teacher = classEntity?.Teacher;
         var school = classEntity?.School;

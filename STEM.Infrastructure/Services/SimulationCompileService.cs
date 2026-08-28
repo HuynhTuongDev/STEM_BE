@@ -277,6 +277,19 @@ public class SimulationCompileService : ISimulationCompileService
             // UTF8Encoding(false) writes UTF-8 without the BOM preamble.
             await File.WriteAllTextAsync(Path.Combine(sketchDir, "sketch.ino"), sourceCode, new UTF8Encoding(false), cancellationToken);
 
+            // ExtraFiles (vd StemFlowDHT.h — xem CompileSimulationRequest.ExtraFiles,
+            // SensorRuntimeHeaderGenerator.BuildExtraFiles) — file phụ sketch #include,
+            // phải TỒN TẠI THẬT trong cùng thư mục để preprocessor resolve được. Null/
+            // rỗng (mọi caller hiện có trước tính năng DHT) = không ghi gì thêm, giữ
+            // nguyên hành vi cũ.
+            if (request.ExtraFiles != null)
+            {
+                foreach (var (fileName, content) in request.ExtraFiles)
+                {
+                    await File.WriteAllTextAsync(Path.Combine(sketchDir, fileName), content, new UTF8Encoding(false), cancellationToken);
+                }
+            }
+
             // Sandboxing: the only host filesystem the container ever sees is this
             // job's own temp dir (sketch input read-only, output read-write), and the
             // whole dir is deleted in the `finally` below regardless of outcome — both
@@ -540,6 +553,25 @@ public class SimulationCompileService : ISimulationCompileService
         else if (sourceCode.Length > MaxCodeLength)
         {
             errors.Add(new CompileSimulationError { Message = $"Code is too large. Max length is {MaxCodeLength} characters." });
+        }
+
+        // ExtraFiles ghi thẳng vào sketchDir bằng đúng tên gọi ra (xem
+        // CompileCoreAsync) — request tới thẳng từ [FromBody] của endpoint public
+        // POST api/simulation/compile, KHÔNG được tin tưởng: chặn path traversal
+        // (vd "../../etc/passwd") và path tuyệt đối ở đây, chỉ chấp nhận tên file
+        // trần (không chứa dấu phân cách thư mục).
+        if (request.ExtraFiles != null)
+        {
+            foreach (var fileName in request.ExtraFiles.Keys)
+            {
+                if (string.IsNullOrWhiteSpace(fileName) ||
+                    Path.IsPathRooted(fileName) ||
+                    fileName != Path.GetFileName(fileName) ||
+                    fileName.Contains(".."))
+                {
+                    errors.Add(new CompileSimulationError { Message = $"Invalid extra file name '{fileName}'." });
+                }
+            }
         }
 
         if (request.LabId.HasValue)

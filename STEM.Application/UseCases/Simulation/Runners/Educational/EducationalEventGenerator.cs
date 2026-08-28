@@ -2,6 +2,7 @@ using STEM.Application.Dtos.Simulation;
 using STEM.Application.UseCases.Simulation.Abstractions;
 using STEM.Application.UseCases.Simulation.Runtime;
 using STEM.Application.UseCases.Simulation.Runners.Educational.Components;
+using STEM.Application.UseCases.Simulation.Runners.Qemu;
 
 namespace STEM.Application.UseCases.Simulation.Runners.Educational;
 
@@ -143,19 +144,70 @@ public sealed class EducationalEventGenerator
                     await EmitAsync(state, onEventEmitted, buzzer.ToDigitalEvent(state.Time, instruction.Value!), cancellationToken);
                 }
 
+                foreach (var relay in state.FindRelays(instruction.Pin!))
+                {
+                    await EmitAsync(state, onEventEmitted, relay.ToDigitalEvent(state.Time, instruction.Value!), cancellationToken);
+                }
+
                 return null;
 
             case EducationalInstructionKind.DigitalRead:
                 var pinMode = state.PinModes.TryGetValue(instruction.Pin!, out var mode) ? mode : null;
                 var button = state.FindButtons(instruction.Pin!).FirstOrDefault();
+                var digitalSensor = state.FindDigitalSensors(instruction.Pin!).FirstOrDefault();
                 var value = button?.Read(state.Context.ComponentInputs, pinMode) ??
-                    (pinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW");
+                    (digitalSensor != null
+                        ? ((digitalSensor.TryReadLiveInput(state.Context.ComponentInputs) ??
+                            state.ReadDigitalSensorScenario(digitalSensor.PartId, digitalSensor.UseMotionField, defaultValue: false))
+                           ? "HIGH" : "LOW")
+                        : (pinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW"));
 
                 await EmitAsync(state, onEventEmitted, "pin-state", state.Time, new Dictionary<string, object?>
                 {
                     ["pin"] = instruction.Pin,
                     ["value"] = value,
                     ["operation"] = "digitalRead"
+                }, cancellationToken);
+                return null;
+
+            case EducationalInstructionKind.AnalogReadAssign:
+                // Re-read live on every visit — same reasoning as DigitalRead/If
+                // below, this is what lets a running loop() react to a slider
+                // (or a light-sensor reading) moved via ISimulationInputChannel
+                // since the last iteration. ReadAnalog doesn't care which
+                // analog-capable component is on this pin.
+                var analogValue = state.ReadAnalog(instruction.Pin!, state.Context.ComponentInputs);
+                state.AnalogLocals[instruction.Value!] = analogValue;
+
+                await EmitAsync(state, onEventEmitted, "pin-state", state.Time, new Dictionary<string, object?>
+                {
+                    ["pin"] = instruction.Pin,
+                    ["value"] = analogValue,
+                    ["operation"] = "analogRead"
+                }, cancellationToken);
+                return null;
+
+            case EducationalInstructionKind.DhtReadAssign:
+                // Pin encodes "{componentId}:{field}" — see
+                // EducationalInstruction.DhtReadAssign's comment. Re-read
+                // live every visit (same reasoning as AnalogReadAssign
+                // above) so a scenario timeline crossing a new mark mid-run
+                // is picked up on the very next loop() pass.
+                var dhtParts = instruction.Pin!.Split(':', 2);
+                var dhtValue = state.ReadDhtScenario(dhtParts[0], dhtParts[1]);
+                // AnalogLocals is int-only (matches IfNumeric's int
+                // Threshold, same 0..4095-integer world Potentiometer/
+                // LightSensor already live in) — DHT values are rounded,
+                // not truncated. Documented limitation, not a bug: this
+                // milestone's own sensorScenario samples only use
+                // whole-number temperature/humidity marks.
+                state.AnalogLocals[instruction.Value!] = (int)Math.Round(dhtValue);
+
+                await EmitAsync(state, onEventEmitted, "pin-state", state.Time, new Dictionary<string, object?>
+                {
+                    ["pin"] = dhtParts[0],
+                    ["value"] = dhtValue,
+                    ["operation"] = dhtParts[1] == "Temperature" ? "dht.readTemperature" : "dht.readHumidity"
                 }, cancellationToken);
                 return null;
 
@@ -167,6 +219,34 @@ public sealed class EducationalEventGenerator
                 await EmitAsync(state, onEventEmitted, "serial", state.Time, new Dictionary<string, object?>
                 {
                     ["message"] = instruction.Message ?? string.Empty,
+                    ["newline"] = instruction.Newline
+                }, cancellationToken);
+                return null;
+
+            // Serial.print(aliasName) for a "bool aliasName = digitalRead(pin)
+            // == X;" local — re-reads the pin live (same helper the plain If
+            // case below uses) and prints "1"/"0", matching real Arduino's
+            // Serial.print(bool).
+            case EducationalInstructionKind.SerialBoolVariable:
+                var actualForSerial = ReadDigitalConditionValue(state, instruction.Pin!);
+                var boolAsText = actualForSerial.Equals(instruction.Value, StringComparison.OrdinalIgnoreCase) ? "1" : "0";
+                await EmitAsync(state, onEventEmitted, "serial", state.Time, new Dictionary<string, object?>
+                {
+                    ["message"] = boolAsText,
+                    ["newline"] = instruction.Newline
+                }, cancellationToken);
+                return null;
+
+            // Serial.print(varName) for an "int varName = analogRead(pin);"
+            // local — looks up the same AnalogLocals slot AnalogReadAssign
+            // just wrote, live, instead of a static parse-time placeholder.
+            case EducationalInstructionKind.SerialNumericVariable:
+                var numericForSerial = state.AnalogLocals.TryGetValue(instruction.Value!, out var storedNumeric)
+                    ? storedNumeric
+                    : 0;
+                await EmitAsync(state, onEventEmitted, "serial", state.Time, new Dictionary<string, object?>
+                {
+                    ["message"] = numericForSerial.ToString(System.Globalization.CultureInfo.InvariantCulture),
                     ["newline"] = instruction.Newline
                 }, cancellationToken);
                 return null;
@@ -259,6 +339,61 @@ public sealed class EducationalEventGenerator
 
                 return null;
 
+            case EducationalInstructionKind.If:
+                // Re-read live on EVERY visit (not cached from parse time) —
+                // this is what lets a running loop() react to a value an
+                // external caller wrote into ComponentInputs via
+                // ISimulationInputChannel since the last iteration.
+                IReadOnlyList<EducationalInstruction>? branch;
+                if (instruction.ComparisonOperator != null)
+                {
+                    // Numeric mode (IfNumeric) — Pin holds the AnalogLocals
+                    // variable name here, set by the AnalogReadAssign visited
+                    // earlier this same loop() pass. Missing/never-assigned
+                    // variable reads as 0, matching an uninitialized int's
+                    // typical Arduino behavior closely enough for this scope.
+                    var currentValue = state.AnalogLocals.TryGetValue(instruction.Pin!, out var storedValue)
+                        ? storedValue
+                        : 0;
+                    var conditionTrue = instruction.ComparisonOperator switch
+                    {
+                        ">" => currentValue > instruction.Threshold,
+                        "<" => currentValue < instruction.Threshold,
+                        ">=" => currentValue >= instruction.Threshold,
+                        "<=" => currentValue <= instruction.Threshold,
+                        _ => false
+                    };
+                    branch = conditionTrue ? instruction.Body : instruction.ElseBody;
+                }
+                else
+                {
+                    var conditionPinMode = state.PinModes.TryGetValue(instruction.Pin!, out var ifMode) ? ifMode : null;
+                    var conditionButton = state.FindButtons(instruction.Pin!).FirstOrDefault();
+                    var conditionDigitalSensor = state.FindDigitalSensors(instruction.Pin!).FirstOrDefault();
+                    var actualValue = conditionButton?.Read(state.Context.ComponentInputs, conditionPinMode) ??
+                        (conditionDigitalSensor != null
+                            ? ((conditionDigitalSensor.TryReadLiveInput(state.Context.ComponentInputs) ??
+                                state.ReadDigitalSensorScenario(conditionDigitalSensor.PartId, conditionDigitalSensor.UseMotionField, defaultValue: false))
+                               ? "HIGH" : "LOW")
+                            : (conditionPinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW"));
+                    branch = actualValue.Equals(instruction.Value, StringComparison.OrdinalIgnoreCase)
+                        ? instruction.Body
+                        : instruction.ElseBody;
+                }
+
+                if (branch == null || branch.Count == 0)
+                {
+                    return null;
+                }
+
+                var branchResult = await ExecuteBlockAsync(branch, state, onEventEmitted, isLoop: true, cancellationToken);
+                if (!branchResult.Success || state.ReachedMaxDuration)
+                {
+                    return branchResult;
+                }
+
+                return null;
+
             case EducationalInstructionKind.CountedLoop:
                 for (var iteration = 0; iteration < instruction.IterationCount; iteration++)
                 {
@@ -314,6 +449,24 @@ public sealed class EducationalEventGenerator
             default:
                 return null;
         }
+    }
+
+    // Same live digitalRead-condition resolution as the If case above
+    // (button > digital sensor > INPUT_PULLUP default), factored out standalone
+    // for SerialBoolVariable so it doesn't need to duplicate If's branching —
+    // If's own inline copy is left untouched on purpose (proven, already
+    // covered by existing tests; this is an additive read-only helper).
+    private static string ReadDigitalConditionValue(EducationalRunState state, string pin)
+    {
+        var pinMode = state.PinModes.TryGetValue(pin, out var mode) ? mode : null;
+        var button = state.FindButtons(pin).FirstOrDefault();
+        var digitalSensor = state.FindDigitalSensors(pin).FirstOrDefault();
+        return button?.Read(state.Context.ComponentInputs, pinMode) ??
+            (digitalSensor != null
+                ? ((digitalSensor.TryReadLiveInput(state.Context.ComponentInputs) ??
+                    state.ReadDigitalSensorScenario(digitalSensor.PartId, digitalSensor.UseMotionField, defaultValue: false))
+                   ? "HIGH" : "LOW")
+                : (pinMode?.Equals("INPUT_PULLUP", StringComparison.OrdinalIgnoreCase) == true ? "HIGH" : "LOW"));
     }
 
     // Chờ THẬT (Task.Delay, không phải cộng dồn state.Time) — đây là điểm
@@ -382,12 +535,30 @@ public sealed class EducationalEventGenerator
         private readonly Dictionary<string, List<ButtonModel>> _buttonsByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<BuzzerModel>> _buzzersByPin = new(StringComparer.OrdinalIgnoreCase);
         private readonly Dictionary<string, List<ServoModel>> _servosByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<PotentiometerModel>> _potentiometersByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<LightSensorModel>> _lightSensorsByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<RelayModel>> _relaysByPin = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<string, List<DigitalSensorModel>> _digitalSensorsByPin = new(StringComparer.OrdinalIgnoreCase);
+
+        // DHT scripted-sensor timeline — reused AS-IS from the QEMU side
+        // (STEP 8/9: "Reuse trực tiếp semantic của QEMU. Không viết một
+        // timeline behavior khác.") via SensorRuntimeHeaderGenerator's own
+        // parser, so both runners read the exact same sensorScenario shape.
+        private readonly SensorScenarioConfig? _scenario;
+
+        // Must match SensorRuntimeHeaderGenerator.cs's DefaultTemperatureC/
+        // DefaultHumidityPct exactly (those are private consts there) — kept
+        // in sync by SensorRuntimeHeaderGeneratorDhtTests.cs's read-assign
+        // coverage plus this port's own DhtEducationalTests.
+        private const double DefaultTemperatureC = 25.0;
+        private const double DefaultHumidityPct = 50.0;
 
         public EducationalRunState(SimulationRunContext context, VirtualLabRuntimeDiagramSnapshot diagram)
         {
             Context = context;
             MaxDurationMs = Math.Max(1, context.MaxDurationMs);
             BuildComponentIndexes(diagram);
+            _scenario = SensorRuntimeHeaderGenerator.TryParseScenario(context.DiagramJson);
         }
 
         public SimulationRunContext Context { get; }
@@ -402,10 +573,108 @@ public sealed class EducationalEventGenerator
         public Dictionary<string, string> PinValues { get; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, string> ServoPins { get; } = new(StringComparer.OrdinalIgnoreCase);
 
+        // Minimal local-variable slot for "int value = analogRead(pin);" followed
+        // later by "if (value > N)" — NOT a general variable system (no arithmetic,
+        // no other types). Overwritten by the SAME AnalogReadAssign instruction
+        // every loop() iteration, so it's always fresh by the time an If reads it —
+        // no separate per-iteration reset needed.
+        public Dictionary<string, int> AnalogLocals { get; } = new(StringComparer.OrdinalIgnoreCase);
+
         public IReadOnlyCollection<LedModel> FindLeds(string pin) => Find(_ledsByPin, pin);
         public IReadOnlyCollection<ButtonModel> FindButtons(string pin) => Find(_buttonsByPin, pin);
         public IReadOnlyCollection<BuzzerModel> FindBuzzers(string pin) => Find(_buzzersByPin, pin);
         public IReadOnlyCollection<ServoModel> FindServos(string pin) => Find(_servosByPin, pin);
+        public IReadOnlyCollection<PotentiometerModel> FindPotentiometers(string pin) => Find(_potentiometersByPin, pin);
+        public IReadOnlyCollection<LightSensorModel> FindLightSensors(string pin) => Find(_lightSensorsByPin, pin);
+        public IReadOnlyCollection<RelayModel> FindRelays(string pin) => Find(_relaysByPin, pin);
+        public IReadOnlyCollection<DigitalSensorModel> FindDigitalSensors(string pin) => Find(_digitalSensorsByPin, pin);
+
+        // analogRead() doesn't care WHAT is attached to the pin, only that
+        // something producing a 0..4095 value is — same reasoning as
+        // digitalRead() not caring whether it's reading a button vs. some
+        // other digital source. Tries every analog-capable component pool.
+        public int ReadAnalog(string pin, IReadOnlyDictionary<string, object> componentInputs)
+        {
+            var pot = FindPotentiometers(pin).FirstOrDefault();
+            if (pot != null) return pot.Read(componentInputs);
+
+            var lightSensor = FindLightSensors(pin).FirstOrDefault();
+            if (lightSensor != null) return lightSensor.Read(componentInputs);
+
+            return 0;
+        }
+
+        // DHT step-function timeline lookup — direct C# port of
+        // SensorRuntimeHeaderGenerator.cs's __sf_lookupFloat, same semantics:
+        // "latest scenario entry whose TimeMs <= now" (elapsed simulated
+        // time, this class's own Time — the Educational equivalent of
+        // QEMU's millis()), stepping forward only, no interpolation. Before
+        // the first entry, returns the FIRST entry's value (matching
+        // __sf_lookupFloat exactly) — defaultValue only applies when the
+        // component has no scenario/timeline entries for this field at all.
+        public double ReadDhtScenario(string componentId, string field)
+        {
+            var defaultValue = field == "Temperature" ? DefaultTemperatureC : DefaultHumidityPct;
+            if (_scenario == null || !_scenario.Sensors.TryGetValue(componentId, out var timeline))
+            {
+                return defaultValue;
+            }
+
+            var entries = timeline.Timeline
+                .Where(e => field == "Temperature" ? e.Temperature.HasValue : e.Humidity.HasValue)
+                .OrderBy(e => e.TimeMs)
+                .Select(e => (e.TimeMs, Value: (field == "Temperature" ? e.Temperature : e.Humidity)!.Value))
+                .ToList();
+
+            if (entries.Count == 0)
+            {
+                return defaultValue;
+            }
+
+            var result = entries[0].Value;
+            foreach (var entry in entries)
+            {
+                if (entry.TimeMs <= Time) result = entry.Value; else break;
+            }
+
+            return result;
+        }
+
+        // Generic digital-sensor scripted-scenario lookup — same step-function
+        // semantics as ReadDhtScenario, ported for the boolean-valued sensor
+        // family (PIR's Motion field; Water Leak/Flame/Soil Moisture/Rain/
+        // Vibration/IR Obstacle's shared Detected field — see
+        // SensorTimelineEntry's own doc comments in SensorScenarioDtos.cs).
+        // Deliberately NOT extended to HC-SR04 (needs pulseIn/microsecond
+        // arithmetic) or Line Tracking (needs pattern-to-per-channel-array
+        // logic) — QEMU-only remains the correct, honest state for those two,
+        // matching STEP 8/17's explicit low-ROI/runner-honesty guidance.
+        public bool ReadDigitalSensorScenario(string componentId, bool useMotionField, bool defaultValue)
+        {
+            if (_scenario == null || !_scenario.Sensors.TryGetValue(componentId, out var timeline))
+            {
+                return defaultValue;
+            }
+
+            var entries = timeline.Timeline
+                .Where(e => useMotionField ? e.Motion.HasValue : e.Detected.HasValue)
+                .OrderBy(e => e.TimeMs)
+                .Select(e => (e.TimeMs, Value: (useMotionField ? e.Motion : e.Detected)!.Value))
+                .ToList();
+
+            if (entries.Count == 0)
+            {
+                return defaultValue;
+            }
+
+            var result = entries[0].Value;
+            foreach (var entry in entries)
+            {
+                if (entry.TimeMs <= Time) result = entry.Value; else break;
+            }
+
+            return result;
+        }
 
         public SimulationRunResult ToResult(bool success)
         {
@@ -455,6 +724,56 @@ public sealed class EducationalEventGenerator
                          TryFindPin(component, new[] { "PWM" }, out var servoPin))
                 {
                     AddModel(_servosByPin, servoPin, new ServoModel(component.Id, servoPin));
+                }
+                else if (component.Type.Equals("wokwi-potentiometer", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "SIG" }, out var potPin))
+                {
+                    AddModel(_potentiometersByPin, potPin, new PotentiometerModel(component.Id, potPin));
+                }
+                else if (component.Type.Equals("wokwi-photoresistor-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "AO" }, out var lightPin))
+                {
+                    AddModel(_lightSensorsByPin, lightPin, new LightSensorModel(component.Id, lightPin));
+                }
+                else if (component.Type.Equals("wokwi-relay-module", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "IN" }, out var relayPin))
+                {
+                    AddModel(_relaysByPin, relayPin, new RelayModel(component.Id, relayPin));
+                }
+                else if (component.Type.Equals("wokwi-pir-motion-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "OUT" }, out var pirPin))
+                {
+                    AddModel(_digitalSensorsByPin, pirPin, new DigitalSensorModel(component.Id, pirPin, useMotionField: true));
+                }
+                else if (component.Type.Equals("wokwi-water-leak-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "S" }, out var waterLeakPin))
+                {
+                    AddModel(_digitalSensorsByPin, waterLeakPin, new DigitalSensorModel(component.Id, waterLeakPin, useMotionField: false));
+                }
+                else if (component.Type.Equals("wokwi-flame-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "DOUT" }, out var flamePin))
+                {
+                    AddModel(_digitalSensorsByPin, flamePin, new DigitalSensorModel(component.Id, flamePin, useMotionField: false));
+                }
+                else if (component.Type.Equals("wokwi-soil-moisture-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "DO" }, out var soilPin))
+                {
+                    AddModel(_digitalSensorsByPin, soilPin, new DigitalSensorModel(component.Id, soilPin, useMotionField: false));
+                }
+                else if (component.Type.Equals("wokwi-rain-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "DO" }, out var rainPin))
+                {
+                    AddModel(_digitalSensorsByPin, rainPin, new DigitalSensorModel(component.Id, rainPin, useMotionField: false));
+                }
+                else if (component.Type.Equals("wokwi-vibration-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "OUT" }, out var vibrationPin))
+                {
+                    AddModel(_digitalSensorsByPin, vibrationPin, new DigitalSensorModel(component.Id, vibrationPin, useMotionField: false));
+                }
+                else if (component.Type.Equals("wokwi-ir-obstacle-sensor", StringComparison.OrdinalIgnoreCase) &&
+                         TryFindPin(component, new[] { "OUT" }, out var irObstaclePin))
+                {
+                    AddModel(_digitalSensorsByPin, irObstaclePin, new DigitalSensorModel(component.Id, irObstaclePin, useMotionField: false));
                 }
             }
         }

@@ -58,7 +58,7 @@ public class UpdateSubmissionGradeHandler
                 UserId = submission.StudentId.Value,
                 Title = "Điểm đã được cập nhật",
                 Content = $"\"{submission.Assignment?.Title}\" vừa được chấm lại — {submission.Score} điểm.",
-                Type = "GradeReport"
+                Type = NotificationType.GradeReport
             }, cancellationToken);
             await _notificationRepository.SaveChangesAsync(cancellationToken);
         }

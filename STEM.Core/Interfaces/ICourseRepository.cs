@@ -9,12 +9,11 @@ public interface ICourseRepository : IRepository<Course>
         int pageNumber,
         int pageSize,
         string? searchTerm,
-        int? schoolId,
         CancellationToken cancellationToken = default);
 
     Task<Course?> GetCourseDetailAsync(int id, CancellationToken cancellationToken = default);
-    
-    Task<bool> ExistsByTitleAsync(string title, int schoolId, CancellationToken cancellationToken = default);
-    
+
+    Task<bool> ExistsByTitleAsync(string title, CancellationToken cancellationToken = default);
+
     Task<bool> HasClassesAsync(int courseId, CancellationToken cancellationToken = default);
 }

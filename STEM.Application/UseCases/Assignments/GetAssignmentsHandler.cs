@@ -40,9 +40,6 @@ public class GetAssignmentsHandler
         var roleName = currentUser.Role?.Name 
             ?? RoleNames.Student; // Default to Student for enrolled users
 
-        // DEBUG: Log the filtering
-        Console.WriteLine($"[GetAssignments] UserId: {currentUserId}, Role: {roleName}, StudentId filter: {studentId}");
-
         if (roleName == RoleNames.SchoolAdministrator)
         {
             schoolId = currentUser.SchoolId ?? throw new UnauthorizedAccessException("School admin has no school.");
@@ -79,7 +76,7 @@ public class GetAssignmentsHandler
             TotalCount = totalCount,
             PageNumber = pageNumber,
             PageSize = pageSize,
-            Items = assignments.Select(assignment => AssignmentResponseMapper.Map(assignment, revealAnswers, studentId)).ToList()
+            Items = assignments.Select(assignment => AssignmentResponseMapper.Map(assignment, revealAnswers: revealAnswers, currentStudentId: studentId)).ToList()
         };
     }
 }

@@ -50,7 +50,14 @@ public class SubmitReportAssignmentHandler
             throw new InvalidOperationException("Resubmission is not allowed for this assignment.");
 
         if (assignment.ResubmitLimit.HasValue && attemptCount >= assignment.ResubmitLimit.Value)
-            throw new InvalidOperationException($"You have reached the maximum number of attempts ({assignment.ResubmitLimit.Value}).");
+            throw new InvalidOperationException($"Bạn đã hết lượt nộp lại (tối đa {assignment.ResubmitLimit.Value} lần).");
+
+        // Always delete previous submissions for this student and assignment (keep only latest attempt)
+        var oldSubmissions = await _submissionRepository.GetAllByAssignmentAndStudentAsync(assignmentId, studentId, cancellationToken);
+        foreach (var old in oldSubmissions)
+        {
+            _submissionRepository.Delete(old);
+        }
 
         var contentJson = JsonSerializer.Serialize(new
         {

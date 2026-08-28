@@ -1,4 +1,5 @@
 using STEM.Application.Dtos.Notifications;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
 
@@ -13,19 +14,24 @@ public class NotificationHandler
         _notificationRepository = notificationRepository;
     }
 
-    public async Task<IEnumerable<NotificationResponse>> GetNotificationsByUserId(int userId, CancellationToken cancellationToken = default)
+    public async Task<IEnumerable<NotificationResponse>> GetNotificationsByUserId(int userId, int page = 1, int pageSize = 20, CancellationToken cancellationToken = default)
     {
-        var notifications = await _notificationRepository.GetByUserIdAsync(userId, cancellationToken);
-        return notifications.Select(n => new NotificationResponse
+        var skip = (page - 1) * pageSize;
+        var notifications = await _notificationRepository.GetByUserIdAsync(userId.ToString(), skip, pageSize, cancellationToken: cancellationToken);
+        
+        var response = notifications.Select(n => new NotificationResponse
         {
             Id = n.Id,
             UserId = n.UserId,
             Title = n.Title,
             Content = n.Content,
-            Type = n.Type,
+            Type = n.Type.ToString(),
             IsRead = n.IsRead,
             CreatedAt = n.CreatedAt
-        });
+        }).ToList();
+        
+        Console.WriteLine($"[DEBUG] GetNotificationsByUserId: userId={userId}, found {response.Count} notifications");
+        return response;
     }
 
     public async Task<bool> MarkAsRead(int id, int currentUserId, string currentUserRole, CancellationToken cancellationToken = default)
@@ -58,5 +64,10 @@ public class NotificationHandler
         _notificationRepository.Delete(notification);
         await _notificationRepository.SaveChangesAsync(cancellationToken);
         return true;
+    }
+
+    public async Task MarkAllAsRead(int userId, CancellationToken cancellationToken = default)
+    {
+        await _notificationRepository.MarkAllAsReadAsync(userId.ToString(), cancellationToken);
     }
 }

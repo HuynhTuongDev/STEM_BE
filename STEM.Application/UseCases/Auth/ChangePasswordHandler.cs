@@ -23,8 +23,8 @@ public class ChangePasswordHandler
         if (user == null)
             throw new KeyNotFoundException("User not found.");
 
-        if (user.RoleId != 2)
-            throw new UnauthorizedAccessException("Password change is only available for School Administrators.");
+        if (user.RoleId != 1 && user.RoleId != 2)
+            throw new UnauthorizedAccessException("Password change is only available for Master Admin or School Administrators.");
 
         if (string.IsNullOrWhiteSpace(user.PasswordHash) || !BCrypt.Net.BCrypt.Verify(request.OldPassword, user.PasswordHash))
         {
@@ -34,7 +34,6 @@ public class ChangePasswordHandler
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.NewPassword);
         user.UpdatedAt = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
-        _userRepository.Update(user);
         await _userRepository.SaveChangesAsync(cancellationToken);
     }
 }

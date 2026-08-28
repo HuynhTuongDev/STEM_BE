@@ -21,7 +21,11 @@ public interface ISubmissionRepository : IRepository<Submission>
 
     Task<Submission?> GetByAssignmentAndStudentAsync(int assignmentId, int studentId, CancellationToken cancellationToken = default);
 
+    Task<IEnumerable<Submission>> GetAllByAssignmentAndStudentAsync(int assignmentId, int studentId, CancellationToken cancellationToken = default);
+
     Task<int> GetAttemptCountAsync(int assignmentId, int studentId, CancellationToken cancellationToken = default);
+
+    Task<decimal> GetBestScoreAsync(int assignmentId, int studentId, CancellationToken cancellationToken = default);
 
     Task<IEnumerable<Submission>> GetByStudentIdPagedAsync(
         int studentId,
@@ -30,4 +34,6 @@ public interface ISubmissionRepository : IRepository<Submission>
         CancellationToken cancellationToken = default);
 
     Task<IEnumerable<Submission>> GetGradedByStudentIdAsync(int studentId, CancellationToken cancellationToken = default);
+
+    Task<Dictionary<int, double>> GetAverageScoresByStudentIdsAsync(IEnumerable<int> studentIds, CancellationToken cancellationToken = default);
 }

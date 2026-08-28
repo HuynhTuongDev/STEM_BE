@@ -75,7 +75,16 @@ public class GetAvailableStudentsHandler
             if (!student.IsActive)
                 continue;
 
-            // Check if student has any conflicting class
+            // Check if student is already enrolled in another class with the same course
+            var existingCourseEnrollment = await _enrollmentRepository.GetExistingCourseEnrollmentAsync(
+                student.Id, classEntity.CourseId, classId);
+            if (existingCourseEnrollment != null)
+            {
+                unavailableCount++;
+                continue;
+            }
+
+            // Check if student has any conflicting schedule
             var canAdd = await _enrollmentRepository.CanAddStudentToClassAsync(student.Id, classId);
             if (canAdd)
             {
@@ -117,6 +126,8 @@ public class GetAvailableStudentsHandler
 
     private async Task<AvailableStudentsResponse> GetAllAvailableStudentsAsync(int classId, int schoolId, AvailableStudentsRequest request)
     {
+        var classEntity = await _classRepository.GetByIdAsync(classId);
+
         // Get student role
         var studentRole = (await _roleRepository.FindAsync(r => r.Name == StudentRoleName)).FirstOrDefault();
         if (studentRole == null)
@@ -133,6 +144,22 @@ public class GetAvailableStudentsHandler
             u.RoleId == studentRole.Id &&
             u.IsActive))
             .Where(s => !enrolledStudentIds.Contains(s.Id)).ToList();
+
+        // Filter out students already enrolled in another class with the same course
+        if (classEntity != null)
+        {
+            var studentsWithCourseConflict = new HashSet<int>();
+            foreach (var student in allStudents)
+            {
+                var existingCourseEnrollment = await _enrollmentRepository.GetExistingCourseEnrollmentAsync(
+                    student.Id, classEntity.CourseId, classId);
+                if (existingCourseEnrollment != null)
+                {
+                    studentsWithCourseConflict.Add(student.Id);
+                }
+            }
+            allStudents = allStudents.Where(s => !studentsWithCourseConflict.Contains(s.Id)).ToList();
+        }
 
         var totalCount = allStudents.Count;
         var pagedStudents = allStudents

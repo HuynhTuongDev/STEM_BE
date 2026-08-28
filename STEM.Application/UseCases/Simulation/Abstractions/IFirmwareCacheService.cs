@@ -38,12 +38,18 @@ public interface IFirmwareCacheService
     // CompileSimulationRequest.ProjectId — cho phép compile thật bên trong
     // vẫn hưởng cache build-path theo scope (project thật lúc Run, hoặc LabId
     // lúc precompile bài mẫu) dù đây là cache firmware theo nội dung, không
-    // theo scope.
+    // theo scope. `extraFiles` (tuỳ chọn, DHT fix 2026-08-23): file phụ cần ghi
+    // thêm vào sketchDir bên cạnh sketch.ino trước khi compile — xem
+    // SensorRuntimeHeaderGenerator.BuildExtraFiles, CompileSimulationRequest.ExtraFiles.
+    // KHÔNG đưa vào cache key (ResolveCacheDir) — nội dung của các file này là
+    // hằng số (chỉ include-guard), không đổi theo scenario, nên không ảnh hưởng
+    // tính đúng đắn của cache theo nội dung sourceCode+sensorHeader hiện có.
     Task<CompileSimulationResponse> CompileAndCacheAsync(
         string sourceCode,
         string board,
         string framework,
         Guid? buildCacheScopeId,
         CancellationToken cancellationToken,
-        string sensorHeader = "");
+        string sensorHeader = "",
+        IReadOnlyDictionary<string, string>? extraFiles = null);
 }

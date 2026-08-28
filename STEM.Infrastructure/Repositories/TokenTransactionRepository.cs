@@ -8,11 +8,8 @@ namespace STEM.Infrastructure.Repositories;
 
 public class TokenTransactionRepository : Repository<TokenTransaction>, ITokenTransactionRepository
 {
-    private readonly StemDbContext _context;
-
     public TokenTransactionRepository(StemDbContext context) : base(context)
     {
-        _context = context;
     }
 
     public async Task<IEnumerable<TokenTransaction>> GetByAccountIdAsync(int accountId, int page, int pageSize, CancellationToken cancellationToken = default)

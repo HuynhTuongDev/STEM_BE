@@ -74,7 +74,7 @@ public class ApproveResubmitRequestHandler
             UserId = resubmitRequest.StudentId,
             Title = "Yêu cầu nộp lại đã được duyệt",
             Content = $"Giáo viên đã đồng ý cho bạn nộp lại bài \"{resubmitRequest.Assignment?.Title}\".",
-            Type = "ResubmitRequestReviewed"
+            Type = NotificationType.ResubmissionApproved
         }, cancellationToken);
         await _notificationRepository.SaveChangesAsync(cancellationToken);
 

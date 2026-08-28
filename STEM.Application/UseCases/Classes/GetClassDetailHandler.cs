@@ -1,7 +1,9 @@
 using STEM.Application.Dtos.Classes;
 using STEM.Core.Entities.Classes;
+using STEM.Core.Entities.Courses;
 using STEM.Core.Entities.Projects;
 using STEM.Core.Entities.Users;
+using STEM.Core.Interfaces;
 using STEM.Core.Repository;
 
 namespace STEM.Application.UseCases.Classes;
@@ -12,17 +14,23 @@ public class GetClassDetailHandler
     private readonly IUserRepository _userRepository;
     private readonly IEnrollmentRepository _enrollmentRepository;
     private readonly IRepository<Role> _roleRepository;
+    private readonly IModuleRepository _moduleRepository;
+    private readonly ILessonRepository _lessonRepository;
 
     public GetClassDetailHandler(
         IClassRepository classRepository,
         IUserRepository userRepository,
         IEnrollmentRepository enrollmentRepository,
-        IRepository<Role> roleRepository)
+        IRepository<Role> roleRepository,
+        IModuleRepository moduleRepository,
+        ILessonRepository lessonRepository)
     {
         _classRepository = classRepository;
         _userRepository = userRepository;
         _enrollmentRepository = enrollmentRepository;
         _roleRepository = roleRepository;
+        _moduleRepository = moduleRepository;
+        _lessonRepository = lessonRepository;
     }
 
     public async Task<ClassDetailResponse> Handle(
@@ -77,12 +85,18 @@ public class GetClassDetailHandler
                 .ToList();
         }
 
+        // DEBUG: Log schedule lesson info
+        var scheduleDebug = classEntity.Schedules?.Select(s => new { s.Id, LessonId = s.LessonId, LessonTitle = s.Lesson?.Title }).ToList();
+        Console.WriteLine($"[GetClassDetailHandler] ClassId={classId}, Schedules with lessons: {System.Text.Json.JsonSerializer.Serialize(scheduleDebug)}");
+
         return new ClassDetailResponse
         {
             Id = classEntity.Id,
             ClassCode = classEntity.ClassCode,
             SchoolId = classEntity.SchoolId,
             SchoolName = classEntity.School?.Name,
+            GradeLevelId = classEntity.GradeLevelId,
+            GradeLevelName = classEntity.GradeLevel?.Name,
             CourseId = classEntity.CourseId,
             CourseName = classEntity.Course?.Title ?? string.Empty,
             TeacherId = classEntity.TeacherId,
@@ -102,8 +116,15 @@ public class GetClassDetailHandler
             Schedules = classEntity.Schedules?.Select(s => new ScheduleResponse
             {
                 Id = s.Id,
+                ClassId = s.ClassId,
+                ClassCode = classEntity.ClassCode,
+                ClassName = classEntity.Course?.Title ?? string.Empty,
+                LessonId = s.LessonId,
+                LessonTitle = s.Lesson?.Title,
                 StartTime = s.StartTime,
-                EndTime = s.EndTime
+                EndTime = s.EndTime,
+                CreatedAt = s.CreatedAt,
+                UpdatedAt = s.UpdatedAt
             }).ToList() ?? new List<ScheduleResponse>(),
             Announcements = classEntity.Announcements?.Select(a => new AnnouncementResponse
             {
@@ -142,6 +163,25 @@ public class GetClassDetailHandler
         // Get assignments for this class
         var assignments = await _classRepository.GetClassAssignmentsAsync(classId, cancellationToken);
 
+        // Get modules for the course
+        var modules = await _moduleRepository.GetByCourseIdOrderedAsync(classEntity.CourseId);
+        var moduleList = new List<StudentModuleResponse>();
+        
+        foreach (var module in modules)
+        {
+            var lessons = await _lessonRepository.GetByModuleIdAsync(module.Id);
+            moduleList.Add(new StudentModuleResponse
+            {
+                Id = module.Id,
+                Title = module.Title,
+                Description = module.Description,
+                Order = module.DisplayOrder,
+                LessonsCompleted = 0, // TODO: Track completed lessons per student
+                TotalLessons = lessons.Count(),
+                IsCompleted = false
+            });
+        }
+
         return new StudentClassDetailResponse
         {
             Id = classEntity.Id,
@@ -155,7 +195,7 @@ public class GetClassDetailHandler
             EndDate = classEntity.EndDate,
             Progress = CalculateProgress(classEntity),
             Status = DetermineStatus(classEntity),
-            Modules = new List<StudentModuleResponse>(), // TODO: Get from course modules
+            Modules = moduleList,
             Assignments = assignments.Select(a => new StudentAssignmentResponse
             {
                 Id = a.Id,
@@ -164,7 +204,8 @@ public class GetClassDetailHandler
                 ClassId = classEntity.Id,
                 DueDate = a.DueDate?.ToString("O") ?? string.Empty,
                 Status = DetermineAssignmentStatus(a),
-                MaxScore = (double)a.MaxScore
+                MaxScore = (double)a.MaxScore,
+                AssignmentType = a.AssignmentType
             }).ToList()
         };
     }
@@ -238,6 +279,108 @@ public class GetClassDetailHandler
             return "overdue";
         return "pending";
     }
+
+    public async Task<ClassCurriculumResponse> HandleGetCurriculum(
+        int classId,
+        int currentUserId,
+        CancellationToken cancellationToken = default)
+    {
+        var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
+        if (currentUser == null)
+            throw new UnauthorizedAccessException("Người dùng không tồn tại.");
+
+        var roleName = currentUser.Role?.Name;
+
+        var classEntity = await _classRepository.GetByIdWithDetailsAsync(classId, cancellationToken);
+        if (classEntity == null)
+            throw new KeyNotFoundException($"Không tìm thấy lớp học với id {classId}.");
+
+        // Check access: teacher of this class, admin, or enrolled student
+        var isTeacher = roleName == RoleNames.Teacher && classEntity.TeacherId == currentUserId;
+        var isAdmin = roleName == RoleNames.MasterAdministrator || roleName == RoleNames.SchoolAdministrator;
+        var isEnrolled = await _enrollmentRepository.FindAsync(
+            e => e.StudentId == currentUserId && e.ClassId == classId, cancellationToken);
+
+        if (!isTeacher && !isAdmin && !isEnrolled.Any())
+            throw new UnauthorizedAccessException("Bạn không có quyền xem giáo trình của lớp học này.");
+
+        // Get modules and lessons for the course
+        var modules = await _moduleRepository.GetByCourseIdOrderedAsync(classEntity.CourseId);
+        var moduleList = new List<ModuleWithLessonsDto>();
+
+        foreach (var module in modules)
+        {
+            var lessons = await _lessonRepository.GetByModuleIdAsync(module.Id);
+            moduleList.Add(new ModuleWithLessonsDto
+            {
+                Id = module.Id,
+                Title = module.Title,
+                Description = module.Description,
+                DisplayOrder = module.DisplayOrder,
+                EstimatedMinutes = module.EstimatedMinutes,
+                LessonCount = lessons.Count(),
+                Lessons = lessons.Select(l => new LessonInCurriculumDto
+                {
+                    Id = l.Id,
+                    Title = l.Title,
+                    DisplayOrder = l.DisplayOrder,
+                    EstimatedMinutes = l.EstimatedMinutes,
+                    LessonType = l.LessonType,
+                    HasVirtualLab = l.HasVirtualLab,
+                    LabId = l.LabId?.ToString()
+                }).ToList()
+            });
+        }
+
+        return new ClassCurriculumResponse
+        {
+            ClassId = classEntity.Id,
+            ClassCode = classEntity.ClassCode,
+            ClassName = classEntity.Course?.Title ?? string.Empty,
+            CourseTitle = classEntity.Course?.Title ?? string.Empty,
+            Modules = moduleList
+        };
+    }
+
+    public async Task<TeacherClassDetailResponse> HandleForTeacher(
+        int classId,
+        int teacherId,
+        CancellationToken cancellationToken = default)
+    {
+        var teacher = await _userRepository.GetByIdAsync(teacherId, cancellationToken);
+        if (teacher == null)
+            throw new UnauthorizedAccessException("Người dùng không tồn tại.");
+
+        var classEntity = await _classRepository.GetByIdWithDetailsAsync(classId, cancellationToken);
+        if (classEntity == null)
+            throw new KeyNotFoundException($"Không tìm thấy lớp học với id {classId}.");
+
+        // Verify teacher is assigned to this class
+        if (classEntity.TeacherId != teacherId && teacher.Role?.Name != RoleNames.MasterAdministrator && teacher.Role?.Name != RoleNames.SchoolAdministrator)
+            throw new UnauthorizedAccessException("Bạn không phải giáo viên của lớp học này.");
+
+        // Get modules
+        var modules = await _moduleRepository.GetByCourseIdOrderedAsync(classEntity.CourseId);
+
+        return new TeacherClassDetailResponse
+        {
+            Id = classEntity.Id,
+            ClassCode = classEntity.ClassCode,
+            ClassName = classEntity.ClassCode,
+            CourseId = classEntity.CourseId,
+            CourseName = classEntity.Course?.Title ?? string.Empty,
+            Status = DetermineStatus(classEntity),
+            StartDate = classEntity.StartDate,
+            EndDate = classEntity.EndDate,
+            Students = classEntity.Enrollments?.Select(e => new StudentInfoDto
+            {
+                Id = e.StudentId,
+                FullName = e.Student?.FullName ?? string.Empty,
+                Email = e.Student?.Email ?? string.Empty,
+                EnrolledAt = e.CreatedAt
+            }).ToList() ?? new List<StudentInfoDto>()
+        };
+    }
 }
 
 // Response classes for student
@@ -278,6 +421,7 @@ public class StudentAssignmentResponse
     public string DueDate { get; set; } = string.Empty;
     public string Status { get; set; } = string.Empty;
     public double MaxScore { get; set; }
+    public string AssignmentType { get; set; } = string.Empty;
 }
 
 public class StudentScheduleItemResponse

@@ -26,6 +26,7 @@ public sealed class SimulationRunnerResolverTests
         services.AddSingleton<VirtualLabMockRunner>();
         services.AddSingleton<ISimulationEventBroadcaster, NoOpSimulationEventBroadcaster>();
         services.AddSingleton<IRunningSimulationRegistry, RunningSimulationRegistry>();
+        services.AddSingleton<ISimulationInputChannel, SimulationInputChannel>();
         services.AddScoped<ISimulationEventStore, FakeSimulationEventStore>();
         services.AddSingleton<EducationalSimulationRunner>();
         services.AddScoped<ISimulationRunnerResolver, SimulationRunnerResolver>();
@@ -41,7 +42,7 @@ public sealed class SimulationRunnerResolverTests
     [Fact]
     public async Task EducationalRunner_GeneratesLedOnOffEvents_ForBlinkProgram()
     {
-        var (runner, broadcaster, store, _) = CreateStreamingRunner();
+        var (runner, broadcaster, store, _, _) = CreateStreamingRunner();
 
         var startedAt = DateTime.UtcNow;
         var startResult = await runner.RunAsync(new SimulationRunContext
@@ -101,7 +102,7 @@ public sealed class SimulationRunnerResolverTests
     [Fact]
     public async Task EducationalRunner_ForLoopBare_ProducesSixAlternatingEvents()
     {
-        var (runner, broadcaster, store, _) = CreateStreamingRunner();
+        var (runner, broadcaster, store, _, _) = CreateStreamingRunner();
 
         var startResult = await runner.RunAsync(new SimulationRunContext
         {
@@ -152,7 +153,7 @@ public sealed class SimulationRunnerResolverTests
     [Fact]
     public async Task EducationalRunner_ForLoopWithTrailingStatement_ProducesCorrectSequence()
     {
-        var (runner, broadcaster, store, _) = CreateStreamingRunner();
+        var (runner, broadcaster, store, _, _) = CreateStreamingRunner();
 
         var startResult = await runner.RunAsync(new SimulationRunContext
         {
@@ -207,7 +208,7 @@ public sealed class SimulationRunnerResolverTests
     [Fact]
     public async Task EducationalRunner_TryCancelMidRun_StopsCleanly_NoMoreEventsAfterCancel()
     {
-        var (runner, broadcaster, store, registry) = CreateStreamingRunner();
+        var (runner, broadcaster, store, registry, _) = CreateStreamingRunner();
         var projectId = Guid.NewGuid().ToString("N");
 
         var startResult = await runner.RunAsync(new SimulationRunContext
@@ -277,15 +278,25 @@ public sealed class SimulationRunnerResolverTests
     }
     """;
 
-    private static (
+    // internal (not private) — reused by RealtimeSimulationInputTests so both
+    // test classes build an EducationalSimulationRunner the exact same way as
+    // production DI, instead of duplicating the wiring.
+    internal static (
         EducationalSimulationRunner Runner,
         FakeSimulationEventBroadcaster Broadcaster,
         FakeSimulationEventStore Store,
-        IRunningSimulationRegistry Registry) CreateStreamingRunner()
+        IRunningSimulationRegistry Registry,
+        ISimulationInputChannel InputChannel) CreateStreamingRunner(
+            ISimulationInputChannel? sharedInputChannel = null)
     {
         var broadcaster = new FakeSimulationEventBroadcaster();
         var store = new FakeSimulationEventStore();
         var registry = new RunningSimulationRegistry();
+        // Two runners sharing one channel instance is the real production
+        // topology (ISimulationInputChannel is a singleton) — tests that need
+        // to prove cross-session isolation on ONE channel pass their own
+        // shared instance in; everything else gets an independent one.
+        var inputChannel = sharedInputChannel ?? new SimulationInputChannel();
 
         // IServiceScopeFactory THẬT (không tự chế) — EducationalSimulationRunner
         // tạo scope mới cho mỗi lần chạy nền, đúng như production; store dùng
@@ -305,9 +316,10 @@ public sealed class SimulationRunnerResolverTests
             scopeFactory,
             broadcaster,
             registry,
+            inputChannel,
             configuration);
 
-        return (runner, broadcaster, store, registry);
+        return (runner, broadcaster, store, registry, inputChannel);
     }
 
     private static async Task WaitForCompletionAsync(FakeSimulationEventBroadcaster broadcaster)

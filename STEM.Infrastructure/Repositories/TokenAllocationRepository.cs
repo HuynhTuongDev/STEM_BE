@@ -86,4 +86,23 @@ public class TokenAllocationRepository : Repository<TokenAllocation>, ITokenAllo
                 && a.AllocatedTokens > a.UsedTokens)
             .ToListAsync(cancellationToken);
     }
+
+    public async Task<(int TeacherCount, int StudentCount, int TeacherTokens, int StudentTokens)> GetAllocationStatsByRoleAsync(int accountId, CancellationToken cancellationToken = default)
+    {
+        var allocations = await _dbSet
+            .Include(a => a.User)
+            .ThenInclude(u => u!.Role)
+            .Where(a => a.AccountId == accountId && a.IsActive)
+            .ToListAsync(cancellationToken);
+
+        var teacherAllocations = allocations.Where(a => a.User?.RoleId == 3).ToList(); // RoleId 3 = Teacher
+        var studentAllocations = allocations.Where(a => a.User?.RoleId == 4).ToList(); // RoleId 4 = Student
+
+        return (
+            TeacherCount: teacherAllocations.Count,
+            StudentCount: studentAllocations.Count,
+            TeacherTokens: teacherAllocations.Sum(a => a.AllocatedTokens - a.UsedTokens),
+            StudentTokens: studentAllocations.Sum(a => a.AllocatedTokens - a.UsedTokens)
+        );
+    }
 }

@@ -50,6 +50,8 @@ public class GetClassesListHandler
             ClassCode = c.ClassCode,
             SchoolId = c.SchoolId,
             SchoolName = c.School?.Name,
+            GradeLevelId = c.GradeLevelId,
+            GradeLevelName = c.GradeLevel?.Name,
             CourseId = c.CourseId,
             CourseName = c.Course?.Title ?? string.Empty,
             TeacherId = c.TeacherId,
@@ -69,38 +71,66 @@ public class GetClassesListHandler
         };
     }
 
-    public async Task<List<ClassListItemResponse>> HandleTeacherClasses(
+    public async Task<PagedClassListResponse> HandleTeacherClasses(
         int teacherId,
-        int currentUserId,
+        GetClassesRequest request,
         CancellationToken cancellationToken = default)
     {
-        var currentUser = await _userRepository.GetByIdAsync(currentUserId, cancellationToken);
+        var currentUser = await _userRepository.GetByIdAsync(teacherId, cancellationToken);
         if (currentUser == null)
-            throw new UnauthorizedAccessException("Current user not found.");
+            throw new UnauthorizedAccessException("Giáo viên không tồn tại.");
 
-        if (currentUser.Role?.Name != RoleNames.Teacher || currentUser.Id != teacherId)
-            throw new UnauthorizedAccessException("Teacher can only view their own classes.");
+        var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
+        var pageSize = request.PageSize < 1 ? 20 : Math.Min(request.PageSize, 100);
 
         var classes = await _classRepository.GetByTeacherIdAsync(teacherId, cancellationToken);
 
-        return classes
-            .OrderByDescending(c => c.CreatedAt)
-            .Select(c => new ClassListItemResponse
+        // Filter by status if provided
+        var now = DateTime.UtcNow;
+        var filteredClasses = classes.AsEnumerable();
+
+        if (!string.IsNullOrEmpty(request.Status))
+        {
+            filteredClasses = request.Status switch
             {
-                Id = c.Id,
-                ClassCode = c.ClassCode,
-                SchoolId = c.SchoolId,
-                SchoolName = c.School?.Name,
-                CourseId = c.CourseId,
-                CourseName = c.Course?.Title ?? string.Empty,
-                TeacherId = c.TeacherId,
-                TeacherName = c.Teacher?.FullName ?? string.Empty,
-                StartDate = c.StartDate,
-                EndDate = c.EndDate,
-                CreatedAt = c.CreatedAt,
-                StudentCount = c.Enrollments?.Count ?? 0
-            })
+                "active" => filteredClasses.Where(c => c.StartDate <= now && c.EndDate >= now),
+                "completed" => filteredClasses.Where(c => c.EndDate < now),
+                "upcoming" => filteredClasses.Where(c => c.StartDate > now),
+                _ => filteredClasses
+            };
+        }
+
+        var totalCount = filteredClasses.Count();
+        var pagedClasses = filteredClasses
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToList();
+
+        return new PagedClassListResponse
+        {
+            TotalCount = totalCount,
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            Items = pagedClasses
+                .Select(c => new ClassListItemResponse
+                {
+                    Id = c.Id,
+                    ClassCode = c.ClassCode,
+                    SchoolId = c.SchoolId,
+                    SchoolName = c.School?.Name,
+                    GradeLevelId = c.GradeLevelId,
+                    GradeLevelName = c.GradeLevel?.Name,
+                    CourseId = c.CourseId,
+                    CourseName = c.Course?.Title ?? string.Empty,
+                    TeacherId = c.TeacherId,
+                    TeacherName = c.Teacher?.FullName ?? string.Empty,
+                    StartDate = c.StartDate,
+                    EndDate = c.EndDate,
+                    CreatedAt = c.CreatedAt,
+                    StudentCount = c.Enrollments?.Count ?? 0
+                })
+                .ToList()
+        };
     }
 
     public async Task<PagedClassListResponse> HandleStudentClasses(
@@ -157,6 +187,8 @@ public class GetClassesListHandler
                 ClassCode = e.Class!.ClassCode,
                 SchoolId = e.Class!.SchoolId,
                 SchoolName = e.Class!.School?.Name,
+                GradeLevelId = e.Class!.GradeLevelId,
+                GradeLevelName = e.Class!.GradeLevel?.Name,
                 CourseId = e.Class!.CourseId,
                 CourseName = e.Class!.Course?.Title ?? string.Empty,
                 TeacherId = e.Class!.TeacherId,

@@ -164,6 +164,7 @@ public class LabService : ILabService
                 {
                     Id = Guid.NewGuid(),
                     ClassId = classId,
+                    ScheduleId = payload.ScheduleId,
                     CreatedAt = now
                 })
                 .ToList()
@@ -251,7 +252,7 @@ public class LabService : ILabService
         lab.LinkedAssignmentId = payload.LinkedAssignmentId;
         lab.UpdatedAt = DateTime.UtcNow;
 
-        SyncClassAssignments(lab, payload.ClassIds);
+        SyncClassAssignments(lab, payload.ClassIds, payload.ScheduleId);
         await _context.SaveChangesAsync(cancellationToken);
 
         TriggerStarterCodePrecompile(lab.Id, lab.BoardType, lab.StarterCode);
@@ -627,8 +628,8 @@ public class LabService : ILabService
         if (roleName == RoleNames.SchoolAdministrator)
         {
             return user.SchoolId.HasValue &&
-                (lab.CreatedBy?.SchoolId == user.SchoolId.Value ||
-                 lab.ClassAssignments.Any(assignment => assignment.Class?.SchoolId == user.SchoolId.Value));
+                (lab.CreatedBy?.SchoolId == user.SchoolId!.Value ||
+                 lab.ClassAssignments.Any(assignment => assignment.Class?.SchoolId == user.SchoolId!.Value));
         }
 
         if (roleName == RoleNames.Teacher)
@@ -646,7 +647,7 @@ public class LabService : ILabService
 
         if (roleName == RoleNames.SchoolAdministrator)
         {
-            return user.SchoolId.HasValue && classEntity.SchoolId == user.SchoolId.Value;
+            return user.SchoolId.HasValue && classEntity.SchoolId == user.SchoolId!.Value;
         }
 
         if (roleName == RoleNames.Teacher)
@@ -767,7 +768,8 @@ public class LabService : ILabService
             request.WokwiProjectUrl,
             request.ClassIds,
             request.Status,
-            request.LinkedAssignmentId);
+            request.LinkedAssignmentId,
+            request.ScheduleId);
     }
 
     private static LabPayload PreparePayload(UpdateLabRequest request)
@@ -786,7 +788,8 @@ public class LabService : ILabService
             request.WokwiProjectUrl,
             request.ClassIds,
             request.Status,
-            request.LinkedAssignmentId);
+            request.LinkedAssignmentId,
+            request.ScheduleId);
     }
 
     private static LabPayload PreparePayload(
@@ -803,7 +806,8 @@ public class LabService : ILabService
         string? wokwiProjectUrl,
         IReadOnlyCollection<int> classIds,
         string status,
-        int? linkedAssignmentId)
+        int? linkedAssignmentId,
+        int? scheduleId)
     {
         if (string.IsNullOrWhiteSpace(title))
         {
@@ -888,7 +892,8 @@ public class LabService : ILabService
             projectUrl,
             normalizedClassIds,
             normalizedStatus,
-            linkedAssignmentId);
+            linkedAssignmentId,
+            scheduleId);
     }
 
     private static (string ProjectId, string ProjectUrl) NormalizeWokwiProject(
@@ -1034,7 +1039,7 @@ public class LabService : ILabService
         };
     }
 
-    private void SyncClassAssignments(Lab lab, IReadOnlyCollection<int> classIds)
+    private void SyncClassAssignments(Lab lab, IReadOnlyCollection<int> classIds, int? scheduleId)
     {
         var now = DateTime.UtcNow;
         var targetIds = classIds.ToHashSet();
@@ -1051,13 +1056,32 @@ public class LabService : ILabService
 
         foreach (var classId in targetIds.Except(existingIds))
         {
-            lab.ClassAssignments.Add(new LabClassAssignment
+            // Must go through the DbSet's Add (not lab.ClassAssignments.Add):
+            // adding to an already-tracked parent's navigation collection lets
+            // EF's change detection decide the new row's state from its Id,
+            // and a pre-assigned (client-generated) Guid key gets read as
+            // "already exists" -> State=Modified instead of Added. That made
+            // SaveChangesAsync emit an UPDATE ... WHERE Id = @id for a row
+            // that was never inserted -> 0 rows affected ->
+            // DbUpdateConcurrencyException ("Lab was modified by another
+            // user") on every attempt, even a fresh reload. Adding to the
+            // DbSet directly always marks the entity Added regardless of its
+            // key value; EF's relationship fixup still wires it into
+            // lab.ClassAssignments via the LabId FK.
+            _context.LabClassAssignments.Add(new LabClassAssignment
             {
                 Id = Guid.NewGuid(),
                 LabId = lab.Id,
                 ClassId = classId,
+                ScheduleId = scheduleId,
                 CreatedAt = now
             });
+        }
+
+        // Update existing assignments with new scheduleId
+        foreach (var assignment in lab.ClassAssignments.Where(a => targetIds.Contains(a.ClassId)))
+        {
+            assignment.ScheduleId = scheduleId;
         }
     }
 
@@ -1225,5 +1249,6 @@ public class LabService : ILabService
         string? WokwiProjectUrl,
         IReadOnlyCollection<int> ClassIds,
         string Status,
-        int? LinkedAssignmentId);
+        int? LinkedAssignmentId,
+        int? ScheduleId);
 }

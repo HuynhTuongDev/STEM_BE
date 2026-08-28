@@ -65,7 +65,11 @@ public record TokenBalanceDto(
     int TokensDistributed,
     int TokensUsed,
     DateTime? ExpiresAt,
-    DateTime? LastPurchaseAt
+    DateTime? LastPurchaseAt,
+    int TeacherCount,
+    int StudentCount,
+    int TeacherTokens,
+    int StudentTokens
 );
 
 public record TokenTransactionDto(
@@ -153,3 +157,27 @@ public record BulkAllocationResponse(
     List<BulkAllocationResult> Results,
     string? ErrorMessage
 );
+
+// Webhook Request DTOs
+public record PayOSWebhookRequestDto(
+    string Code,
+    string? Desc,
+    string? Success,
+    string? PaymentLinkId,
+    long? OrderCode,
+    long? Amount,
+    long? TransactionId,
+    string? TransactionDateTime,
+    string? Signature,
+    string? AccountNumber,
+    string? SubAccount,
+    string? Currency
+);
+
+public record PaymentCallbackRequestDto(
+    string TransactionId,
+    string Status,
+    string? GatewayTransactionId
+);
+
+public record UpdateOrderCodeRequestDto(long OrderCode);

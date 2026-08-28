@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using STEM.Application.Interfaces;
+using STEM.Core.Entities.Common;
 using STEM.Core.Entities.Schools;
 using STEM.Core.Entities.Users;
 using STEM.Core.Repository;
+using System.Security.Claims;
 
 namespace STEM.Api.Controllers;
 
@@ -15,15 +17,24 @@ public class SchoolRequestsController : ControllerBase
     private readonly IUserRepository _userRepository;
     private readonly IRepository<School> _schoolRepository;
     private readonly IEmailService _emailService;
+    private readonly ISystemLogService _systemLogService;
 
     public SchoolRequestsController(
         IUserRepository userRepository,
         IRepository<School> schoolRepository,
-        IEmailService emailService)
+        IEmailService emailService,
+        ISystemLogService systemLogService)
     {
         _userRepository = userRepository;
         _schoolRepository = schoolRepository;
         _emailService = emailService;
+        _systemLogService = systemLogService;
+    }
+
+    private int? GetCurrentUserId()
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        return int.TryParse(userIdClaim, out int userId) ? userId : null;
     }
 
     /// <summary>
@@ -115,6 +126,17 @@ public class SchoolRequestsController : ControllerBase
 
             await _schoolRepository.SaveChangesAsync(cancellationToken);
 
+            await _systemLogService.WriteAsync(
+                SystemLogLevels.Information,
+                SystemLogActions.SchoolApproved,
+                GetCurrentUserId(),
+                User.FindFirst(ClaimTypes.Role)?.Value,
+                entityType: nameof(School),
+                entityId: school.Id.ToString(),
+                description: $"Approved school registration '{school.Name}'.",
+                metadata: new { school.Id, school.Name },
+                cancellationToken);
+
             // Gửi email thông báo duyệt
             if (adminUser != null)
             {
@@ -177,6 +199,17 @@ public class SchoolRequestsController : ControllerBase
             }
 
             await _schoolRepository.SaveChangesAsync(cancellationToken);
+
+            await _systemLogService.WriteAsync(
+                SystemLogLevels.Warning,
+                SystemLogActions.SchoolRejected,
+                GetCurrentUserId(),
+                User.FindFirst(ClaimTypes.Role)?.Value,
+                entityType: nameof(School),
+                entityId: school.Id.ToString(),
+                description: $"Rejected school registration '{school.Name}'.",
+                metadata: new { school.Id, school.Name, reason = request.Reason },
+                cancellationToken);
 
             // Gửi email thông báo từ chối
             var body = $@"
