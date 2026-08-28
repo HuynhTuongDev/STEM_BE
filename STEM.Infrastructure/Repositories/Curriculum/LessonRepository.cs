@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using STEM.Core.Entities.Courses;
+using STEM.Core.Entities.Curriculum;
 using STEM.Core.Interfaces;
 using STEM.Core.Repository;
 using STEM.Infrastructure.Data;
@@ -102,5 +103,53 @@ public class LessonRepository : Repository<Lesson>, ILessonRepository
         }
 
         await _context.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task<bool> IsSyllabusArchivedForModuleAsync(int moduleId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Modules
+            .Where(m => m.Id == moduleId)
+            .AnyAsync(m => m.Course != null && m.Course.Syllabus != null && m.Course.Syllabus.Status == SyllabusStatuses.Archived, cancellationToken);
+    }
+
+    public async Task<bool> IsSyllabusArchivedForLessonAsync(int lessonId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Where(l => l.Id == lessonId)
+            .AnyAsync(l => l.Module != null && l.Module.Course != null && l.Module.Course.Syllabus != null && l.Module.Course.Syllabus.Status == SyllabusStatuses.Archived, cancellationToken);
+    }
+
+    public async Task<bool> IsSyllabusArchivedForClassAsync(int classId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Classes
+            .Where(c => c.Id == classId)
+            .AnyAsync(c => c.Course != null && c.Course.Syllabus != null && c.Course.Syllabus.Status == SyllabusStatuses.Archived, cancellationToken);
+    }
+
+    public async Task<bool> IsSyllabusOrCourseRestrictedForModuleAsync(int moduleId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Modules
+            .Where(m => m.Id == moduleId)
+            .AnyAsync(m => m.Course != null && m.Course.Syllabus != null && (
+                m.Course.Syllabus.Status == SyllabusStatuses.Draft || m.Course.Syllabus.Status == SyllabusStatuses.Archived
+            ), cancellationToken);
+    }
+
+    public async Task<bool> IsSyllabusOrCourseRestrictedForLessonAsync(int lessonId, CancellationToken cancellationToken = default)
+    {
+        return await _dbSet
+            .Where(l => l.Id == lessonId)
+            .AnyAsync(l => l.Module != null && l.Module.Course != null && l.Module.Course.Syllabus != null && (
+                l.Module.Course.Syllabus.Status == SyllabusStatuses.Draft || l.Module.Course.Syllabus.Status == SyllabusStatuses.Archived
+            ), cancellationToken);
+    }
+
+    public async Task<bool> IsSyllabusOrCourseRestrictedForClassAsync(int classId, CancellationToken cancellationToken = default)
+    {
+        return await _context.Classes
+            .Where(c => c.Id == classId)
+            .AnyAsync(c => c.Course != null && c.Course.Syllabus != null && (
+                c.Course.Syllabus.Status == SyllabusStatuses.Draft || c.Course.Syllabus.Status == SyllabusStatuses.Archived
+            ), cancellationToken);
     }
 }

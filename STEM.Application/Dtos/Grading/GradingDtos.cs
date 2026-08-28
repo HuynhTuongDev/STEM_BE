@@ -82,6 +82,15 @@ public class PagedSubmissionResponse
     public IReadOnlyCollection<SubmissionResponse> Items { get; set; } = Array.Empty<SubmissionResponse>();
 }
 
+// Trả về id của project "chấm điểm" (KHÁC HOÀN TOÀN project thật của học
+// sinh) đã được seed đúng code+diagram+board từ Submission.ContentJson —
+// giáo viên bấm Chạy mô phỏng dùng SessionId này, không đụng gì tới workspace
+// đang sống của học sinh.
+public class PrepareGradingSessionResponse
+{
+    public string SessionId { get; set; } = string.Empty;
+}
+
 public class SubmissionCommentRequest
 {
     public string Body { get; set; } = string.Empty;

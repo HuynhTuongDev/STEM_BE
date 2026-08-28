@@ -15,4 +15,10 @@ public interface ILessonRepository
     Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default);
     Task<bool> ExistsAsync(int id, CancellationToken cancellationToken = default);
     Task UpdateOrdersAsync(int moduleId, List<(int LessonId, int NewOrder)> orders, CancellationToken cancellationToken = default);
+    Task<bool> IsSyllabusArchivedForModuleAsync(int moduleId, CancellationToken cancellationToken = default);
+    Task<bool> IsSyllabusArchivedForLessonAsync(int lessonId, CancellationToken cancellationToken = default);
+    Task<bool> IsSyllabusArchivedForClassAsync(int classId, CancellationToken cancellationToken = default);
+    Task<bool> IsSyllabusOrCourseRestrictedForModuleAsync(int moduleId, CancellationToken cancellationToken = default);
+    Task<bool> IsSyllabusOrCourseRestrictedForLessonAsync(int lessonId, CancellationToken cancellationToken = default);
+    Task<bool> IsSyllabusOrCourseRestrictedForClassAsync(int classId, CancellationToken cancellationToken = default);
 }

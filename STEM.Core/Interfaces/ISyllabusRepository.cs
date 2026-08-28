@@ -29,6 +29,7 @@ public interface ISyllabusRepository
         string? searchTerm,
         int? gradeLevelId,
         string? status,
+        bool excludeArchived = false,
         CancellationToken cancellationToken = default);
     Task<Syllabus?> GetDetailAsync(int id, CancellationToken cancellationToken = default);
     Task<Syllabus?> GetStructureAsync(int id, CancellationToken cancellationToken = default);

@@ -167,11 +167,17 @@ public class SyllabusRepository : Repository<Syllabus>, ISyllabusRepository
         string? searchTerm,
         int? gradeLevelId,
         string? status,
+        bool excludeArchived = false,
         CancellationToken cancellationToken = default)
     {
         var query = _dbSet
             .Include(s => s.GradeLevel)
             .AsQueryable();
+
+        if (excludeArchived)
+        {
+            query = query.Where(s => s.Status != SyllabusStatuses.Archived);
+        }
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {

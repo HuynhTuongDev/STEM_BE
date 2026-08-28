@@ -1,5 +1,9 @@
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
+using System.Linq;
 using STEM.Application.Dtos.Curriculum;
 using STEM.Core.Entities.Curriculum;
+using STEM.Core.Entities.Users;
 using STEM.Core.Interfaces;
 
 namespace STEM.Application.UseCases.Curriculum;
@@ -7,10 +11,14 @@ namespace STEM.Application.UseCases.Curriculum;
 public class GetSyllabiHandler
 {
     private readonly ISyllabusRepository _repository;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public GetSyllabiHandler(ISyllabusRepository repository)
+    public GetSyllabiHandler(
+        ISyllabusRepository repository,
+        IHttpContextAccessor httpContextAccessor)
     {
         _repository = repository;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<IEnumerable<SyllabusDto>> Handle(string? status = null, int? gradeLevelId = null, CancellationToken cancellationToken = default)
@@ -28,6 +36,23 @@ public class GetSyllabiHandler
         else
         {
             syllabi = await _repository.GetAllWithDetailsAsync();
+        }
+
+        var httpContext = _httpContextAccessor.HttpContext;
+        if (httpContext != null)
+        {
+            var roleName = httpContext.User?.FindFirst(ClaimTypes.Role)?.Value
+                ?? httpContext.User?.FindFirst("role")?.Value
+                ?? httpContext.User?.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+            var isMasterAdmin = string.Equals(roleName, RoleNames.MasterAdministrator, StringComparison.OrdinalIgnoreCase);
+            if (!isMasterAdmin)
+            {
+                syllabi = syllabi.Where(s => s.Status != SyllabusStatuses.Archived);
+            }
+        }
+        else
+        {
+            syllabi = syllabi.Where(s => s.Status != SyllabusStatuses.Archived);
         }
 
         var result = new List<SyllabusDto>();
@@ -62,16 +87,33 @@ public class GetSyllabiHandler
 public class GetSyllabusByIdHandler
 {
     private readonly ISyllabusRepository _repository;
+    private readonly IHttpContextAccessor _httpContextAccessor;
 
-    public GetSyllabusByIdHandler(ISyllabusRepository repository)
+    public GetSyllabusByIdHandler(
+        ISyllabusRepository repository,
+        IHttpContextAccessor httpContextAccessor)
     {
         _repository = repository;
+        _httpContextAccessor = httpContextAccessor;
     }
 
     public async Task<SyllabusDetailDto?> Handle(int id, CancellationToken cancellationToken = default)
     {
         var syllabus = await _repository.GetByIdWithDetailsAsync(id);
         if (syllabus == null)
+            return null;
+
+        var httpContext = _httpContextAccessor.HttpContext;
+        var isMasterAdmin = false;
+        if (httpContext != null)
+        {
+            var roleName = httpContext.User?.FindFirst(ClaimTypes.Role)?.Value
+                ?? httpContext.User?.FindFirst("role")?.Value
+                ?? httpContext.User?.FindFirst("http://schemas.microsoft.com/ws/2008/06/identity/claims/role")?.Value;
+            isMasterAdmin = string.Equals(roleName, RoleNames.MasterAdministrator, StringComparison.OrdinalIgnoreCase);
+        }
+
+        if (!isMasterAdmin && syllabus.Status == SyllabusStatuses.Archived)
             return null;
 
         var dto = new SyllabusDetailDto

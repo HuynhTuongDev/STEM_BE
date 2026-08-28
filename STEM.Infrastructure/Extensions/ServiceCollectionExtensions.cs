@@ -72,6 +72,8 @@ public static class ServiceCollectionExtensions
         });
         services.AddScoped<ISimulationCompileService, SimulationCompileService>();
         services.AddScoped<IVirtualLabRuntimeService, VirtualLabRuntimeService>();
+        services.AddScoped<ILabSubmissionService, LabSubmissionService>();
+        services.AddScoped<IGradingSessionService, GradingSessionService>();
         services.AddScoped<ISimulationEventStore, SimulationEventStore>();
         services.AddScoped<IFirmwareCacheService, FirmwareCacheService>();
         services.AddSingleton<IPrecompileTriggerService, PrecompileTriggerService>();
