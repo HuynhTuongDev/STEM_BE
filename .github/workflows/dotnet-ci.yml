@@ -30,7 +30,21 @@ jobs:
         run: dotnet build ${{ env.SOLUTION_PATH }} --configuration Release --no-restore
 
       - name: Run unit tests
-        run: dotnet test ${{ env.SOLUTION_PATH }} --configuration Release --no-build --verbosity normal
+        # RobotDeliveryQemuIntegrationTests requires real Docker images
+        # (stem-qemu-runner-sandbox, stem-arduino-cli-sandbox) that are only
+        # ever built on a local dev machine — this workflow has no step that
+        # builds or pulls them. ubuntu-latest DOES ship Docker itself, so the
+        # test file's own IsDockerAvailable() check (looking only at whether
+        # the daemon responds) passes here and the tests proceed to a real
+        # `docker run` that can never find the image, instead of skipping
+        # gracefully — confirmed via the Actions run: this job's "Run unit
+        # tests" step alone took ~48 minutes (the 12 real-Docker tests each
+        # hitting their compile/boot timeouts) versus ~21s for the same 271
+        # tests locally with this exact filter. Excluding that one class
+        # here matches the filter already used for every local test run in
+        # this project's history — it is not disabled, just run manually
+        # against a real Docker+image setup, as its own header comment says.
+        run: dotnet test ${{ env.SOLUTION_PATH }} --configuration Release --no-build --verbosity normal --filter "FullyQualifiedName!~RobotDeliveryQemuIntegrationTests"
 
       - name: Create NuGet artifact
         run: dotnet pack ${{ env.SOLUTION_PATH }} --configuration Release --output ./artifacts
